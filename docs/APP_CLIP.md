@@ -125,9 +125,9 @@ Phase 1 ships with the app release after 2.0.1 clears review, once the preview W
 3. **Phase 2, the door.** Advanced experiences per venue through the App Store Connect API, printable App Clip Codes on the admin venue page, location confirmation (`APActivationPayload.confirmAcquired(in:)`), ephemeral door notifications, Square venues if Square's SDK can be avoided.
 4. **Later.** Platform clips for other audiences' apps (each tenant app ships its own clip; the per-host AASA from the deep links plan lists it), Apple Maps place experiences, Live Activity for a pass.
 
-Open for Rick:
+Open for Rick (phase 1 scope approved 2026-10-17):
 
-- [ ] Approve the phase 1 scope: view plus Apple Pay cover, with Sign in with Apple only. This replaces the "door check-in or view-only" question from the deep links thread; door codes become phase 2 on the same clip.
+- [x] Phase 1 scope approved by Rick on 2026-10-17: view plus Apple Pay cover, with Sign in with Apple only. This replaces the "door check-in or view-only" question from the deep links thread; door codes become phase 2 on the same clip.
 - [ ] Keep the 15 MB budget (recommended) so door codes stay possible, or take the 100 MB link-only tier and give them up.
 - [ ] Default experience copy and header image (the Hot Mess brand frame from the share previews can be reused).
 - [ ] Whether RSVP belongs in phase 1 once someone has signed in for cover, or stays in the full app (recommended: full app, keeps the clip to one action).
