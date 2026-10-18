@@ -59,11 +59,13 @@ struct NowScreen: View {
                             }
                         }
 
-                        pingsSection(now)
-                        nearbySection(now)
+                        // Small talk, then events, then venues.
+                        venueChatSection(now)
                         localeChatSection(now)
-                        friendVenuesSection(now)
                         eventsSection(now)
+                        nearbySection(now)
+                        friendVenuesSection(now)
+                        pingsSection(now)
                     }
                     .padding(.bottom, 24)
                 }
@@ -242,7 +244,7 @@ struct NowScreen: View {
                 }
             }
         } else if let venue = now.venue {
-            // A pass for tonight goes first, ready for the door; otherwise
+            // A pass for tonight leads the venue's cards, ready for the door; otherwise
             // the way to skip the line when the cover can be paid here.
             if let pass = now.viewerAdmission, pass.isPaid {
                 TonightPassCard(admission: pass)
@@ -259,8 +261,15 @@ struct NowScreen: View {
             if !now.onNow.isEmpty {
                 OnNowSection(appearances: now.onNow)
             }
+        } else {
+            friendsSection(now, title: String(localized: "People"))
+        }
+    }
 
-            // At an event the venue's room is the event's: named and pictured for it.
+    /// At a venue: its room. At an event the room is the event's, named and pictured for it.
+    @ViewBuilder
+    private func venueChatSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
             let room = now.event.map { ChatRoom.event($0, at: venue) } ?? .venue(venue)
             LiveChatPeek(
                 title: String(localized: "Small talk"),
@@ -270,9 +279,6 @@ struct NowScreen: View {
                 route: now.event == nil ? .venueChat(venue) : .eventChat(room)
             )
             .padding(.horizontal, 16)
-
-        } else {
-            friendsSection(now, title: String(localized: "People"))
         }
     }
 
