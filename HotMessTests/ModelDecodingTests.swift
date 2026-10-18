@@ -382,6 +382,18 @@ struct OnNowDecodingTests {
         #expect(away.onNow.isEmpty)
     }
 
+    @Test("A set without an end runs until close")
+    func hoursUntilClose() {
+        let person = Person(id: UUID(), name: "Q")
+        let start = Date(timeIntervalSince1970: 1_792_133_100)
+        let open = Appearance(id: UUID(), person: person, role: .dj, startsAt: start)
+        let ended = Appearance(id: UUID(), person: person, role: .dj, startsAt: start, endsAt: start.addingTimeInterval(3600))
+
+        #expect(open.hours?.hasSuffix("– close") == true)
+        #expect(ended.hours?.hasSuffix("close") == false)
+        #expect(Appearance.Role.dj.systemImage == "headphones")
+    }
+
     @Test("Keeps someone whose role this build doesn't know, without a label")
     func unknownRole() throws {
         let appearance = try decode(Appearance.self, from: """
@@ -391,8 +403,8 @@ struct OnNowDecodingTests {
 
         #expect(appearance.role == nil)
         #expect(appearance.startsAt == nil)
-        #expect(appearance.detail == nil)
-        #expect(Appearance.Role(wire: "performer")?.label == "Performing")
+        #expect(appearance.hours == nil)
+        #expect(Appearance.Role(wire: "performer")?.label == "Performer")
     }
 }
 
