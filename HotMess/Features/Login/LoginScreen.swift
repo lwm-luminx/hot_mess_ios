@@ -11,8 +11,9 @@ import SwiftUI
 /// Sign in with Apple beside it. AudienceKit says which of them the audience
 /// offers (`GET /v1/token/methods`); until it answers, or if it can't, both.
 ///
-/// Every sign-in (Facebook, Apple, an App Review code) first needs the person
-/// to be 18 or older, from iOS's declared age range or their own confirmation
+/// A method AudienceKit has a warning for ("Facebook login is only for
+/// testers") shows it with Cancel and Continue first. Every sign-in (Facebook,
+/// Apple, an App Review code) then needs the person to be 18 or older, from iOS's declared age range or their own confirmation
 /// (`AgeGate`), and to agree to the terms.
 struct LoginScreen: View {
     /// A sign-in waiting for the age check and the terms.
@@ -20,6 +21,15 @@ struct LoginScreen: View {
         case facebook
         case apple(Result<ASAuthorization, any Error>)
         case reviewCode
+
+        /// Its name in `GET /v1/token/methods`.
+        var method: String {
+            switch self {
+            case .facebook: "facebook"
+            case .apple: "apple"
+            case .reviewCode: "review_code"
+            }
+        }
     }
 
     @Environment(AppModel.self) private var model
@@ -42,6 +52,12 @@ struct LoginScreen: View {
     @State private var isReviewSignInEnabled = false
     /// The ways the audience lets people sign in; nil shows Facebook and Apple.
     @State private var signInMethods: SignInMethods?
+    /// Whether AudienceKit has answered (or couldn't): the buttons wait for
+    /// it so nobody skips a warning by tapping early.
+    @State private var hasAskedSignInMethods = false
+    /// A sign-in waiting on the audience's warning: Cancel or Continue.
+    @State private var warnedSignIn: PendingSignIn?
+    @State private var isShowingWarning = false
     @State private var isEnteringReviewCode = false
     @State private var isShowingError = false
     @State private var hasAppeared = false
@@ -92,6 +108,7 @@ struct LoginScreen: View {
             } else {
                 isReviewSignInEnabled = await model.session.isReviewSignInEnabled()
             }
+            hasAskedSignInMethods = true
         }
         .onChange(of: model.session.state) { _, state in
             if state == .signedIn {
@@ -108,6 +125,15 @@ struct LoginScreen: View {
             Button(String(localized: "Report a Problem")) { isReportingProblem = true }
         } message: {
             Text(failureMessage ?? String(localized: "Please try again."))
+        }
+        .alert(String(localized: "Before You Continue"), isPresented: $isShowingWarning, presenting: warnedSignIn) { signIn in
+            Button(String(localized: "Cancel"), role: .cancel) { warnedSignIn = nil }
+            Button(String(localized: "Continue")) {
+                warnedSignIn = nil
+                Task { await gate(signIn, warned: true) }
+            }
+        } message: { signIn in
+            Text(signInMethods?.warning(for: signIn.method) ?? "")
         }
         .alert(String(localized: "Hot Mess Is for Adults"), isPresented: $isShowingUnderage) {
             Button(String(localized: "OK"), role: .cancel) {}
@@ -194,7 +220,7 @@ struct LoginScreen: View {
                 .font(.hotMess(.footnote, semibold: true))
                 .foregroundStyle(.white.opacity(0.85))
                 .buttonStyle(.plain)
-                .disabled(isSigningIn)
+                .disabled(isSigningIn || !hasAskedSignInMethods)
                 .accessibilityIdentifier("login.reviewCode")
             }
         }
@@ -240,7 +266,7 @@ struct LoginScreen: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(isSigningIn)
+        .disabled(isSigningIn || !hasAskedSignInMethods)
         .accessibilityIdentifier("login.facebook")
         .accessibilityLabel(String(localized: "Continue with Facebook"))
     }
@@ -259,20 +285,27 @@ struct LoginScreen: View {
         .signInWithAppleButtonStyle(.white)
         .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54)
         .clipShape(Capsule())
-        .disabled(isSigningIn)
+        .disabled(isSigningIn || !hasAskedSignInMethods)
         .accessibilityIdentifier("login.apple")
     }
 
     // MARK: - Age and terms
 
-    /// Checks the person's age, then asks them to agree to the terms (and,
-    /// when iOS couldn't say, to confirm they're 18 or older) before `signIn`
-    /// goes ahead.
+    /// Shows the audience's warning for the method, if any, then checks the
+    /// person's age and asks them to agree to the terms (and, when iOS
+    /// couldn't say, to confirm they're 18 or older) before `signIn` goes
+    /// ahead. Apple's own sheet comes first, so its warning shows after it.
     private func attempt(_ signIn: PendingSignIn) {
         Task { await gate(signIn) }
     }
 
-    private func gate(_ signIn: PendingSignIn) async {
+    private func gate(_ signIn: PendingSignIn, warned: Bool = false) async {
+        if !warned, signInMethods?.warning(for: signIn.method) != nil {
+            warnedSignIn = signIn
+            isShowingWarning = true
+            return
+        }
+
         if isUnderage {
             isShowingUnderage = true
             return

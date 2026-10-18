@@ -152,6 +152,13 @@ struct EndpointTests {
         #expect(!methods.facebook)
         #expect(methods.apple)
         #expect(methods.reviewCode)
+        #expect(methods.warning(for: "apple") == nil)
+
+        let warned = try JSONDecoder().decode(SignInMethods.self, from: Data(
+            #"{"methods": ["facebook"], "warnings": {"facebook": "Facebook login is only for testers", "apple": " "}}"#.utf8
+        ))
+        #expect(warned.warning(for: "facebook") == "Facebook login is only for testers")
+        #expect(warned.warning(for: "apple") == nil)
     }
 }
 
