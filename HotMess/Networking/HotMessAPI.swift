@@ -668,10 +668,18 @@ extension HotMessAPI {
         /// Enough of a person for a card that links to them.
         static let personSummaryFields = "id name avatar_url: avatarUrl"
 
-        /// Who is on at a venue right now (see `Appearance`), under the
-        /// venue's people mixin (see `VenuePeopleMixin`).
+        /// An act on a venue's lineup (see `Appearance`): its people for a
+        /// duet, and its timing for one on in the show's order.
+        static let appearanceFields = """
+        id kind title role starts_at: startsAt ends_at: endsAt start_timing: startTiming end_timing: endTiming \
+        person { \(personSummaryFields) } people { nodes { \(personSummaryFields) } }
+        """
+
+        /// Who is on at a venue right now, and what its show has on stage and
+        /// up next, under the venue's people mixin (see `VenuePeopleMixin`).
         static let onNowFields = """
-        people { on_now: onNow { nodes { id role starts_at: startsAt ends_at: endsAt person { \(personSummaryFields) } } } }
+        people { on_now: onNow { nodes { \(appearanceFields) } } \
+        on_stage: onStage { id kind title } up_next: upNext { \(appearanceFields) } }
         """
 
         static let socialLinkFields = "id handle provider url"
@@ -1045,7 +1053,7 @@ struct VenueWithEvents: Decodable, Sendable {
     /// The user's coat check tonight, paid or being paid.
     let viewerCoatCheck: Admission?
     /// Who is on there right now, by start.
-    let onNow: [Appearance]
+    let onNow: OnNow
     let friendPings: [Ping]
 
     private enum CodingKeys: String, CodingKey {
