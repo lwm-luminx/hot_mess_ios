@@ -230,6 +230,13 @@ struct HotMessAPI: Sendable {
         try await client.send(Endpoints.appleSignIn(request))
     }
 
+    /// `GET /v1/token/methods`: the ways the audience lets people sign in
+    /// now, which AudienceKit's admin chooses. `host` names the audience. An
+    /// API from before the setting answers 404.
+    func signInMethods(host: String?) async throws -> SignInMethods {
+        try await client.send(Endpoints.signInMethods(host: host))
+    }
+
     /// `GET /v1/token/review`: whether the API takes App Review codes now
     /// (only while the audience is in App Review). `host` names the audience.
     func isReviewSignInEnabled(host: String?) async throws -> Bool {
@@ -498,6 +505,16 @@ extension HotMessAPI {
             Endpoint("/v1/token/apple", method: .post, body: JSONBody(request), requiresAuthentication: false)
         }
 
+        /// How the audience lets people sign in. Open, like the sign-ins.
+        static func signInMethods(host: String?) -> Endpoint<SignInMethods> {
+            Endpoint(
+                "/v1/token/methods",
+                method: .get,
+                query: host.map { [URLQueryItem(name: "host", value: $0)] } ?? [],
+                requiresAuthentication: false
+            )
+        }
+
         /// Whether App Review sign-in is on. Open, like the sign-ins.
         static func reviewSignInStatus(host: String?) -> Endpoint<ReviewSignInStatus> {
             Endpoint(
@@ -542,6 +559,16 @@ struct AppleSignInRequest: Encodable, Sendable {
         case host
         case device
     }
+}
+
+/// `GET /v1/token/methods`: `facebook`, `apple`, `google` and, only while
+/// App Review codes work, `review_code`.
+struct SignInMethods: Decodable, Sendable, Equatable {
+    let methods: [String]
+
+    var facebook: Bool { methods.contains("facebook") }
+    var apple: Bool { methods.contains("apple") }
+    var reviewCode: Bool { methods.contains("review_code") }
 }
 
 /// `GET /v1/token/review`.
