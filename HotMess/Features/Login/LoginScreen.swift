@@ -8,7 +8,8 @@ import SwiftUI
 
 /// What `RootView` shows when there is no session: the Hot Mess silhouette in
 /// the audience's colours, its name and tagline, and Facebook sign-in, with
-/// Sign in with Apple beside it.
+/// Sign in with Apple beside it. AudienceKit says which of them the audience
+/// offers (`GET /v1/token/methods`); until it answers, or if it can't, both.
 ///
 /// Every sign-in (Facebook, Apple, an App Review code) first needs the person
 /// to be 18 or older, from iOS's declared age range or their own confirmation
@@ -39,6 +40,8 @@ struct LoginScreen: View {
     @State private var isUnderage = false
     @State private var isShowingUnderage = false
     @State private var isReviewSignInEnabled = false
+    /// The ways the audience lets people sign in; nil shows Facebook and Apple.
+    @State private var signInMethods: SignInMethods?
     @State private var isEnteringReviewCode = false
     @State private var isShowingError = false
     @State private var hasAppeared = false
@@ -79,8 +82,17 @@ struct LoginScreen: View {
             hasAgreedToEULA = false
             withAnimation(.easeOut(duration: 0.5)) { hasAppeared = true }
         }
-        // App Review sign-in is offered only while the API has it on.
-        .task { isReviewSignInEnabled = await model.session.isReviewSignInEnabled() }
+        // The audience's sign-in methods, with App Review sign-in only while
+        // the API has it on. An API without the methods list still answers
+        // whether App Review sign-in is on.
+        .task {
+            if let methods = await model.session.signInMethods() {
+                signInMethods = methods
+                isReviewSignInEnabled = methods.reviewCode
+            } else {
+                isReviewSignInEnabled = await model.session.isReviewSignInEnabled()
+            }
+        }
         .onChange(of: model.session.state) { _, state in
             if state == .signedIn {
                 Task {
@@ -161,51 +173,15 @@ struct LoginScreen: View {
 
             eulaAgreementRow
 
-            Button {
-                attempt(.facebook)
-            } label: {
-                HStack(spacing: 12) {
-                    if isSigningIn {
-                        ProgressView()
-                            .tint(.black)
-                    } else {
-                        Image("Facebook")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 22, height: 22)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    }
-
-                    Text(isSigningIn ? String(localized: "Signing In…") : String(localized: "Continue with Facebook"))
-                        .font(.hotMess(.headline, semibold: true))
-                }
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(.white, in: Capsule())
-                .contentShape(Capsule())
+            if offersFacebook {
+                facebookButton
             }
-            .buttonStyle(.plain)
-            .disabled(isSigningIn)
-            .accessibilityIdentifier("login.facebook")
-            .accessibilityLabel(String(localized: "Continue with Facebook"))
 
-            SignInWithAppleButton(.continue) { request in
-                request.requestedScopes = [.fullName, .email]
-            } onCompletion: { result in
-                // A cancelled or failed Apple sheet has nothing to gate.
-                if case .failure = result {
-                    model.session.signInWithApple(result)
-                } else {
-                    attempt(.apple(result))
-                }
+            if offersApple {
+                appleButton
             }
-            .signInWithAppleButtonStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54)
-            .clipShape(Capsule())
-            .disabled(isSigningIn)
-            .accessibilityIdentifier("login.apple")
 
-            Text("Hot Mess uses your Facebook profile to find your friends and the events near you. With Apple, you can connect Facebook later.")
+            Text(signInNote)
                 .font(.hotMess(.footnote))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.7))
@@ -222,6 +198,69 @@ struct LoginScreen: View {
                 .accessibilityIdentifier("login.reviewCode")
             }
         }
+    }
+
+    private var offersFacebook: Bool { signInMethods?.facebook ?? true }
+
+    private var offersApple: Bool { signInMethods?.apple ?? true }
+
+    private var signInNote: String {
+        switch (offersFacebook, offersApple) {
+        case (true, true):
+            String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you. With Apple, you can connect Facebook later.")
+        case (true, false):
+            String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you.")
+        default:
+            String(localized: "Sign in with Apple to find the events near you. You can connect Facebook later to find your friends.")
+        }
+    }
+
+    private var facebookButton: some View {
+        Button {
+            attempt(.facebook)
+        } label: {
+            HStack(spacing: 12) {
+                if isSigningIn {
+                    ProgressView()
+                        .tint(.black)
+                } else {
+                    Image("Facebook")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                }
+
+                Text(isSigningIn ? String(localized: "Signing In…") : String(localized: "Continue with Facebook"))
+                    .font(.hotMess(.headline, semibold: true))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(.white, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isSigningIn)
+        .accessibilityIdentifier("login.facebook")
+        .accessibilityLabel(String(localized: "Continue with Facebook"))
+    }
+
+    private var appleButton: some View {
+        SignInWithAppleButton(.continue) { request in
+            request.requestedScopes = [.fullName, .email]
+        } onCompletion: { result in
+            // A cancelled or failed Apple sheet has nothing to gate.
+            if case .failure = result {
+                model.session.signInWithApple(result)
+            } else {
+                attempt(.apple(result))
+            }
+        }
+        .signInWithAppleButtonStyle(.white)
+        .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54)
+        .clipShape(Capsule())
+        .disabled(isSigningIn)
+        .accessibilityIdentifier("login.apple")
     }
 
     // MARK: - Age and terms

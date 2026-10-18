@@ -238,6 +238,13 @@ final class SessionStore {
         }
     }
 
+    /// The ways the audience lets people sign in, or nil when the API can't
+    /// say (an API from before the setting, or no connection): the login
+    /// screen then offers what it always has.
+    func signInMethods() async -> SignInMethods? {
+        try? await api.signInMethods(host: audienceKit.configuration.host)
+    }
+
     /// Whether the login screen offers "Have an App Review code?": only while
     /// the API says App Review sign-in is on. Unreachable reads as off.
     func isReviewSignInEnabled() async -> Bool {

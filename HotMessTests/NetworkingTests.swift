@@ -137,6 +137,22 @@ struct EndpointTests {
         let missing = try JSONDecoder().decode(ReviewSignInStatus.self, from: Data("{}".utf8))
         #expect(!missing.enabled)
     }
+
+    @Test("Asks which sign-in methods the audience offers, without a session")
+    func signInMethods() throws {
+        let endpoint = HotMessAPI.Endpoints.signInMethods(host: "hotmess.social")
+        #expect(endpoint.path == "/v1/token/methods")
+        #expect(endpoint.method == .get)
+        #expect(endpoint.requiresAuthentication == false)
+        #expect(endpoint.query == [URLQueryItem(name: "host", value: "hotmess.social")])
+
+        let methods = try JSONDecoder().decode(
+            SignInMethods.self, from: Data(#"{"methods": ["apple", "review_code"]}"#.utf8)
+        )
+        #expect(!methods.facebook)
+        #expect(methods.apple)
+        #expect(methods.reviewCode)
+    }
 }
 
 @Suite("Age gate")
