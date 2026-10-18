@@ -102,23 +102,50 @@ struct AppearanceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Avatar(url: appearance.person.avatarURL, initials: appearance.person.name.initialsForDisplay, size: 40)
+            Avatar(url: appearance.person.avatarURL, initials: appearance.person.name.initialsForDisplay, size: 44)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: appearance.person.name)
-                    .font(.hotMess(.body, semibold: true))
+                    .font(.hotMess(.headline, semibold: true))
                     .lineLimit(1)
 
-                if let detail = appearance.detail {
-                    Text(detail)
+                if let role = appearance.role {
+                    Label(role.label, systemImage: role.systemImage)
                         .font(.hotMess(.subheadline))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                if let hours = appearance.hours {
+                    Text(hours)
+                        .font(.hotMess(.subheadline))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                OnNowBadge()
+            }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The green "On now" pill with a waveform, as Velvet's lineup draws it.
+struct OnNowBadge: View {
+    var body: some View {
+        Label(String(localized: "On now"), systemImage: "waveform")
+            .font(.hotMess(.caption, semibold: true))
+            .foregroundStyle(Color.hotMessSuccess)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.hotMessSuccessSoft, in: .capsule)
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 

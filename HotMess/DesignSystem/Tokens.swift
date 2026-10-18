@@ -37,6 +37,12 @@ extension Color {
     /// `warning-soft`: the background of a warning strip.
     static var hotMessWarningSoft: Color { .token(\.warningSoft) }
 
+    /// `success`: text and icons on `hotMessSuccessSoft`, like the On now badge.
+    static var hotMessSuccess: Color { .token(\.success) }
+
+    /// `success-soft`: the background of a success badge.
+    static var hotMessSuccessSoft: Color { .token(\.successSoft) }
+
     /// `presence-online`: connected to a chat room now.
     static var hotMessPresenceOnline: Color { .token(\.presenceOnline) }
 

@@ -24,22 +24,34 @@ struct Appearance: Hashable, Sendable, Identifiable {
             self.init(rawValue: wire.lowercased())
         }
 
-        /// Under their name in an On now row.
+        /// Under their name in an On now row, beside `systemImage`, as
+        /// Velvet's lineup shows it.
         var label: String {
             switch self {
-            case .host: String(localized: "Hosting")
+            case .host: String(localized: "Host")
             case .dj: String(localized: "DJ")
-            case .performer: String(localized: "Performing")
+            case .performer: String(localized: "Performer")
             case .mc: String(localized: "MC")
+            }
+        }
+
+        /// The SF Symbol beside `label`, the same as Velvet's.
+        var systemImage: String {
+            switch self {
+            case .host: "sparkles"
+            case .dj: "headphones"
+            case .performer: "theatermasks"
+            case .mc: "music.mic"
             }
         }
     }
 
-    /// The role and, when they have one, the time they finish: "DJ · until 1 AM".
-    var detail: String? {
-        let until = endsAt.map { String(localized: "until \($0.formatted(date: .omitted, time: .shortened))") }
-        let parts = [role?.label, until].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    /// Their set, "23:45 – close" until they have an end time, in the
+    /// viewer's clock. `nil` without a start.
+    var hours: String? {
+        guard let startsAt else { return nil }
+        let end = endsAt.map { $0.formatted(date: .omitted, time: .shortened) } ?? String(localized: "close")
+        return "\(startsAt.formatted(date: .omitted, time: .shortened)) – \(end)"
     }
 
     init(id: UUID, person: Person, role: Role?, startsAt: Date? = nil, endsAt: Date? = nil) {
