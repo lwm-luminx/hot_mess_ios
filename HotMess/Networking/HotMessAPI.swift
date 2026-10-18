@@ -562,13 +562,37 @@ struct AppleSignInRequest: Encodable, Sendable {
 }
 
 /// `GET /v1/token/methods`: `facebook`, `apple`, `google` and, only while
-/// App Review codes work, `review_code`.
+/// App Review codes work, `review_code`, with the warning to show (with
+/// Cancel and Continue) before each method that has one.
 struct SignInMethods: Decodable, Sendable, Equatable {
     let methods: [String]
+    let warnings: [String: String]
 
     var facebook: Bool { methods.contains("facebook") }
     var apple: Bool { methods.contains("apple") }
     var reviewCode: Bool { methods.contains("review_code") }
+
+    init(methods: [String], warnings: [String: String] = [:]) {
+        self.methods = methods
+        self.warnings = warnings
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        methods = try container.decode([String].self, forKey: .methods)
+        // An API from before warnings sends none.
+        warnings = try container.decodeIfPresent([String: String].self, forKey: .warnings) ?? [:]
+    }
+
+    /// What to say before signing in with `method`, such as "Facebook login
+    /// is only for testers"; nil for nothing.
+    func warning(for method: String) -> String? {
+        guard let warning = warnings[method]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !warning.isEmpty else { return nil }
+        return warning
+    }
+
+    private enum CodingKeys: String, CodingKey { case methods, warnings }
 }
 
 /// `GET /v1/token/review`.
