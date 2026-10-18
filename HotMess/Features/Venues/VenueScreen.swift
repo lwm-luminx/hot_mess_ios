@@ -65,8 +65,8 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
-                        if !overview.onNow.isEmpty {
-                            OnNowSection(appearances: overview.onNow)
+                        if overview.onNow.hasAnything {
+                            OnNowSection(onNow: overview.onNow)
                         }
 
                         PingPlaceStrip(

@@ -25,7 +25,7 @@ struct VenueOverview: Sendable, Equatable {
     /// The user's coat check tonight, paid or being paid.
     var viewerCoatCheck: Admission?
     /// Who is on there right now: hosting, DJing, performing or MCing.
-    var onNow: [Appearance] = []
+    var onNow: OnNow = []
     /// Friends' Pings that pick this venue or one of its events.
     var friendPings: [Ping] = []
 }

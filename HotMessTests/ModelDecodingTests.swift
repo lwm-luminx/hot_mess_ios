@@ -382,6 +382,32 @@ struct OnNowDecodingTests {
         #expect(away.onNow.isEmpty)
     }
 
+    @Test("Reads a show the venue advances: a duet on, an intermission, and who's up next")
+    func runningOrder() throws {
+        let detail = try decode(VenueWithEvents.self, from: """
+        { "id": "8B4F1B60-9A5D-4D0E-9B3F-2C6B3E5D8A11", "name": "The Stud", "people": {
+          "on_now": { "nodes": [
+            { "id": "4D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "PERFORMER", "title": null,
+              "starts_at": "2026-10-11T05:12:00Z", "ends_at": null, "start_timing": "NONE", "end_timing": "ADVANCE",
+              "person": { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Ada" },
+              "people": { "nodes": [ { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Ada" },
+                                     { "id": "1A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Bo" } ] } }
+          ] },
+          "on_stage": { "id": "9D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "INTERMISSION", "title": "Bar break" },
+          "up_next": { "id": "7D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "PERFORMER",
+                       "starts_at": null, "start_timing": "NONE", "end_timing": "ADVANCE",
+                       "person": { "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Cleo" },
+                       "people": { "nodes": [ { "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Cleo" } ] } }
+        } }
+        """)
+
+        #expect(detail.onNow.first?.name == "Ada & Bo")
+        #expect(detail.onNow.first?.hours == nil)
+        #expect(detail.onNow.intermission?.title == "Bar break")
+        #expect(detail.onNow.upNext?.name == "Cleo")
+        #expect(detail.onNow.hasAnything)
+    }
+
     @Test("A set without an end runs until close")
     func hoursUntilClose() {
         let person = Person(id: UUID(), name: "Q")

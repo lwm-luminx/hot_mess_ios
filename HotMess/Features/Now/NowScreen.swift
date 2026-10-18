@@ -258,8 +258,8 @@ struct NowScreen: View {
                 CoatCheckCard(venue: venue, coatCheck: coatCheck)
             }
 
-            if !now.onNow.isEmpty {
-                OnNowSection(appearances: now.onNow)
+            if now.onNow.hasAnything {
+                OnNowSection(onNow: now.onNow)
             }
         } else {
             friendsSection(now, title: String(localized: "People"))

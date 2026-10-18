@@ -99,6 +99,8 @@ struct SocialLinkRow: View {
 /// ("DJ · until 1 AM").
 struct AppearanceRow: View {
     let appearance: Appearance
+    /// Up next in the show rather than on now.
+    var upNext = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -106,7 +108,7 @@ struct AppearanceRow: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: appearance.person.name)
+                Text(verbatim: appearance.name)
                     .font(.hotMess(.headline, semibold: true))
                     .lineLimit(1)
 
@@ -128,8 +130,43 @@ struct AppearanceRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                OnNowBadge()
+                if upNext {
+                    Text("Up next")
+                        .font(.hotMess(.caption, semibold: true))
+                        .foregroundStyle(.secondary)
+                } else {
+                    OnNowBadge()
+                }
             }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A break in the venue's show, in the On now list.
+struct IntermissionRow: View {
+    let intermission: OnNow.Intermission
+
+    private var label: String {
+        if let title = intermission.title, !title.isEmpty { return title }
+        return String(localized: "Intermission")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "cup.and.saucer")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 44)
+                .background(.quaternary, in: .circle)
+                .accessibilityHidden(true)
+
+            Text(verbatim: label)
+                .font(.hotMess(.headline, semibold: true))
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+            OnNowBadge()
         }
         .accessibilityElement(children: .combine)
     }
@@ -152,13 +189,21 @@ struct OnNowBadge: View {
 /// Who's on at a venue right now, each opening their page. Like any
 /// `DetailSection`, it draws nothing when nobody is on.
 struct OnNowSection: View {
-    let appearances: [Appearance]
+    let onNow: OnNow
 
     var body: some View {
         DetailSection(String(localized: "On now")) {
-            ForEach(appearances) { appearance in
+            ForEach(onNow.acts) { appearance in
                 DetailLink(route: .person(appearance.person.id)) {
                     AppearanceRow(appearance: appearance)
+                }
+            }
+            if let intermission = onNow.intermission {
+                IntermissionRow(intermission: intermission)
+            }
+            if let upNext = onNow.upNext {
+                DetailLink(route: .person(upNext.person.id)) {
+                    AppearanceRow(appearance: upNext, upNext: true)
                 }
             }
         }

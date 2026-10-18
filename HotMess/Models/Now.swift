@@ -41,7 +41,7 @@ struct Now: Decodable, Hashable, Sendable {
     /// The user's coat check tonight at the venue the user is in, paid or being paid.
     let viewerCoatCheck: Admission?
     /// Who is on at the venue the user is in right now.
-    let onNow: [Appearance]
+    let onNow: OnNow
     /// The locale the user is in, or nearest.
     let locale: AppLocale?
     /// Whether the user can join the locale's chat room: they're out in the
@@ -188,7 +188,7 @@ struct Now: Decodable, Hashable, Sendable {
         coverCharge: CoverCharge? = nil,
         viewerAdmission: Admission? = nil,
         viewerCoatCheck: Admission? = nil,
-        onNow: [Appearance] = [],
+        onNow: OnNow = [],
         locale: AppLocale? = nil,
         localeChatOpen: Bool = false,
         localeMessages: [VenueMessage] = [],
