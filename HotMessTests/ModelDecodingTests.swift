@@ -356,7 +356,7 @@ struct OnNowDecodingTests {
         #expect(detail.onNow.first?.startsAt == start)
         #expect(detail.onNow.first?.endsAt == end)
         #expect(detail.onNow.last?.endsAt == nil)
-        #expect(detail.onNow.last?.detail == "Hosting")
+        #expect(detail.onNow.last?.hours?.hasSuffix("– close") == true)
     }
 
     @Test("Reads who's on at the venue the user is in")
