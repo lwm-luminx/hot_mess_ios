@@ -6,7 +6,7 @@
 #
 # Reads APP_REVIEW_CODE and APP_REVIEW_BANNED_CODE (and any HOTMESS_UITEST_* overrides) from the audience-kit root .env,
 # or ENV_FILE, and hands them to the test runner without printing them. Set DEVICE to pick the simulator (default
-# "iPhone 17 Pro Max"), TEST to run one test (testReviewerScreens or testBannedReviewerScreens), and OUT for where the PNGs go (default ~/Desktop/hotmess-app-review-screens/ui-test).
+# "iPhone 17 Pro Max"), TEST to run one test (testReviewerScreens or testBannedReviewerScreens), SUITE=StoreScreenshots for the listing, LOCATION=lat,lon to put the simulator somewhere first, and OUT for where the PNGs go (default ~/Desktop/hotmess-app-review-screens/ui-test).
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,9 +33,12 @@ export TEST_RUNNER_HOTMESS_UITEST_SCREENSHOT_DIR="$out"
 udid="$(xcrun simctl list devices available | grep -F "    $device (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')"
 [[ -n "$udid" ]] || { echo "No available simulator named $device" >&2; exit 1; }
 
+# Now only fills in from a fresh location fix, so set one before the app launches: LOCATION=lat,lon.
+[[ -n "${LOCATION:-}" ]] && xcrun simctl location "$udid" set "$LOCATION"
+
 mkdir -p "$out"
 cd "$repo"
 xcodebuild test -project HotMess.xcodeproj -scheme "HotMess Screenshots" \
   -destination "platform=iOS Simulator,id=$udid" \
-  -only-testing:"HotMessScreenshots/ReviewCodeScreenshots${TEST:+/$TEST}"
+  -only-testing:"HotMessScreenshots/${SUITE:-ReviewCodeScreenshots}${TEST:+/$TEST}"
 echo "Screenshots in $out"

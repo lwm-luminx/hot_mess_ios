@@ -15,7 +15,7 @@ import XCTest
 ///
 ///   HOTMESS_UITEST_REVIEW_CODE         the main reviewer's code (testReviewerScreens); the .env's APP_REVIEW_CODE
 ///   HOTMESS_UITEST_BANNED_REVIEW_CODE  the banned reviewer's code (testBannedReviewerScreens); APP_REVIEW_BANNED_CODE
-///   HOTMESS_UITEST_VENUE               the busy venue to pretend to be at, default "The SunTrapp"
+///   HOTMESS_UITEST_VENUE               the busy venue to pretend to be at, default "Club Try-Angles"
 ///   HOTMESS_UITEST_BANNED_VENUE        the venue the banned reviewer is banned from, default HOTMESS_UITEST_VENUE
 ///   HOTMESS_UITEST_HOST                a host whose page lists upcoming events, default "Drew G"
 ///   HOTMESS_UITEST_SCREENSHOT_DIR      also write each capture there as a PNG (the simulator shares the Mac's disk)
@@ -51,7 +51,7 @@ final class ReviewCodeScreenshots: XCTestCase {
 
     func testReviewerScreens() throws {
         let code = try Self.required("HOTMESS_UITEST_REVIEW_CODE", or: "APP_REVIEW_CODE")
-        let venue = Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
+        let venue = Self.value("HOTMESS_UITEST_VENUE") ?? "Club Try-Angles"
         try signIn(code: code, captureLogin: true)
 
         // A busy venue tonight: lineup, karaoke and Ping here, then pretend to be there to open its chat.
@@ -96,7 +96,7 @@ final class ReviewCodeScreenshots: XCTestCase {
     /// The banned reviewer's view: the venue is gone from Venues and its events are gone from Events.
     func testBannedReviewerScreens() throws {
         let code = try Self.required("HOTMESS_UITEST_BANNED_REVIEW_CODE", or: "APP_REVIEW_BANNED_CODE")
-        let venue = Self.value("HOTMESS_UITEST_BANNED_VENUE") ?? Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
+        let venue = Self.value("HOTMESS_UITEST_BANNED_VENUE") ?? Self.value("HOTMESS_UITEST_VENUE") ?? "Club Try-Angles"
         try signIn(code: code, captureLogin: false)
 
         open(tab: "Venues")
@@ -119,6 +119,7 @@ final class ReviewCodeScreenshots: XCTestCase {
     // MARK: - Sign-in
 
     private func signIn(code: String, captureLogin: Bool) throws {
+        XCUIDevice.shared.location = XCUILocation(location: StoreScreenshots.location)
         app.launch()
         let tabs = app.descendants(matching: .any)["main.tabs"]
         let reviewCode = app.buttons["login.reviewCode"]
@@ -129,6 +130,7 @@ final class ReviewCodeScreenshots: XCTestCase {
         // Signing out (or a link) can bounce through Safari, which leaves "◂ Safari" in the status bar of every capture.
         XCUIApplication(bundleIdentifier: "com.apple.mobilesafari").terminate()
         app.terminate()
+        XCUIDevice.shared.location = XCUILocation(location: StoreScreenshots.location)
         app.launch()
         XCTAssertTrue(reviewCode.waitForExistence(timeout: 20), "The sign-in screen didn't appear")
         if captureLogin { capture("08-login-eula") }
@@ -208,10 +210,12 @@ final class ReviewCodeScreenshots: XCTestCase {
     /// cancels: nothing is reported.
     private func showReportSheet() {
         let report = app.buttons["Report…"]
-        // A message reads "Name: text"; a role's reads "Name, Role: text"; your own start with "You".
-        let messages = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^,:]+: .+", "You"))
+        // A message reads "Name: text", a role's (the venue's own posts too) "Name, Role: text"; your own start with
+        // "You". A person's message comes first, for the Block line in the menu.
+        let all = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^:]{1,60}: .+", "You"))
             .allElementsBoundByIndex.reversed()
+        let messages = all.filter { !$0.label.contains(", ") } + all.filter { $0.label.contains(", ") }
         for message in messages.prefix(12) where message.isHittable {
             message.press(forDuration: 1.2)
             if report.waitForExistence(timeout: 2) { break }
