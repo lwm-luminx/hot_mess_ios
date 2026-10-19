@@ -23,11 +23,13 @@ struct EventListing: Decodable, Hashable, Sendable {
         self.sections = sections
     }
 
-    /// Splits upcoming events the way the REST API did: up to two events with
-    /// a banner as "Featured", then every event as "Upcoming".
+    /// Splits upcoming events: up to two events with a banner as "Featured",
+    /// then every other event as "Upcoming", so none is listed twice.
     init(upcoming events: [Event]) {
-        let upcoming = events.sorted { $0.startDate < $1.startDate }
-        let featured = Array(upcoming.filter { $0.bannerURL != nil }.prefix(2))
+        let sorted = events.sorted { $0.startDate < $1.startDate }
+        let featured = Array(sorted.filter { $0.bannerURL != nil }.prefix(2))
+        let featuredIDs = Set(featured.map(\.id))
+        let upcoming = sorted.filter { !featuredIDs.contains($0.id) }
 
         sections = [
             EventSection(id: "recommended", title: String(localized: "Featured"), events: featured),
