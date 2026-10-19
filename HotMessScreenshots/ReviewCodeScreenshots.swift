@@ -13,14 +13,15 @@ import XCTest
 /// Review (or add the codes on the console's App Review card), naming the venue the banned reviewer is banned from.
 /// The codes come from the environment, never the repository:
 ///
-///   HOTMESS_UITEST_REVIEW_CODE         the main reviewer's code (testReviewerScreens)
-///   HOTMESS_UITEST_BANNED_REVIEW_CODE  the banned reviewer's code (testBannedReviewerScreens)
+///   HOTMESS_UITEST_REVIEW_CODE         the main reviewer's code (testReviewerScreens); the .env's APP_REVIEW_CODE
+///   HOTMESS_UITEST_BANNED_REVIEW_CODE  the banned reviewer's code (testBannedReviewerScreens); APP_REVIEW_BANNED_CODE
 ///   HOTMESS_UITEST_VENUE               the busy venue to pretend to be at, default "The SunTrapp"
 ///   HOTMESS_UITEST_BANNED_VENUE        the venue the banned reviewer is banned from, default HOTMESS_UITEST_VENUE
 ///   HOTMESS_UITEST_HOST                a host whose page lists upcoming events, default "Drew G"
 ///   HOTMESS_UITEST_SCREENSHOT_DIR      also write each capture there as a PNG (the simulator shares the Mac's disk)
 ///
-/// Pass them to the runner as `TEST_RUNNER_<name>=…` on the xcodebuild command line. Run with the Screenshots scheme
+/// Scripts/review-screenshots.sh passes the root .env to the runner; otherwise pass them as `TEST_RUNNER_<name>=…` on the
+/// xcodebuild command line. Run with the Screenshots scheme
 /// (the next API) or, for production data, against an installed Release build by also setting
 /// HOTMESS_UITEST_BUNDLE_ID=social.hotmess.HotMess (the review aids still show for review accounts). Nothing here sends
 /// a report, a block, a Ping or a karaoke signup: each sheet is captured and cancelled.
@@ -49,7 +50,7 @@ final class ReviewCodeScreenshots: XCTestCase {
     // MARK: - The main reviewer
 
     func testReviewerScreens() throws {
-        let code = try Self.required("HOTMESS_UITEST_REVIEW_CODE")
+        let code = try Self.required("HOTMESS_UITEST_REVIEW_CODE", or: "APP_REVIEW_CODE")
         let venue = Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
         try signIn(code: code, captureLogin: true)
 
@@ -94,7 +95,7 @@ final class ReviewCodeScreenshots: XCTestCase {
 
     /// The banned reviewer's view: the venue is gone from Venues and its events are gone from Events.
     func testBannedReviewerScreens() throws {
-        let code = try Self.required("HOTMESS_UITEST_BANNED_REVIEW_CODE")
+        let code = try Self.required("HOTMESS_UITEST_BANNED_REVIEW_CODE", or: "APP_REVIEW_BANNED_CODE")
         let venue = Self.value("HOTMESS_UITEST_BANNED_VENUE") ?? Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
         try signIn(code: code, captureLogin: false)
 
@@ -125,6 +126,10 @@ final class ReviewCodeScreenshots: XCTestCase {
             // A Release build keeps its session: sign out, so the code decides who is signed in.
             signOut()
         }
+        // Signing out (or a link) can bounce through Safari, which leaves "◂ Safari" in the status bar of every capture.
+        XCUIApplication(bundleIdentifier: "com.apple.mobilesafari").terminate()
+        app.terminate()
+        app.launch()
         XCTAssertTrue(reviewCode.waitForExistence(timeout: 20), "The sign-in screen didn't appear")
         if captureLogin { capture("08-login-eula") }
 
@@ -186,9 +191,10 @@ final class ReviewCodeScreenshots: XCTestCase {
     }
 
     private func openChat() {
-        let join = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Join the chat", "Start the chat")).firstMatch
-        XCTAssertTrue(scroll(to: join), "The venue's chat peek didn't show")
-        join.tap()
+        // The whole peek opens the room; its "Join the chat" line isn't a button of its own.
+        let peek = app.descendants(matching: .any)["chat.peek"]
+        XCTAssertTrue(scroll(to: peek), "The venue's chat peek didn't show")
+        peek.tap()
         let accept = app.buttons["chat.acceptTerms"]
         if accept.waitForExistence(timeout: 5) {
             capture("10-chat-rules")
@@ -202,12 +208,12 @@ final class ReviewCodeScreenshots: XCTestCase {
     /// cancels: nothing is reported.
     private func showReportSheet() {
         let report = app.buttons["Report…"]
-        let candidates = app.scrollViews.firstMatch.descendants(matching: .any)
-            .matching(NSPredicate(format: "elementType IN %@", [XCUIElement.ElementType.other.rawValue,
-                                                                XCUIElement.ElementType.staticText.rawValue]))
+        // A message reads "Name: text"; a role's reads "Name, Role: text"; your own start with "You".
+        let messages = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^,:]+: .+", "You"))
             .allElementsBoundByIndex.reversed()
-        for element in candidates.prefix(20) where element.isHittable && !element.label.isEmpty {
-            element.press(forDuration: 1.2)
+        for message in messages.prefix(12) where message.isHittable {
+            message.press(forDuration: 1.2)
             if report.waitForExistence(timeout: 2) { break }
             app.tap()
         }
@@ -306,8 +312,11 @@ final class ReviewCodeScreenshots: XCTestCase {
         ProcessInfo.processInfo.environment[key].flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private static func required(_ key: String) throws -> String {
-        guard let value = value(key) else { throw XCTSkip("Set \(key) (TEST_RUNNER_\(key)=… on the xcodebuild command line) to run this.") }
+    /// `key`, else the root .env's name for it (Scripts/review-screenshots.sh passes the .env through).
+    private static func required(_ key: String, or envFileKey: String) throws -> String {
+        guard let value = value(key) ?? value(envFileKey) else {
+            throw XCTSkip("Set \(envFileKey) in the root .env, or TEST_RUNNER_\(key)=… on the xcodebuild command line, to run this.")
+        }
         return value
     }
 }
