@@ -65,7 +65,11 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
-                        if overview.onNow.hasAnything {
+                        // The whole night when the API sends it, else just
+                        // who's on (an older API).
+                        if !overview.onNow.lineup.isEmpty {
+                            TonightLineupSection(onNow: overview.onNow)
+                        } else if overview.onNow.hasAnything {
                             OnNowSection(onNow: overview.onNow)
                         }
 

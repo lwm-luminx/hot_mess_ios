@@ -706,6 +706,12 @@ extension HotMessAPI {
         on_stage: onStage { id kind title } up_next: upNext { \(appearanceFields) } }
         """
 
+        /// Tonight's whole running order at a venue, merged into the people
+        /// mixin `onNowFields` selects, for the venue page's lineup.
+        static let lineupFields = """
+        people { running_order: runningOrder { nodes { \(appearanceFields) state } } }
+        """
+
         static let socialLinkFields = "id handle provider url"
 
         /// The social links connection, merged into the profile mixin that
@@ -809,6 +815,7 @@ extension HotMessAPI {
             chat { open recent_messages: recentMessages(limit: 3) { nodes { \(messageFields) } } }
             \(venueCoverFields)
             \(onNowFields)
+            \(lineupFields)
             ping { friend_pings: friendPings { \(pingFields) } }
           } }
         }

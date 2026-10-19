@@ -133,11 +133,16 @@ struct OnNow: RandomAccessCollection, Hashable, Sendable, ExpressibleByArrayLite
     var acts: [Appearance]
     var intermission: Intermission?
     var upNext: Appearance?
+    /// Tonight's whole running order, when the document asks for it (the
+    /// venue page): empty from an older API or a night with nothing on it.
+    var lineup: [LineupEntry]
 
-    init(acts: [Appearance] = [], intermission: Intermission? = nil, upNext: Appearance? = nil) {
+    init(acts: [Appearance] = [], intermission: Intermission? = nil, upNext: Appearance? = nil,
+         lineup: [LineupEntry] = []) {
         self.acts = acts
         self.intermission = intermission
         self.upNext = upNext
+        self.lineup = lineup
     }
 
     init(arrayLiteral acts: Appearance...) {
@@ -150,6 +155,52 @@ struct OnNow: RandomAccessCollection, Hashable, Sendable, ExpressibleByArrayLite
 
     /// Whether there's anything to show: someone on, a break, or who's next.
     var hasAnything: Bool { !acts.isEmpty || intermission != nil || upNext != nil }
+
+    /// Whether `entry` is what advancing the show puts on next.
+    func isUpNext(_ entry: LineupEntry) -> Bool { entry.state == .upcoming && entry.id == upNext?.id }
+}
+
+/// One entry in a venue night's running order (`Venue.people.runningOrder`):
+/// an act or an intermission, and whether it's still to come, on, or done.
+struct LineupEntry: Hashable, Sendable, Identifiable {
+    enum State: String, Hashable, Sendable {
+        case upcoming = "UPCOMING", on = "ON", done = "DONE"
+    }
+
+    enum Content: Hashable, Sendable {
+        case act(Appearance)
+        case intermission(OnNow.Intermission)
+    }
+
+    let content: Content
+    let state: State
+
+    var id: UUID {
+        switch content {
+        case .act(let appearance): appearance.id
+        case .intermission(let intermission): intermission.id
+        }
+    }
+}
+
+extension LineupEntry: Decodable {
+    private enum CodingKeys: String, CodingKey { case id, kind, title, state }
+
+    /// An act needs a `person` with a name, as `Appearance` does; an unknown
+    /// state reads as still to come.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try? container.decodeIfPresent(String.self, forKey: .kind)
+        if kind == "INTERMISSION" {
+            let id = try container.decode(UUID.self, forKey: .id)
+            let title = try? container.decodeIfPresent(String.self, forKey: .title)
+            content = .intermission(OnNow.Intermission(id: id, title: title))
+        } else {
+            content = try .act(Appearance(from: decoder))
+        }
+        let wire = try? container.decodeIfPresent(String.self, forKey: .state)
+        state = wire.flatMap { State(rawValue: $0) } ?? .upcoming
+    }
 }
 
 /// A venue's `people` mixin as the app asks for it: who is on there right
@@ -163,6 +214,7 @@ struct VenuePeopleMixin: Decodable {
         case onNow = "on_now"
         case onStage = "on_stage"
         case upNext = "up_next"
+        case runningOrder = "running_order"
     }
     private enum ConnectionKeys: String, CodingKey { case nodes }
     /// Enough of `onStage` and `upNext` to tell an intermission from an act.
@@ -184,7 +236,10 @@ struct VenuePeopleMixin: Decodable {
         let intermission = stage.flatMap { $0.kind == "INTERMISSION" ? OnNow.Intermission(id: $0.id, title: $0.title) : nil }
         let next = try? container.decodeIfPresent(Entry.self, forKey: .upNext)
         let upNext: Appearance? = next?.kind == "INTERMISSION" ? nil : (try? container.decodeIfPresent(Appearance.self, forKey: .upNext)) ?? nil
-        onNow = OnNow(acts: acts, intermission: intermission, upNext: upNext)
+        let order = try? container.nestedContainer(keyedBy: ConnectionKeys.self, forKey: .runningOrder)
+        let entries = (try? order?.decodeIfPresent([LenientLineupEntry].self, forKey: .nodes)) ?? nil
+        onNow = OnNow(acts: acts, intermission: intermission, upNext: upNext,
+                      lineup: entries?.compactMap(\.entry) ?? [])
     }
 }
 
@@ -203,6 +258,14 @@ private struct LenientPerson: Decodable {
 
     init(from decoder: any Decoder) throws {
         person = try? Person(from: decoder)
+    }
+}
+
+private struct LenientLineupEntry: Decodable {
+    let entry: LineupEntry?
+
+    init(from decoder: any Decoder) throws {
+        entry = try? LineupEntry(from: decoder)
     }
 }
 

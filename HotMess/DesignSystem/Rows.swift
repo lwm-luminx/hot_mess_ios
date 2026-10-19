@@ -95,12 +95,16 @@ struct SocialLinkRow: View {
     }
 }
 
-/// Someone on at a venue: their photo, their name, and what they're doing
-/// ("DJ · until 1 AM").
+/// Someone on a venue's lineup: their photo, their name, and what they're
+/// doing ("DJ · until 1 AM"), badged by where they are in the night.
 struct AppearanceRow: View {
+    /// What the trailing badge says.
+    enum Status {
+        case onNow, upNext, later, done
+    }
+
     let appearance: Appearance
-    /// Up next in the show rather than on now.
-    var upNext = false
+    var status: Status = .onNow
 
     var body: some View {
         HStack(spacing: 12) {
@@ -130,15 +134,19 @@ struct AppearanceRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                if upNext {
+                switch status {
+                case .onNow:
+                    OnNowBadge()
+                case .upNext:
                     Text("Up next")
                         .font(.hotMess(.caption, semibold: true))
                         .foregroundStyle(.secondary)
-                } else {
-                    OnNowBadge()
+                case .later, .done:
+                    EmptyView()
                 }
             }
         }
+        .opacity(status == .done ? 0.5 : 1)
         .accessibilityElement(children: .combine)
     }
 }
@@ -146,6 +154,8 @@ struct AppearanceRow: View {
 /// A break in the venue's show, in the On now list.
 struct IntermissionRow: View {
     let intermission: OnNow.Intermission
+    /// On now rather than later or done in tonight's lineup.
+    var isOn = true
 
     private var label: String {
         if let title = intermission.title, !title.isEmpty { return title }
@@ -166,8 +176,11 @@ struct IntermissionRow: View {
                 .lineLimit(1)
 
             Spacer(minLength: 8)
-            OnNowBadge()
+            if isOn {
+                OnNowBadge()
+            }
         }
+        .opacity(isOn ? 1 : 0.5)
         .accessibilityElement(children: .combine)
     }
 }
@@ -203,9 +216,39 @@ struct OnNowSection: View {
             }
             if let upNext = onNow.upNext {
                 DetailLink(route: .person(upNext.person.id)) {
-                    AppearanceRow(appearance: upNext, upNext: true)
+                    AppearanceRow(appearance: upNext, status: .upNext)
                 }
             }
+        }
+    }
+}
+
+/// Everything on a venue's lineup tonight, in running order: who's done
+/// (dimmed), who's on, who's up next and who's later, each act opening its
+/// page. Like any `DetailSection`, it draws nothing when the night is empty.
+struct TonightLineupSection: View {
+    let onNow: OnNow
+
+    var body: some View {
+        DetailSection(String(localized: "Tonight's lineup")) {
+            ForEach(onNow.lineup) { entry in
+                switch entry.content {
+                case .act(let appearance):
+                    DetailLink(route: .person(appearance.person.id)) {
+                        AppearanceRow(appearance: appearance, status: status(of: entry))
+                    }
+                case .intermission(let intermission):
+                    IntermissionRow(intermission: intermission, isOn: entry.state == .on)
+                }
+            }
+        }
+    }
+
+    private func status(of entry: LineupEntry) -> AppearanceRow.Status {
+        switch entry.state {
+        case .on: .onNow
+        case .done: .done
+        case .upcoming: onNow.isUpNext(entry) ? .upNext : .later
         }
     }
 }
