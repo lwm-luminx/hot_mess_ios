@@ -208,10 +208,12 @@ final class ReviewCodeScreenshots: XCTestCase {
     /// cancels: nothing is reported.
     private func showReportSheet() {
         let report = app.buttons["Report…"]
-        // A message reads "Name: text"; a role's reads "Name, Role: text"; your own start with "You".
-        let messages = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^,:]+: .+", "You"))
+        // A message reads "Name: text", a role's (the venue's own posts too) "Name, Role: text"; your own start with
+        // "You". A person's message comes first, for the Block line in the menu.
+        let all = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^:]{1,60}: .+", "You"))
             .allElementsBoundByIndex.reversed()
+        let messages = all.filter { !$0.label.contains(", ") } + all.filter { $0.label.contains(", ") }
         for message in messages.prefix(12) where message.isHittable {
             message.press(forDuration: 1.2)
             if report.waitForExistence(timeout: 2) { break }
