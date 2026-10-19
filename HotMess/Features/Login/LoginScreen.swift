@@ -380,7 +380,7 @@ struct LoginScreen: View {
 
     /// "I confirm I am 18 or older", until the device has a confirmation.
     private var ageCheckboxRow: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .checkboxCenter, spacing: 12) {
             Button {
                 hasConfirmedAge.toggle()
             } label: {
@@ -390,6 +390,7 @@ struct LoginScreen: View {
             }
             .buttonStyle(.plain)
             .disabled(isUnderage)
+            .alignmentGuide(.checkboxCenter) { $0[VerticalAlignment.center] }
             .accessibilityIdentifier("login.ageCheckbox")
             .accessibilityLabel(String(localized: "I confirm I am 18 or older"))
             .accessibilityValue(hasConfirmedAge ? "1" : "0")
@@ -397,12 +398,13 @@ struct LoginScreen: View {
             Text("I confirm I am 18 or older")
                 .font(.hotMess(.caption))
                 .foregroundStyle(.white)
+                .alignmentGuide(.checkboxCenter) { $0[VerticalAlignment.center] }
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var eulaCheckboxRow: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .checkboxCenter, spacing: 12) {
             Button {
                 hasAgreedToEULA.toggle()
             } label: {
@@ -411,6 +413,7 @@ struct LoginScreen: View {
                     .foregroundStyle(hasAgreedToEULA ? .white : .white.opacity(0.9))
             }
             .buttonStyle(.plain)
+            .alignmentGuide(.checkboxCenter) { $0[VerticalAlignment.center] }
             .accessibilityIdentifier("login.eulaCheckbox")
             .accessibilityValue(hasAgreedToEULA ? "1" : "0")
 
@@ -430,6 +433,7 @@ struct LoginScreen: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("login.openEULA")
                 }
+                .alignmentGuide(.checkboxCenter) { $0[VerticalAlignment.center] }
                 Text("Zero tolerance for objectionable content or abusive users.")
                     .font(.hotMess(.caption2, semibold: true))
                     .foregroundStyle(.white.opacity(0.85))
@@ -447,4 +451,15 @@ struct LoginScreen: View {
         if case let .failed(message) = model.session.state { return message }
         return nil
     }
+}
+
+private extension VerticalAlignment {
+    /// Centers a terms checkbox on the first line of its label.
+    enum CheckboxCenter: AlignmentID {
+        static func defaultValue(in context: ViewDimensions) -> CGFloat {
+            context[VerticalAlignment.center]
+        }
+    }
+
+    static let checkboxCenter = VerticalAlignment(CheckboxCenter.self)
 }
