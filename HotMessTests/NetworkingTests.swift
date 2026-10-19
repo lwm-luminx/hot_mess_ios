@@ -339,7 +339,7 @@ struct GraphQLTests {
         #expect(entry.friends.map(\.firstName) == ["Alex", "Sam"])
     }
 
-    @Test("Features up to two events with a banner")
+    @Test("Features up to two events with a banner, and lists the rest as upcoming")
     func featuredEvents() {
         let banner = URL(string: "https://cdn.example/banner.jpg")
         let events = (0 ..< 4).map { index in
@@ -351,7 +351,8 @@ struct GraphQLTests {
 
         #expect(listing.sections.map(\.id) == ["recommended", "upcoming"])
         #expect(listing.sections[0].events.map(\.name) == ["Event 0", "Event 1"])
-        #expect(listing.sections[1].events.count == 4)
+        #expect(listing.sections[1].events.map(\.name) == ["Event 2", "Event 3"])
+        #expect(listing.allEvents.count == 4)
         #expect(EventListing(upcoming: []).isEmpty)
     }
 
