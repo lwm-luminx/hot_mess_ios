@@ -266,7 +266,7 @@ struct VenueScreen: View {
     private func testingSection(_ venue: Venue) -> some View {
         let isTestBuild = model.configuration.isTestBuild
         let isReview = model.isReviewMode
-        if isReview, let coordinate = venue.coordinate {
+        if model.showsReviewAids, let coordinate = venue.coordinate {
             DetailSection(isTestBuild ? String(localized: "Testing") : String(localized: "App Review")) {
                 if model.location.simulatedVenueName == venue.name {
                     Button(String(localized: "Stop pretending"), systemImage: "location.slash") {

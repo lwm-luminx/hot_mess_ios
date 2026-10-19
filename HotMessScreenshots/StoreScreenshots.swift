@@ -18,6 +18,8 @@ final class StoreScreenshots: XCTestCase {
         app.terminate()
         // Now only fills in from a location fix, so hand the simulator a fixed one before launch.
         XCUIDevice.shared.location = XCUILocation(location: Self.location)
+        // A review account signs in, but its "Pretend I'm here" row has no place in the listing.
+        app.launchArguments.append("-HotMessHideReviewAids")
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["main.tabs"].waitForExistence(timeout: 30),
                       "Sign in to Hot Mess on this simulator before capturing store screenshots.")

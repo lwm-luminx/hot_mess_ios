@@ -62,6 +62,13 @@ final class AppModel {
         #endif
     }
 
+    /// The App Store listing screenshots sign in with a review account but
+    /// shouldn't show its testing aids, so `-HotMessHideReviewAids` hides
+    /// them. It only ever takes something away, so it works in every build.
+    var showsReviewAids: Bool {
+        isReviewMode && !ProcessInfo.processInfo.arguments.contains("-HotMessHideReviewAids")
+    }
+
     private static let promptedFacebookOnPingKey = "hasPromptedFacebookOnPing"
     private static let promptedFacebookOnChatKey = "hasPromptedFacebookOnChat"
 
