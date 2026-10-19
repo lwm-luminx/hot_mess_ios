@@ -125,7 +125,23 @@ struct HotMessAPI: Sendable {
         }
     }
 
-    /// Takes the user off the karaoke list, while they haven't been called up.
+    /// Asks the venue to play a song. The server's refusal (not at the venue,
+    /// requests closed) comes back worded for the room.
+    func requestSong(venueID: UUID, _ draft: SongRequestDraft) async throws {
+        do {
+            try await audienceKit.requestSong(
+                venueID: venueID.uuidString,
+                title: draft.title,
+                artist: draft.artist,
+                note: draft.note
+            )
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// Takes the user off the karaoke list, or a song request off the queue,
+    /// while it hasn't been called up.
     func withdrawSongRequest(_ request: SongRequest) async throws {
         do {
             try await audienceKit.withdrawSongRequest(id: request.id)
@@ -717,7 +733,8 @@ extension HotMessAPI {
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
         posted_as_person: postedAsPerson person { id } \
-        event { id name start_at: startAt }
+        event { id name start_at: startAt } \
+        request { id kind title artist singer state }
         """
 
         /// Enough of a person for a card that links to them.
@@ -1009,7 +1026,8 @@ extension HotMessAPI {
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
         posted_as_person: postedAsPerson person { id } \
-        event { id name start_at: startAt }
+        event { id name start_at: startAt } \
+        request { id kind title artist singer state }
         """
 
         static let sendMyChatMessage = """

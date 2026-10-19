@@ -8,8 +8,9 @@ import AudienceKitUI
 import SwiftUI
 
 /// Tonight at a venue, from AudienceKitUI: the host on now with their links
-/// and Tip, the lineup strip (each act opening its page), and karaoke, its
-/// first few singers with See all pushing the whole list.
+/// and Tip, the lineup strip (each act opening its page), karaoke, its first
+/// few singers with See all pushing the whole list, and song requests when
+/// the venue takes them.
 struct VenueLineupSection: View {
     let lineupModel: VenueLineupModel
     let lineup: VenueLineup
@@ -41,6 +42,15 @@ struct VenueLineupSection: View {
                 onSignUp: lineupModel.signUp,
                 onRemove: lineupModel.remove
             )
+
+            if lineup.showsSongRequests {
+                SongRequestsSection(
+                    lineup: lineup,
+                    signedIn: model.session.isSignedIn,
+                    onRequest: lineupModel.requestSong,
+                    onWithdraw: lineupModel.remove
+                )
+            }
         }
         .audiencePreset(model.brand.preset)
         .confirmationDialog(

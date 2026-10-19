@@ -8,11 +8,11 @@ import AudienceKitUI
 import Foundation
 import Observation
 
-/// A venue's lineup tonight and its karaoke signups, from the AudienceKit
-/// SDK (`lineup(venueID:)`), for the venue page's host row, lineup strip and
-/// karaoke list, and the full karaoke list it pushes. Kept apart from
-/// `VenueViewModel` so signing up, leaving and the live refresh refetch only
-/// the lineup, not the whole venue.
+/// A venue's lineup tonight, its karaoke signups and its song requests, from
+/// the AudienceKit SDK (`lineup(venueID:)`), for the venue page's host row,
+/// lineup strip, karaoke list and song requests, and the full karaoke list it
+/// pushes. Kept apart from `VenueViewModel` so signing up, requesting a song,
+/// leaving and the live refresh refetch only the lineup, not the whole venue.
 @MainActor
 @Observable
 final class VenueLineupModel {
@@ -62,6 +62,12 @@ final class VenueLineupModel {
         await refresh()
     }
 
+    func requestSong(_ draft: SongRequestDraft) async throws {
+        try await api.requestSong(venueID: venueID, draft)
+        await refresh()
+    }
+
+    /// Takes back a karaoke signup or a song request while it waits.
     func remove(_ request: SongRequest) async throws {
         try await api.withdrawSongRequest(request)
         await refresh()
@@ -116,6 +122,13 @@ extension VenueLineup {
         if let session = karaokeSession, session.provider != nil, !session.isAudienceKit { return true }
         guard let karaoke else { return false }
         return karaoke.permitted || !singers.isEmpty
+    }
+
+    /// Whether `SongRequestsSection` shows anything: the venue takes song
+    /// requests, or the viewer has one still waiting or playing.
+    var showsSongRequests: Bool {
+        guard let songRequests else { return false }
+        return songRequests.permitted || songRequests.mine.contains { $0.state.isOpen }
     }
 }
 
