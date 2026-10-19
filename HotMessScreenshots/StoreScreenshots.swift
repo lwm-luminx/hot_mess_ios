@@ -5,7 +5,7 @@ import XCTest
 ///
 /// HOTMESS_UITEST_BUNDLE_ID drives an installed build instead (social.hotmess.HotMess for production),
 /// HOTMESS_UITEST_CITY picks the city the simulator is in (default Salt Lake), HOTMESS_UITEST_LOCATION where it is (lat,lon, default The SunTrapp), HOTMESS_UITEST_VENUE the venue captured
-/// (default the first), HOTMESS_UITEST_PERFORMER the profile captured (default Agony Ray), and HOTMESS_UITEST_SCREENSHOT_DIR also writes each capture there as a PNG.
+/// (default The SunTrapp), HOTMESS_UITEST_PERFORMER the profile captured (default Mama Alma), and HOTMESS_UITEST_SCREENSHOT_DIR also writes each capture there as a PNG.
 @MainActor
 final class StoreScreenshots: XCTestCase {
     private var app: XCUIApplication!
@@ -18,6 +18,8 @@ final class StoreScreenshots: XCTestCase {
         app.terminate()
         // Now only fills in from a location fix, so hand the simulator a fixed one before launch.
         XCUIDevice.shared.location = XCUILocation(location: Self.location)
+        // A review account signs in, but its "Pretend I'm here" row has no place in the listing.
+        app.launchArguments.append("-HotMessHideReviewAids")
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["main.tabs"].waitForExistence(timeout: 30),
                       "Sign in to Hot Mess on this simulator before capturing store screenshots.")
@@ -48,25 +50,22 @@ final class StoreScreenshots: XCTestCase {
     func testEvent() { open("Events"); openCard("event"); snapshot("05-event") }
     func testVenue() {
         open("Venues")
-        if let name = Self.value("HOTMESS_UITEST_VENUE") {
-            let venue = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
-                                                         "card.venue.", name)).firstMatch
-            // Swipe the screen, not the first scroll view: that's the map at the top of Venues.
-            for _ in 0..<15 {
-                if venue.exists && venue.isHittable { break }
-                app.swipeUp(velocity: .slow)
-            }
-            XCTAssertTrue(venue.exists && venue.isHittable, "\(name) must be visible for the venue capture.")
-            venue.tap()
-            settle()
-        } else {
-            openCard("venue")
+        let name = Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
+        let venue = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
+                                                     "card.venue.", name)).firstMatch
+        // Swipe the screen, not the first scroll view: that's the map at the top of Venues.
+        for _ in 0..<15 {
+            if venue.exists && venue.isHittable { break }
+            app.swipeUp(velocity: .slow)
         }
+        XCTAssertTrue(venue.exists && venue.isHittable, "\(name) must be visible for the venue capture.")
+        venue.tap()
+        settle()
         snapshot("06-venue")
     }
     func testPerson() {
         everyone()
-        let name = Self.value("HOTMESS_UITEST_PERFORMER") ?? "Agony Ray"
+        let name = Self.value("HOTMESS_UITEST_PERFORMER") ?? "Mama Alma"
         let performer = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
                                                          "card.person.", name)).firstMatch
         for _ in 0..<15 {
