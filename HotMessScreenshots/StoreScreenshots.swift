@@ -1,37 +1,78 @@
+import CoreLocation
 import XCTest
 
 /// Captures the real production UI with the simulator's existing signed-in session.
+///
+/// HOTMESS_UITEST_BUNDLE_ID drives an installed build instead (social.hotmess.HotMess for production),
+/// HOTMESS_UITEST_CITY picks the city the simulator is in (default Salt Lake), HOTMESS_UITEST_LOCATION where it is (lat,lon, default The SunTrapp), HOTMESS_UITEST_VENUE the venue captured
+/// (default The SunTrapp), HOTMESS_UITEST_PERFORMER the profile captured (default Mama Alma), and HOTMESS_UITEST_SCREENSHOT_DIR also writes each capture there as a PNG.
 @MainActor
 final class StoreScreenshots: XCTestCase {
     private var app: XCUIApplication!
+    private var city: String { Self.value("HOTMESS_UITEST_CITY") ?? "Salt Lake" }
 
     override func setUp() async throws {
         continueAfterFailure = false
-        app = XCUIApplication()
+        app = Self.value("HOTMESS_UITEST_BUNDLE_ID").map { XCUIApplication(bundleIdentifier: $0) } ?? XCUIApplication()
+        XCUIApplication(bundleIdentifier: "com.apple.mobilesafari").terminate()
+        app.terminate()
+        // Now only fills in from a location fix, so hand the simulator a fixed one before launch.
+        XCUIDevice.shared.location = XCUILocation(location: Self.location)
+        // A review account signs in, but its "Pretend I'm here" row has no place in the listing.
+        app.launchArguments.append("-HotMessHideReviewAids")
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["main.tabs"].waitForExistence(timeout: 30),
                       "Sign in to Hot Mess on this simulator before capturing store screenshots.")
         dismissLocationUpgrade()
         tab("Venues").tap()
-        XCTAssertTrue(app.navigationBars["Seattle"].waitForExistence(timeout: 30),
-                      "Set the screenshot simulator location to Seattle and allow location access.")
+        XCTAssertTrue(app.navigationBars[city].waitForExistence(timeout: 30),
+                      "Set the screenshot simulator location to \(city) and allow location access.")
     }
 
-    func testNow() { open("Now"); snapshot("01-now") }
+    func testNow() {
+        open("Now")
+        // Now fills in after the location fix and its events load; pull to refresh until it names the city.
+        let named = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", city)).firstMatch
+        let deadline = Date().addingTimeInterval(30)
+        while !named.exists && Date() < deadline {
+            XCUIDevice.shared.location = XCUILocation(location: Self.location)
+            app.swipeDown(velocity: .slow)
+            _ = named.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(named.exists, "Now never showed \(city); check HOTMESS_UITEST_LOCATION is inside it")
+        requireCard("event")
+        settle()
+        snapshot("01-now")
+    }
     func testEvents() { open("Events"); requireCard("event"); snapshot("02-events") }
     func testVenues() { open("Venues"); requireCard("venue"); snapshot("03-venues") }
     func testPeople() { everyone(); requireCard("person"); snapshot("04-people") }
     func testEvent() { open("Events"); openCard("event"); snapshot("05-event") }
-    func testVenue() { open("Venues"); openCard("venue"); snapshot("06-venue") }
+    func testVenue() {
+        open("Venues")
+        let name = Self.value("HOTMESS_UITEST_VENUE") ?? "The SunTrapp"
+        let venue = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
+                                                     "card.venue.", name)).firstMatch
+        // Swipe the screen, not the first scroll view: that's the map at the top of Venues.
+        for _ in 0..<15 {
+            if venue.exists && venue.isHittable { break }
+            app.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(venue.exists && venue.isHittable, "\(name) must be visible for the venue capture.")
+        venue.tap()
+        settle()
+        snapshot("06-venue")
+    }
     func testPerson() {
         everyone()
+        let name = Self.value("HOTMESS_UITEST_PERFORMER") ?? "Mama Alma"
         let performer = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
-                                                         "card.person.", "Agony Ray")).firstMatch
+                                                         "card.person.", name)).firstMatch
         for _ in 0..<15 {
             if performer.exists && performer.isHittable { break }
             app.scrollViews.firstMatch.swipeUp()
         }
-        XCTAssertTrue(performer.exists && performer.isHittable, "Agony Ray must be visible for the profile capture.")
+        XCTAssertTrue(performer.exists && performer.isHittable, "\(name) must be visible for the profile capture.")
         performer.tap()
         settle()
         snapshot("07-person")
@@ -88,9 +129,25 @@ final class StoreScreenshots: XCTestCase {
     }
 
     private func snapshot(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if let directory = Self.value("HOTMESS_UITEST_SCREENSHOT_DIR") {
+            let url = URL(fileURLWithPath: directory).appendingPathComponent("\(name).png")
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? screenshot.pngRepresentation.write(to: url)
+        }
+    }
+
+    /// HOTMESS_UITEST_LOCATION as "lat,lon", default The SunTrapp in Salt Lake.
+    static var location: CLLocation {
+        let parts = (value("HOTMESS_UITEST_LOCATION") ?? "40.7666,-111.9033").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        return parts.count == 2 ? CLLocation(latitude: parts[0], longitude: parts[1]) : CLLocation(latitude: 40.7666, longitude: -111.9033)
+    }
+
+    private static func value(_ key: String) -> String? {
+        ProcessInfo.processInfo.environment[key].flatMap { $0.isEmpty ? nil : $0 }
     }
 }
