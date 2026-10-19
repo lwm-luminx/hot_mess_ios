@@ -1,20 +1,23 @@
+import CoreLocation
 import XCTest
 
 /// Captures the real production UI with the simulator's existing signed-in session.
 ///
 /// HOTMESS_UITEST_BUNDLE_ID drives an installed build instead (social.hotmess.HotMess for production),
-/// HOTMESS_UITEST_CITY picks the city the simulator is in (default Seattle), HOTMESS_UITEST_VENUE the venue captured
+/// HOTMESS_UITEST_CITY picks the city the simulator is in (default Salt Lake), HOTMESS_UITEST_LOCATION where it is (lat,lon, default The SunTrapp), HOTMESS_UITEST_VENUE the venue captured
 /// (default the first), HOTMESS_UITEST_PERFORMER the profile captured (default Agony Ray), and HOTMESS_UITEST_SCREENSHOT_DIR also writes each capture there as a PNG.
 @MainActor
 final class StoreScreenshots: XCTestCase {
     private var app: XCUIApplication!
-    private var city: String { Self.value("HOTMESS_UITEST_CITY") ?? "Seattle" }
+    private var city: String { Self.value("HOTMESS_UITEST_CITY") ?? "Salt Lake" }
 
     override func setUp() async throws {
         continueAfterFailure = false
         app = Self.value("HOTMESS_UITEST_BUNDLE_ID").map { XCUIApplication(bundleIdentifier: $0) } ?? XCUIApplication()
         XCUIApplication(bundleIdentifier: "com.apple.mobilesafari").terminate()
         app.terminate()
+        // Now only fills in from a location fix, so hand the simulator a fixed one before launch.
+        XCUIDevice.shared.location = XCUILocation(location: Self.location)
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["main.tabs"].waitForExistence(timeout: 30),
                       "Sign in to Hot Mess on this simulator before capturing store screenshots.")
@@ -26,8 +29,17 @@ final class StoreScreenshots: XCTestCase {
 
     func testNow() {
         open("Now")
-        // Now fills in after the location and its events load; an empty Now makes a poor listing.
+        // Now fills in after the location fix and its events load; pull to refresh until it names the city.
+        let named = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", city)).firstMatch
+        let deadline = Date().addingTimeInterval(30)
+        while !named.exists && Date() < deadline {
+            XCUIDevice.shared.location = XCUILocation(location: Self.location)
+            app.swipeDown(velocity: .slow)
+            _ = named.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(named.exists, "Now never showed \(city); check HOTMESS_UITEST_LOCATION is inside it")
         requireCard("event")
+        settle()
         snapshot("01-now")
     }
     func testEvents() { open("Events"); requireCard("event"); snapshot("02-events") }
@@ -128,6 +140,12 @@ final class StoreScreenshots: XCTestCase {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? screenshot.pngRepresentation.write(to: url)
         }
+    }
+
+    /// HOTMESS_UITEST_LOCATION as "lat,lon", default The SunTrapp in Salt Lake.
+    static var location: CLLocation {
+        let parts = (value("HOTMESS_UITEST_LOCATION") ?? "40.7666,-111.9033").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        return parts.count == 2 ? CLLocation(latitude: parts[0], longitude: parts[1]) : CLLocation(latitude: 40.7666, longitude: -111.9033)
     }
 
     private static func value(_ key: String) -> String? {
