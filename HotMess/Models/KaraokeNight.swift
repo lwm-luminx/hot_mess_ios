@@ -9,6 +9,9 @@ struct KaraokeNight: Codable, Hashable, Sendable {
     private let joinLink: String?
 
     var venueControlled: Bool { ownSessionCode == nil }
+    /// AudienceKit's own karaoke: no partner session to join; people sign up
+    /// to sing from the venue's page or chat, and the host calls them up.
+    var isAudienceKit: Bool { provider == "audiencekit" && joinURL == nil }
     /// A partner link is a web destination; never open an arbitrary executable scheme from a response.
     var joinURL: URL? {
         guard let joinLink, let parts = URLComponents(string: joinLink),

@@ -85,8 +85,20 @@ struct DeepLinkTests {
         #expect(!push.isPing)
     }
 
+    @Test("A karaoke singer's up-next push opens the venue's chat room")
+    func singerUpNextPush() throws {
+        let push = try #require(PingNotification(userInfo: [
+            "kind": "singer_up_next", "room_id": id.uuidString.lowercased(), "request_id": UUID().uuidString,
+            "url": "https://hotmess.social/venues/\(id.uuidString.lowercased())/chat",
+        ]))
+
+        #expect(DeepLink.destination(for: push.url) == .venueChat(id))
+        #expect(!push.isPing)
+    }
+
     @Test("Routes each destination to the tab that owns it")
     func tabForRoute() {
+        #expect(AppRoute.karaokeList(id).tab == .venues)
         #expect(AppRoute.venue(id).tab == .venues)
         #expect(AppRoute.event(id).tab == .events)
         #expect(AppRoute.person(id).tab == .people)

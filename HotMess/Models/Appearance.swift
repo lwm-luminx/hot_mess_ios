@@ -93,11 +93,21 @@ extension Appearance: Decodable {
 
     private enum ConnectionKeys: String, CodingKey { case nodes }
 
+    /// GraphQL's role for a karaoke signup on the lineup.
+    static let singerRole = "SINGER"
+
     /// Only `id` and a `person` with a name are required; an unknown role or
     /// a malformed time is dropped rather than failing the appearance, and an
-    /// older API's appearance (no people, no timing) is a set.
+    /// older API's appearance (no people, no timing) is a set. A karaoke
+    /// singer isn't an appearance here: it fails, so the lenient lists drop
+    /// it (the venue page shows singers with AudienceKitUI's `KaraokeQueue`).
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if (try? container.decodeIfPresent(String.self, forKey: .role)) == Self.singerRole {
+            throw DecodingError.dataCorruptedError(
+                forKey: .role, in: container, debugDescription: "A karaoke singer isn't an appearance"
+            )
+        }
         id = try container.decode(UUID.self, forKey: .id)
         person = try container.decode(Person.self, forKey: .person)
         let others = (try? container.nestedContainer(keyedBy: ConnectionKeys.self, forKey: .people))

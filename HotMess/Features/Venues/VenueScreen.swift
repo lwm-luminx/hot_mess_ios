@@ -15,6 +15,7 @@ struct VenueScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var viewModel: VenueViewModel?
+    @State private var lineupModel: VenueLineupModel?
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var pingSeed: PingSeed?
@@ -65,9 +66,12 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
-                        // The whole night when the API sends it, else just
-                        // who's on (an older API).
-                        if !overview.onNow.lineup.isEmpty {
+                        // Tonight from AudienceKit: the host, the lineup and
+                        // karaoke. Until it loads, or if it can't, the venue
+                        // query's whole night, else just who's on (an older API).
+                        if let lineupModel, let lineup = lineupModel.lineup {
+                            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+                        } else if !overview.onNow.lineup.isEmpty {
                             TonightLineupSection(onNow: overview.onNow)
                         } else if overview.onNow.hasAnything {
                             OnNowSection(onNow: overview.onNow)
@@ -94,11 +98,12 @@ struct VenueScreen: View {
                         }
 
                         if overview.chatOpen {
-                            ChatPeek(
+                            LiveChatPeek(
                                 title: String(localized: "Chat"),
-                                roomName: venue.name,
-                                messages: overview.recentMessages.peekMessages(currentUserID: model.session.userID, friends: model.friends.byID),
-                                route: .venueChat(venue)
+                                room: .venue(venue),
+                                messages: overview.recentMessages,
+                                route: .venueChat(venue),
+                                onMessage: lineupChanged
                             )
                             .padding(.horizontal, 16)
                         }
@@ -167,6 +172,9 @@ struct VenueScreen: View {
             ensureViewModel()
             await viewModel?.load()
         }
+        .keepsLineupFresh(lineupModel)
+        // Who a karaoke signup goes under.
+        .task { await model.session.refreshUser() }
         // Whether App Review may pretend to be here.
         .task { await model.safety.load() }
         .sheet(item: $pingSeed) { seed in
@@ -294,9 +302,20 @@ struct VenueScreen: View {
         item.openInMaps()
     }
 
+    /// Advancing the lineup posts an "On now" announcement as the venue, so
+    /// one from the venue or its talent refetches the lineup at once rather
+    /// than at the next poll.
+    private func lineupChanged(_ message: VenueMessage) {
+        guard message.kind == .announcement || message.isFromListing else { return }
+        Task { await lineupModel?.refresh() }
+    }
+
     private func ensureViewModel() {
         if viewModel == nil {
             viewModel = VenueViewModel(api: model.api, venueID: venueID, friends: model.friends)
+        }
+        if lineupModel == nil {
+            lineupModel = VenueLineupModel(api: model.api, venueID: venueID)
         }
     }
 
@@ -304,6 +323,7 @@ struct VenueScreen: View {
         Task {
             ensureViewModel()
             await viewModel?.load()
+            await lineupModel?.refresh()
         }
     }
 }

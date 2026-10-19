@@ -2,6 +2,8 @@ import SwiftUI
 
 struct KaraokeSection: View {
     let karaoke: KaraokeNight
+    /// Where the event is, whose page takes AudienceKit's own karaoke signups.
+    var venue: Venue? = nil
     @State private var showingJoinCode = false
 
     private var joinTitle: String {
@@ -9,6 +11,13 @@ struct KaraokeSection: View {
             return String(localized: "Join \(provider) session")
         }
         return String(localized: "Join karaoke session")
+    }
+
+    private var signUpPointer: String {
+        if let venue {
+            return String(localized: "Sign up to sing on \(venue.name)'s page, or in its chat once you're there.")
+        }
+        return String(localized: "Sign up to sing on the venue's page, or in its chat once you're there.")
     }
 
     var body: some View {
@@ -20,6 +29,16 @@ struct KaraokeSection: View {
                     Label(String(localized: "Show join code"), systemImage: "qrcode")
                 }
                 .accessibilityIdentifier("karaoke.showCode")
+            } else if karaoke.isAudienceKit {
+                // Signups are on the lineup, from the venue's page or its chat.
+                Label(String(localized: "Karaoke night"), systemImage: "music.mic")
+                Text(signUpPointer).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("karaoke.signUpPointer")
+                if let venue {
+                    DetailLink(route: .venue(venue.id)) {
+                        Label(String(localized: "Sign up at \(venue.name)"), systemImage: "mappin.and.ellipse")
+                    }
+                }
             } else {
                 Label(String(localized: "Karaoke night"), systemImage: "music.mic")
                 Text(String(localized: "Ask the host how to join the karaoke session.")).foregroundStyle(.secondary)

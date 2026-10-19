@@ -11,6 +11,8 @@ enum AppRoute: Hashable, Sendable {
     case event(UUID)
     case person(UUID)
     case venueChat(Venue)
+    /// Every karaoke singer at a venue tonight, by the venue's ID.
+    case karaokeList(UUID)
     /// A venue's chat room branded for the event the user is at there (Now).
     case eventChat(ChatRoom)
     /// A locale's chat room, for people out in it who aren't at a venue.
@@ -19,7 +21,7 @@ enum AppRoute: Hashable, Sendable {
     /// Which tab the route belongs in.
     var tab: AppTab {
         switch self {
-        case .venue, .venueChat: .venues
+        case .venue, .venueChat, .karaokeList: .venues
         case .event: .events
         case .person: .people
         case .localeChat, .eventChat: .now

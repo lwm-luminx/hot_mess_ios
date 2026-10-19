@@ -20,6 +20,9 @@ struct LiveChatPeek: View {
     let messages: [VenueMessage]
     var participants: [ChatPeek.Participant] = []
     let route: AppRoute
+    /// Called with each line the room says while live, such as the "On now"
+    /// announcement advancing the lineup posts.
+    var onMessage: ((VenueMessage) -> Void)? = nil
 
     @State private var viewModel: VenueChatViewModel?
 
@@ -47,6 +50,9 @@ struct LiveChatPeek: View {
         )
         .task(id: FollowKey(room: room, follows: model.safety.hasAcceptedTerms && scenePhase == .active)) {
             await follow()
+        }
+        .onChange(of: isLive ? viewModel?.messages.last?.id : nil) {
+            if isLive, let message = viewModel?.messages.last { onMessage?(message) }
         }
         .onDisappear {
             let viewModel = self.viewModel

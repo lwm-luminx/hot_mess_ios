@@ -29,6 +29,15 @@ final class BrandStore {
 
     var tagline: String? { branding?.theme.tagline }
 
+    /// The AudienceKitUI preset the audience's views draw with
+    /// (`.audiencePreset(_:)`): the audience's own once branding loads.
+    /// `default` is what the API sends for an audience that never picked one,
+    /// and this app's look is `hot_mess` then, as `BrandPalette`'s is.
+    var preset: String {
+        guard let preset = branding?.theme.preset, preset != "default" else { return "hot_mess" }
+        return preset
+    }
+
     /// The accent, resolving light and dark from the audience's tokens. Reads
     /// `branding` so views that use it redraw when branding arrives.
     var accent: Color {

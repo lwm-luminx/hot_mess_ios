@@ -103,6 +103,37 @@ struct HotMessAPI: Sendable {
         )
     }
 
+    // MARK: - Lineup
+
+    /// A venue's lineup tonight with its karaoke singers and the user's
+    /// signups, from the SDK, for AudienceKitUI's lineup and karaoke views.
+    func lineup(venueID: UUID) async throws -> VenueLineup? {
+        do {
+            return try await audienceKit.lineup(venueID: venueID.uuidString)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// Signs the user up to sing at a venue. The server's refusal (not at the
+    /// venue, signups closed) comes back worded for the room.
+    func signUpToSing(venueID: UUID, _ signup: KaraokeSignup) async throws {
+        do {
+            try await audienceKit.signUpToSing(venueID: venueID.uuidString, signup)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// Takes the user off the karaoke list, while they haven't been called up.
+    func withdrawSongRequest(_ request: SongRequest) async throws {
+        do {
+            try await audienceKit.withdrawSongRequest(id: request.id)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
     // MARK: - Events
 
     func events(in localeID: UUID) async throws -> EventListing {

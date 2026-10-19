@@ -254,6 +254,18 @@ final class AppModel {
         }
     }
 
+    /// Pushes a route onto the tab on screen, for a link in a view that
+    /// takes a closure rather than a `NavigationLink`.
+    func push(_ route: AppRoute) {
+        switch selectedTab {
+        case .now: nowPath.append(route)
+        case .events: eventsPath.append(route)
+        case .venues: venuesPath.append(route)
+        case .people: peoplePath.append(route)
+        case .me: open(route)
+        }
+    }
+
     func open(_ url: URL) -> Bool {
         switch DeepLink.destination(for: url) {
         case let .route(route):

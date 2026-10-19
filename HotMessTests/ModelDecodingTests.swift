@@ -450,6 +450,35 @@ struct OnNowDecodingTests {
         }
     }
 
+    @Test("Leaves karaoke singers out of the app's own lineup and On now, with or without a person")
+    func singersDropped() throws {
+        let detail = try decode(VenueWithEvents.self, from: """
+        { "id": "8B4F1B60-9A5D-4D0E-9B3F-2C6B3E5D8A11", "name": "The Stud", "people": {
+          "on_now": { "nodes": [
+            { "id": "4D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "HOST",
+              "person": { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Ada" } },
+            { "id": "1D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "SINGER",
+              "person": { "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Cleo" } }
+          ] },
+          "up_next": { "id": "3D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "SINGER",
+                       "person": { "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Cleo" } },
+          "running_order": { "nodes": [
+            { "id": "4D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "HOST", "state": "ON",
+              "person": { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Ada" } },
+            { "id": "1D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "SINGER", "state": "ON",
+              "person": { "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Cleo" } },
+            { "id": "3D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "ACT", "role": "SINGER", "state": "UPCOMING",
+              "title": "Bo & Lee", "person": null }
+          ] }
+        } }
+        """)
+
+        #expect(detail.onNow.acts.map(\.name) == ["Ada"])
+        #expect(detail.onNow.upNext == nil)
+        #expect(detail.onNow.lineup.count == 1)
+        #expect(detail.onNow.hasAnything)
+    }
+
     @Test("An older API's venue has no running order")
     func noRunningOrder() throws {
         let detail = try decode(VenueWithEvents.self, from: """

@@ -67,7 +67,7 @@ struct EventScreen: View {
                         }
 
                         if let karaoke = event.karaoke {
-                            KaraokeSection(karaoke: karaoke)
+                            KaraokeSection(karaoke: karaoke, venue: event.venue)
                         }
 
                         detailsSection(event)

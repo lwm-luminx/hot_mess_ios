@@ -36,6 +36,13 @@ final class KaraokeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Ask the host how to join the karaoke session."].exists)
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
     }
+    func testAudienceKitKaraokePointsToTheVenueToSignUp() {
+        let app = open("audiencekit")
+        XCTAssertTrue(app.descendants(matching: .any)["karaoke.badge"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["karaoke.signUpPointer"].exists)
+        XCTAssertFalse(app.staticTexts["Ask the host how to join the karaoke session."].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
+    }
     func testOrdinaryEventHasNoKaraokeBadgeOrSession() {
         let app = open("none")
         XCTAssertTrue(app.navigationBars["Karaoke test"].waitForExistence(timeout: 10))

@@ -7,7 +7,7 @@ struct KaraokeUITestScreen: View {
     @State private var openedURL: String?
     var body: some View {
         let code = mode == "own" ? "654321" : "123456"
-        let json = mode == "disconnected" ? "{}" : """
+        let json = mode == "disconnected" ? "{}" : mode == "audiencekit" ? #"{"provider":"audiencekit","provider_name":"Hot Mess"}"# : """
             {"provider_name":"KaraFun","session_code":"\(code)","own_session_code":\(mode == "own" ? "\"654321\"" : "null"),"join_url":"https://www.karafun.com/\(code)/"}
             """
         let karaoke = mode == "none" ? nil : try? JSONDecoder().decode(KaraokeNight.self, from: Data(json.utf8))

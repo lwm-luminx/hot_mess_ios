@@ -38,6 +38,13 @@ struct KaraokeTests {
         #expect(try event(karaoke: nil).isKaraoke == false)
     }
 
+    @Test("AudienceKit's own karaoke has no session to join; a partner's does")
+    func audienceKitKaraoke() throws {
+        #expect(try event(karaoke: ["provider": "audiencekit", "provider_name": "Hot Mess"]).karaoke?.isAudienceKit == true)
+        #expect(try event(karaoke: ["provider": "karafun", "join_url": "https://www.karafun.com/123456/"]).karaoke?.isAudienceKit == false)
+        #expect(try event(karaoke: [:]).karaoke?.isAudienceKit == false)
+    }
+
     @Test("Only safe web links can be opened", arguments: ["javascript:alert(1)", "file:///etc/passwd", "https://user:password@example.com", "not a URL"])
     func invalidLink(link: String) throws {
         #expect(try event(karaoke: ["join_url": link]).karaoke?.joinURL == nil)
