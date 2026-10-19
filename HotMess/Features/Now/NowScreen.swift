@@ -21,6 +21,9 @@ struct NowScreen: View {
     @State private var loadedPingRevision: Int?
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
+    /// Tonight at the venue you're at (or your event's): the host, the
+    /// lineup and karaoke signups, as its page shows them.
+    @State private var lineupModel: VenueLineupModel?
 
     /// Reloads when the position changes or Pings change elsewhere.
     private struct LoadKey: Hashable {
@@ -126,7 +129,19 @@ struct NowScreen: View {
         .onChange(of: model.checkout.revision) {
             reload()
         }
+        .task(id: tonightVenueID) {
+            lineupModel = VenueLineupModel.reusing(lineupModel, for: tonightVenueID, api: model.api)
+        }
+        .keepsLineupFresh(lineupModel)
+        // Who a karaoke signup goes under.
+        .task { await model.session.refreshUser() }
         .contentReporting(report: $reportSubject, block: $blockTarget)
+    }
+
+    /// The venue you're at, or your event's.
+    private var tonightVenueID: UUID? {
+        guard let now = viewModel?.state.value else { return nil }
+        return now.venue?.id ?? now.event?.venue?.id
     }
 
     private var navigationTitle: String {
@@ -263,14 +278,19 @@ struct NowScreen: View {
         }
     }
 
-    /// At a venue: who's on and up next, and the event's karaoke session when it has one.
+    /// At a venue: tonight as its page shows it, the host, the lineup strip and
+    /// karaoke signups. Until that loads, or from an older API, who's on and up
+    /// next, and the event's karaoke session when it has one (held back while
+    /// loading, so its pointer doesn't flash before the signups).
     @ViewBuilder
     private func stageSection(_ now: Now) -> some View {
-        if now.venues == nil, now.venue != nil {
+        if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke {
+            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+        } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
                 OnNowSection(onNow: now.onNow)
             }
-            if let karaoke = now.event?.karaoke {
+            if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
                 KaraokeSection(karaoke: karaoke)
             }
         }

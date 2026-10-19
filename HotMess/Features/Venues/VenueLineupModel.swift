@@ -92,11 +92,30 @@ final class VenueLineupModel {
     }
 }
 
+extension VenueLineupModel {
+    /// `current` when it's already `venueID`'s, else a new one for it; `nil`
+    /// without a venue. For pages that follow a venue that can change: Now
+    /// moving with you, an event's page loading its venue.
+    static func reusing(_ current: VenueLineupModel?, for venueID: UUID?, api: HotMessAPI) -> VenueLineupModel? {
+        guard let venueID else { return nil }
+        if let current, current.venueID == venueID { return current }
+        return VenueLineupModel(api: api, venueID: venueID)
+    }
+}
+
 extension VenueLineup {
     /// The host on now: the lineup's host entry that's on, else the one
     /// taking karaoke signups.
     var hostOnNow: AudienceKit.LineupEntry? {
         entries.first { $0.role == .host && $0.state == .on } ?? karaoke?.host
+    }
+
+    /// Whether `KaraokeQueue` shows anything: a partner's session to join, or
+    /// AudienceKit signups that are taken or have singers.
+    var showsKaraoke: Bool {
+        if let session = karaokeSession, session.provider != nil, !session.isAudienceKit { return true }
+        guard let karaoke else { return false }
+        return karaoke.permitted || !singers.isEmpty
     }
 }
 

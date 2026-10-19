@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKitUI
 import SwiftUI
 
 /// Event detail, replacing `EventViewController`.
@@ -18,6 +19,8 @@ struct EventScreen: View {
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var pingSeed: PingSeed?
+    /// Its venue's lineup on the night, for karaoke signups right here.
+    @State private var lineupModel: VenueLineupModel?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { detail in
@@ -66,7 +69,20 @@ struct EventScreen: View {
                             )
                         }
 
-                        if let karaoke = event.karaoke {
+                        // On the night, the venue's karaoke itself: who's singing
+                        // and Sign up to sing. Otherwise how to join, held back
+                        // while tonight's lineup loads so it doesn't flash.
+                        if let lineupModel, let lineup = lineupModel.lineup, lineup.showsKaraoke {
+                            KaraokeQueue(
+                                lineup: lineup,
+                                viewerName: model.session.singerName,
+                                previewLimit: 3,
+                                onSeeAll: { model.push(.karaokeList(lineupModel.venueID)) },
+                                onSignUp: lineupModel.signUp,
+                                onRemove: lineupModel.remove
+                            )
+                            .audiencePreset(model.brand.preset)
+                        } else if let karaoke = event.karaoke, lineupModel?.hasLoaded != false {
                             KaraokeSection(karaoke: karaoke, venue: event.venue)
                         }
 
@@ -116,6 +132,12 @@ struct EventScreen: View {
             ensureViewModel()
             await viewModel?.load()
         }
+        .task(id: tonightVenueID) {
+            lineupModel = VenueLineupModel.reusing(lineupModel, for: tonightVenueID, api: model.api)
+        }
+        .keepsLineupFresh(lineupModel)
+        // Who a karaoke signup goes under.
+        .task { await model.session.refreshUser() }
         .sheet(item: $pingSeed) { seed in
             PingSheet(seed: seed)
                 .environment(model)
@@ -145,6 +167,13 @@ struct EventScreen: View {
         } message: {
             Text(viewModel?.rsvpError ?? "")
         }
+    }
+
+    /// Its venue, while the event is on tonight: a karaoke night's signups are
+    /// the venue's lineup tonight.
+    private var tonightVenueID: UUID? {
+        guard viewModel?.isTonight == true, let event = viewModel?.state.value?.event, event.karaoke != nil else { return nil }
+        return event.venue?.id
     }
 
     /// "Ping here", only for an event tonight.

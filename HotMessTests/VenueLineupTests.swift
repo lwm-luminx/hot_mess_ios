@@ -32,6 +32,21 @@ struct VenueLineupTests {
         #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj]).hostOnNow == nil)
     }
 
+    @Test("Karaoke shows on Now and an event's page when signups are taken, there are singers, or a partner runs it")
+    func showsKaraoke() {
+        let host = entry("b", role: .host, state: .on, person: hostID)
+        let singer = entry("s", role: .singer, state: .upcoming)
+        let lineup = { (entries: [AudienceKit.LineupEntry], window: KaraokeWindow?, session: VenueKaraoke?) in
+            VenueLineup(venueID: "v", venueName: "The Stud", entries: entries, karaoke: window, karaokeSession: session)
+        }
+        #expect(lineup([host], KaraokeWindow(permitted: true, open: true, host: host), nil).showsKaraoke)
+        #expect(lineup([host, singer], KaraokeWindow(permitted: false, open: false), nil).showsKaraoke)
+        #expect(lineup([host], nil, VenueKaraoke(provider: "karafun", providerName: "KaraFun", joinUrl: "https://kf.io/x")).showsKaraoke)
+        #expect(!lineup([host], KaraokeWindow(permitted: false, open: false), nil).showsKaraoke)
+        #expect(!lineup([host], nil, VenueKaraoke(provider: "audiencekit")).showsKaraoke)
+        #expect(!lineup([host], nil, nil).showsKaraoke)
+    }
+
     @Test("An act opens its first person's page; a singer or a break opens nothing")
     func personID() {
         #expect(entry("b", role: .host, state: .on, person: hostID).personID == UUID(uuidString: hostID))
