@@ -93,7 +93,7 @@ final class FacebookSignIn: NSObject, ASWebAuthenticationPresentationContextProv
     func authorize() async throws -> Result {
         let state = UUID().uuidString
         let appURL = facebookAppURL(state: state)
-        if UIApplication.shared.canOpenURL(appURL) {
+        if Self.registersURLScheme("fb\(appID)"), UIApplication.shared.canOpenURL(appURL) {
             switch await switchToFacebookApp(url: appURL) {
             case let .redirected(callback):
                 return try Self.result(from: callback, state: state, redirectURI: redirectURI)
@@ -104,6 +104,16 @@ final class FacebookSignIn: NSObject, ASWebAuthenticationPresentationContextProv
             }
         }
         return try await authorizeOnTheWeb(state: state)
+    }
+
+    /// Whether the bundle lists `scheme` in `CFBundleURLTypes`. The Facebook
+    /// app can only hand the redirect back through a registered scheme; an
+    /// app ID from AudienceKit's branding rather than the build has none, so
+    /// that sign-in stays in the web sheet, whose callback needs no
+    /// registration.
+    nonisolated static func registersURLScheme(_ scheme: String, in bundle: Bundle = .main) -> Bool {
+        let types = bundle.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        return types.contains { ($0["CFBundleURLSchemes"] as? [String])?.contains(scheme) == true }
     }
 
     /// Takes the Facebook app's redirect while a sign-in waits for it;
@@ -152,28 +162,39 @@ final class FacebookSignIn: NSObject, ASWebAuthenticationPresentationContextProv
     private func authorizeOnTheWeb(state: String) async throws -> Result {
         let url = dialogURL(state: state)
 
-        let callback: URL = try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "fb\(appID)") { url, error in
-                if let url {
-                    continuation.resume(returning: url)
-                } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
-                    continuation.resume(throwing: SessionError.cancelled)
-                } else {
-                    continuation.resume(throwing: error ?? SessionError.missingFacebookToken)
+        // The sheet refuses to start while an alert or sheet is still going
+        // away (the warning's Continue, the terms sheet), so a refused start
+        // waits a moment and tries again before giving up.
+        var attempt = 0
+        while true {
+            let callback: URL? = try await withCheckedThrowingContinuation { continuation in
+                let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "fb\(appID)") { url, error in
+                    if let url {
+                        continuation.resume(returning: url)
+                    } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                        continuation.resume(throwing: SessionError.cancelled)
+                    } else {
+                        continuation.resume(throwing: error ?? SessionError.missingFacebookToken)
+                    }
+                }
+                // Share Safari's cookies, so someone already signed in to Facebook there just continues.
+                session.prefersEphemeralWebBrowserSession = false
+                session.presentationContextProvider = self
+                self.session = session
+
+                if !session.start() {
+                    continuation.resume(returning: nil)
                 }
             }
-            // Share Safari's cookies, so someone already signed in to Facebook there just continues.
-            session.prefersEphemeralWebBrowserSession = false
-            session.presentationContextProvider = self
-            self.session = session
+            session = nil
 
-            if !session.start() {
-                continuation.resume(throwing: SessionError.configurationUnavailable)
+            if let callback {
+                return try Self.result(from: callback, state: state, redirectURI: redirectURI)
             }
+            attempt += 1
+            guard attempt < 4 else { throw SessionError.facebookSheetUnavailable }
+            try await Task.sleep(for: .milliseconds(400))
         }
-        session = nil
-
-        return try Self.result(from: callback, state: state, redirectURI: redirectURI)
     }
 
     /// Reads the code from the redirect, or the reason Facebook gave instead.

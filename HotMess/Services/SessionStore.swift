@@ -24,6 +24,9 @@ enum AuthenticationState: Equatable, Sendable {
 enum SessionError: Error, LocalizedError {
     case cancelled
     case configurationUnavailable
+    /// Facebook's login sheet wouldn't open, usually because something else
+    /// was still on screen.
+    case facebookSheetUnavailable
     case missingFacebookToken
     case missingAppleToken
     case invalidReviewCode
@@ -34,7 +37,9 @@ enum SessionError: Error, LocalizedError {
         case .cancelled:
             String(localized: "Sign in was cancelled.")
         case .configurationUnavailable:
-            String(localized: "Facebook login isn't configured for this build.")
+            String(localized: "Facebook login isn't set up for Hot Mess yet.")
+        case .facebookSheetUnavailable:
+            String(localized: "Facebook's login didn't open. Please try again.")
         case .missingFacebookToken:
             String(localized: "Facebook didn't return an access token.")
         case .missingAppleToken:
@@ -382,17 +387,19 @@ final class SessionStore {
         versionRequirement = (try? await api.clientRequirement()) ?? nil
     }
 
-    /// Facebook's login dialog for this build's Facebook app. A Business-type
-    /// app needs the Login for Business configuration from the audience's
-    /// branding, so branding is loaded first when it hasn't arrived yet. The
-    /// configuration is only used when it belongs to the same app.
+    /// Facebook's login dialog for this build's Facebook app or, when the
+    /// build names none, the one AudienceKit's branding gives the audience
+    /// (the app the API picks when sign-in names no app). A Business-type
+    /// app needs the Login for Business configuration from the branding, so
+    /// branding is loaded first when it hasn't arrived yet. The configuration
+    /// is only used when it belongs to the same app.
     private func facebookSignIn() async throws -> FacebookSignIn {
-        guard let appID = configuration.facebookAppID, !appID.isEmpty else {
+        if brand.branding == nil { await brand.load() }
+        let branding = brand.branding
+
+        guard let appID = configuration.facebookAppID ?? branding?.facebookAppID.flatMap({ $0.isEmpty ? nil : $0 }) else {
             throw SessionError.configurationUnavailable
         }
-        if brand.branding == nil { await brand.load() }
-
-        let branding = brand.branding
         let configID = branding?.facebookAppID == appID ? branding?.facebookLoginConfigID : nil
         return FacebookSignIn(appID: appID, configID: configID, permissions: Self.requestedPermissions)
     }

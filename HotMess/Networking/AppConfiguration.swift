@@ -69,7 +69,7 @@ struct AppConfiguration: Sendable, Hashable {
         baseURL = serverBase.flatMap(URL.init(string:)) ?? Self.defaultBaseURL
         beaconUUID = (bundle.object(forInfoDictionaryKey: "HotMessBeaconID") as? String)
             .flatMap(UUID.init(uuidString:))
-        facebookAppID = bundle.object(forInfoDictionaryKey: "FacebookAppID") as? String
+        facebookAppID = (bundle.object(forInfoDictionaryKey: "FacebookAppID") as? String).nonEmpty
         audienceHost = host
         audienceID = (bundle.object(forInfoDictionaryKey: "AudienceKitAudienceID") as? String).nonEmpty
         environment = env
