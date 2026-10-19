@@ -59,7 +59,8 @@ struct NowScreen: View {
                             }
                         }
 
-                        // Small talk, then events, then venues.
+                        // The lineup or karaoke, small talk, the next three events, then venues.
+                        stageSection(now)
                         venueChatSection(now)
                         localeChatSection(now)
                         eventsSection(now)
@@ -257,12 +258,21 @@ struct NowScreen: View {
             } else if let coatCheck = now.coverCharge?.coatCheck, coatCheck.payable {
                 CoatCheckCard(venue: venue, coatCheck: coatCheck)
             }
+        } else {
+            friendsSection(now, title: String(localized: "People"))
+        }
+    }
 
+    /// At a venue: who's on and up next, and the event's karaoke session when it has one.
+    @ViewBuilder
+    private func stageSection(_ now: Now) -> some View {
+        if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
                 OnNowSection(onNow: now.onNow)
             }
-        } else {
-            friendsSection(now, title: String(localized: "People"))
+            if let karaoke = now.event?.karaoke {
+                KaraokeSection(karaoke: karaoke)
+            }
         }
     }
 
@@ -392,7 +402,7 @@ struct NowScreen: View {
                 }
             } else {
                 CardSection(String(localized: "Events")) {
-                    ForEach(now.events) { event in
+                    ForEach(now.events.prefix(3)) { event in
                         EventCardLink(event: event)
                     }
                 }
