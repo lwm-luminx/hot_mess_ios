@@ -3,7 +3,6 @@
 //  HotMessTests
 //
 
-import AudienceKit
 import CoreLocation
 import Foundation
 import Testing
