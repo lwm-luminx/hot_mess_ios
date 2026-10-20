@@ -28,6 +28,10 @@ AUDIENCEKIT_ENVIRONMENT = staging
 // (Settings -> Advanced -> Client token) for FACEBOOK_APP_ID above.
 FACEBOOK_CLIENT_TOKEN = 5d40b408dee01b2985755736fd046296
 
+// The New Relic mobile app's token (one per app in New Relic), which ships in
+// the app, so it is not a secret. Empty leaves the agent off.
+NEW_RELIC_TOKEN =
+
 BUNDLE_SUFFIX = .next
 APNS_ENVIRONMENT = development
 

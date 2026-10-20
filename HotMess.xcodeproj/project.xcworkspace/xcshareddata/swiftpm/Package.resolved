@@ -37,6 +37,15 @@
       }
     },
     {
+      "identity" : "newrelic-ios-agent-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/newrelic/newrelic-ios-agent-spm",
+      "state" : {
+        "revision" : "06e6b7a9543c3847139c5278ee61d44e0077c8ee",
+        "version" : "7.7.8"
+      }
+    },
+    {
       "identity" : "stripe-ios-spm",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/stripe/stripe-ios-spm",
