@@ -374,7 +374,7 @@
 			packageReferences = (
 				AC0000000000000000000080 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 				AC0000000000000000000081 /* XCRemoteSwiftPackageReference "Kingfisher" */,
-				AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */,
+				AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */,
 				AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */,
 				AC0000000000000000000084 /* XCRemoteSwiftPackageReference "in-app-payments-ios" */,
 				AC4E00000000000000000020 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */,
@@ -1113,9 +1113,9 @@
 				minimumVersion = 8.0.0;
 			};
 		};
-		AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */ = {
+		AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk-swift.git";
+			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
 				revision = 4d9691f5ba864e75e05fc066b69f6b643ac6c2a6;
@@ -1162,7 +1162,7 @@
 		};
 		AC0000000000000000000093 /* AudienceKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
 			productName = AudienceKit;
 		};
 		AC0000000000000000000094 /* StripePaymentSheet */ = {
@@ -1177,7 +1177,7 @@
 		};
 		ACAD00000000000000000001 /* AudienceKitUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
 			productName = AudienceKitUI;
 		};
 /* End XCSwiftPackageProductDependency section */
