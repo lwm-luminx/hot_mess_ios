@@ -43,6 +43,9 @@ final class AppModel {
     var venuesPath: [AppRoute] = []
     var peoplePath: [AppRoute] = []
 
+    /// Set when a share link turned out to have expired, for the tabs' alert.
+    var isShowingExpiredLink = false
+
     /// Bumped whenever Pings change somewhere other than Now (a push, the
     /// send sheet on a venue), so Now reloads.
     private(set) var pingRevision = 0
@@ -274,6 +277,11 @@ final class AppModel {
     }
 
     func open(_ url: URL) -> Bool {
+        if let link = DeepLink.expiringLink(for: url) {
+            open(link)
+            return true
+        }
+
         switch DeepLink.destination(for: url) {
         case let .route(route):
             open(route)
@@ -294,6 +302,32 @@ final class AppModel {
         case nil:
             return false
         }
+    }
+
+    /// Opens a share link with a signed expiry, but never the record once it
+    /// has expired. An expiry already past needs no network; otherwise the
+    /// API checks the signature, and anything but its 410 opens the record as
+    /// an older link would (the record's own load says if something's wrong).
+    private func open(_ link: ExpiringLink) {
+        guard !link.hasExpired() else {
+            linkExpired()
+            return
+        }
+
+        Task {
+            if await api.shareLinkHasExpired(link) {
+                linkExpired()
+            } else {
+                open(link.route)
+            }
+        }
+    }
+
+    /// Says the link has expired, and shows the venues instead of the record.
+    private func linkExpired() {
+        selectedTab = .venues
+        venuesPath = []
+        isShowingExpiredLink = true
     }
 
     /// Opens the venue, then its chat room on top once the venue loads (the

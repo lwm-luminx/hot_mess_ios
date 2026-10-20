@@ -109,6 +109,23 @@ enum DeepLink {
         }
     }
 
+    /// The share link `url` is, when it carries a signed expiry (`e`). `nil`
+    /// for any other link, a share link from before expiries included.
+    static func expiringLink(for url: URL) -> ExpiringLink? {
+        guard case let .route(route) = destination(for: url),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let token = components.queryItems?.first(where: { $0.name == "e" })?.value,
+              !token.isEmpty
+        else { return nil }
+
+        return ExpiringLink(
+            route: route,
+            host: url.scheme == "hotmess" ? nil : components.host,
+            path: "/" + segments(of: url).prefix(2).joined(separator: "/"),
+            token: token
+        )
+    }
+
     /// `["venues", "<uuid>"]` for either form of link.
     private static func segments(of url: URL) -> [String] {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -122,5 +139,39 @@ enum DeepLink {
                 .flatMap { $0.split(separator: "/").map(String.init) }
         }
         return components.path.split(separator: "/").map(String.init)
+    }
+}
+
+/// A share link with a signed expiry: `https://<audience web domain>/venues/<uuid>?e=<token>`,
+/// where the token is the expiry in Unix seconds, in base 36, then a dot and
+/// the API's signature. Only the API can check the signature (`/v1/share`),
+/// but the expiry the app reads itself, so a link that's plainly out of date
+/// never needs the network. Links from before expiries carry no `e`.
+struct ExpiringLink: Hashable, Sendable {
+    /// The record the link shares.
+    let route: AppRoute
+    /// The link's host, which names the audience to `/v1/share`.
+    let host: String?
+    /// `/venues/<uuid>`, spelt as the link spelt it, which is what was signed.
+    let path: String
+    /// The `e` query value, as the link carried it.
+    let token: String
+
+    /// When the link stops working, or `nil` for a token the app can't read
+    /// (which is left to the API to judge).
+    var expiresAt: Date? { Self.expiry(of: token) }
+
+    /// Whether the token's own expiry has passed, before asking the API.
+    func hasExpired(at date: Date = .now) -> Bool {
+        guard let expiresAt else { return false }
+        return expiresAt <= date
+    }
+
+    /// The base-36 Unix seconds before the token's dot.
+    static func expiry(of token: String) -> Date? {
+        guard let dot = token.firstIndex(of: "."),
+              let seconds = Int(token[..<dot], radix: 36)
+        else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(seconds))
     }
 }

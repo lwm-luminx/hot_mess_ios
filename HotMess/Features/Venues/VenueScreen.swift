@@ -141,11 +141,7 @@ struct VenueScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
-                        if let shareURL = venue.shareURL {
-                            ShareLink(item: shareURL) {
-                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                            }
-                        }
+                        RecordShareLink(path: venue.sharePath)
 
                         Menu {
                             Button(role: .destructive) {

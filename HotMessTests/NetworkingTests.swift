@@ -138,6 +138,19 @@ struct EndpointTests {
         #expect(!missing.enabled)
     }
 
+    @Test("Checks a share link's expiry, without a session")
+    func shareCheck() {
+        let endpoint = HotMessAPI.Endpoints.share(host: "hotmess.social", path: "/venues/abc", token: "s44we8.sig")
+        #expect(endpoint.path == "/v1/share")
+        #expect(endpoint.method == .get)
+        #expect(endpoint.requiresAuthentication == false)
+        #expect(endpoint.query == [
+            URLQueryItem(name: "host", value: "hotmess.social"),
+            URLQueryItem(name: "path", value: "/venues/abc"),
+            URLQueryItem(name: "e", value: "s44we8.sig"),
+        ])
+    }
+
     @Test("Asks which sign-in methods the audience offers, without a session")
     func signInMethods() throws {
         let endpoint = HotMessAPI.Endpoints.signInMethods(host: "hotmess.social")

@@ -485,6 +485,36 @@ struct HotMessAPI: Sendable {
         _ = try await query(Documents.deleteAccount, variables: ["confirm": .bool(true)], as: DeleteAccountResponse.self)
     }
 
+    // MARK: - Sharing
+
+    /// A link to share a venue, event or person by (`path` is
+    /// `/venues/<id>` and the like), which the API signs to stop working
+    /// after a month. `nil` when the record can't be shared.
+    func shareLink(path: String) async throws -> URL? {
+        try await query(Documents.shareLink, variables: ["path": .string(path)], as: ShareLinkResponse.self)
+            .shareLink?.url
+    }
+
+    /// `GET /v1/share`: whether a share link's expiry has passed or its
+    /// signature doesn't hold, which the API answers 410. Any other failure
+    /// isn't taken as expired: the record's own load says what's wrong.
+    func shareLinkHasExpired(_ link: ExpiringLink) async -> Bool {
+        let endpoint = Endpoints.share(host: link.host, path: link.path, token: link.token)
+        do {
+            _ = try await audienceKit.data(for: APIRequest(
+                method: endpoint.method.rawValue,
+                path: endpoint.path,
+                queryItems: endpoint.query,
+                authenticated: endpoint.requiresAuthentication
+            ))
+            return false
+        } catch let error as AudienceKitError {
+            return error.status == 410
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Support
 
     /// "Report a Problem". Works signed out too, so sign-in trouble can be
@@ -560,6 +590,20 @@ extension HotMessAPI {
         /// same credential JSON as Sign in with Apple's.
         static func reviewSignIn(_ request: ReviewSignInRequest) -> Endpoint<Credential> {
             Endpoint("/v1/token/review", method: .post, body: JSONBody(request), requiresAuthentication: false)
+        }
+
+        /// Checks a share link before opening it. Open: the link may be
+        /// opened before sign-in. `host` names the audience.
+        static func share(host: String?, path: String, token: String) -> Endpoint<EmptyResponse> {
+            Endpoint(
+                "/v1/share",
+                method: .get,
+                query: (host.map { [URLQueryItem(name: "host", value: $0)] } ?? []) + [
+                    URLQueryItem(name: "path", value: path),
+                    URLQueryItem(name: "e", value: token),
+                ],
+                requiresAuthentication: false
+            )
         }
 
         /// Facebook sign-in with `connect`, sent with the current session so
@@ -1061,6 +1105,12 @@ extension HotMessAPI {
           deleteAccount(input: { confirm: $confirm }) { deleted }
         }
         """
+
+        static let shareLink = """
+        query ShareLink($path: String!) {
+          shareLink(path: $path, lifetime: MONTH) { url }
+        }
+        """
     }
 }
 
@@ -1368,6 +1418,13 @@ struct SetRecentChatPushResponse: Decodable, Sendable {
 struct DeleteAccountResponse: Decodable, Sendable {
     struct Payload: Decodable, Sendable { let deleted: Bool }
     let deleteAccount: Payload
+}
+
+/// `shareLink(path:lifetime:)` on the audience: null when the record can't
+/// be shared.
+struct ShareLinkResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let url: URL }
+    let shareLink: Payload?
 }
 
 extension Coordinates {

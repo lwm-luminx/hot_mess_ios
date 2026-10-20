@@ -97,6 +97,11 @@ struct MainTabView: View {
         .accessibilityIdentifier("main.tabs")
         .coverPresenter()
         .notificationBannerHost()
+        .alert(String(localized: "This link has expired"), isPresented: $model.isShowingExpiredLink) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text("Ask whoever sent it for a new one, or find it among the venues.")
+        }
     }
 }
 

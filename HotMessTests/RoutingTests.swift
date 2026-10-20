@@ -96,6 +96,52 @@ struct DeepLinkTests {
         #expect(!push.isPing)
     }
 
+    @Test("Keeps a share link's signed expiry, with the host and path it was signed for")
+    func expiringLink() throws {
+        let url = try #require(
+            URL(string: "https://hotmess.social/venues/\(id.uuidString.lowercased())?e=s44we8.AbCdEf_-01234567")
+        )
+        let link = try #require(DeepLink.expiringLink(for: url))
+
+        #expect(link.route == .venue(id))
+        #expect(link.host == "hotmess.social")
+        #expect(link.path == "/venues/\(id.uuidString.lowercased())")
+        #expect(link.token == "s44we8.AbCdEf_-01234567")
+        // It's still the venue to any caller that doesn't check expiries.
+        #expect(DeepLink.destination(for: url) == .route(.venue(id)))
+    }
+
+    @Test("A share link from before expiries, or a link that isn't a record, doesn't expire")
+    func linkWithoutExpiry() throws {
+        let older = try #require(URL(string: "https://hotmess.social/events/\(id.uuidString)"))
+        let blank = try #require(URL(string: "https://hotmess.social/events/\(id.uuidString)?e="))
+        let ping = try #require(URL(string: "https://hotmess.social/pings/ping-1?e=s44we8.sig"))
+
+        #expect(DeepLink.expiringLink(for: older) == nil)
+        #expect(DeepLink.expiringLink(for: blank) == nil)
+        #expect(DeepLink.expiringLink(for: ping) == nil)
+    }
+
+    @Test("Reads a share link's expiry from its token, without the network")
+    func expiryDecode() throws {
+        // 1_700_000_000 in base 36.
+        let link = ExpiringLink(route: .venue(id), host: "hotmess.social", path: "/venues/x", token: "s44we8.AbCdEf_-01234567")
+
+        #expect(link.expiresAt == Date(timeIntervalSince1970: 1_700_000_000))
+        #expect(link.hasExpired(at: Date(timeIntervalSince1970: 1_800_000_000)))
+        #expect(!link.hasExpired(at: Date(timeIntervalSince1970: 1_600_000_000)))
+        #expect(ExpiringLink.expiry(of: "S44WE8.AbCdEf_-01234567") == Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    @Test("Leaves a token it can't read to the API rather than calling it expired")
+    func unreadableExpiry() {
+        let link = ExpiringLink(route: .venue(id), host: nil, path: "/venues/x", token: "not!base36.sig")
+
+        #expect(link.expiresAt == nil)
+        #expect(!link.hasExpired())
+        #expect(ExpiringLink.expiry(of: "s44we8") == nil)
+    }
+
     @Test("Routes each destination to the tab that owns it")
     func tabForRoute() {
         #expect(AppRoute.karaokeList(id).tab == .venues)
