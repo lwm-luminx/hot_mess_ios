@@ -377,6 +377,68 @@ struct HotMessAPI: Sendable {
         ]
     }
 
+    // MARK: - Pair me up
+
+    /// Pair me up at a venue: nil where the venue doesn't have it.
+    func pairUp(venueID: UUID) async throws -> VenuePairUp? {
+        try await query(Documents.venuePairUp, variables: ["id": Self.graphQLID(venueID)], as: VenuePairUpResponse.self)
+            .venues?.venue?.pairUp
+    }
+
+    /// Opts in at the venue for tonight, or changes the hint; after a
+    /// meeting, looks for someone new.
+    func joinPairUp(venueID: UUID, lookFor: String?) async throws -> PairUpState? {
+        let trimmed = lookFor?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await pairUpMutation(Documents.joinPairUp, [
+            "venueId": Self.graphQLID(venueID),
+            "lookFor": trimmed.map(GraphQLValue.string) ?? .null,
+        ])
+    }
+
+    func acceptPairUp(matchID: UUID) async throws -> PairUpState? {
+        try await pairUpMutation(Documents.acceptPairUp, ["matchId": Self.graphQLID(matchID)])
+    }
+
+    /// A new topic for the two of them, or (`partner`) someone new for both.
+    func skipPairUp(matchID: UUID, partner: Bool) async throws -> PairUpState? {
+        try await pairUpMutation(Documents.skipPairUp, [
+            "matchId": Self.graphQLID(matchID),
+            "what": .string(partner ? "PARTNER" : "TOPIC"),
+        ])
+    }
+
+    /// Cancels a pairing: neither sees the other from then on.
+    func cancelPairUp(matchID: UUID) async throws -> PairUpState? {
+        try await pairUpMutation(Documents.cancelPairUp, ["matchId": Self.graphQLID(matchID)])
+    }
+
+    func leavePairUp(venueID: UUID) async throws -> PairUpState? {
+        try await pairUpMutation(Documents.leavePairUp, ["venueId": Self.graphQLID(venueID)])
+    }
+
+    /// A fresh single-use code to show the partner.
+    func showPairUpCode(matchID: UUID) async throws -> String {
+        try await query(Documents.showPairUpCode, variables: ["matchId": Self.graphQLID(matchID)], as: ShowPairUpCodeResponse.self)
+            .showPairUpCode.code
+    }
+
+    func scanPairUpCode(venueID: UUID, code: String) async throws -> PairUpScan {
+        try await query(
+            Documents.scanPairUpCode,
+            variables: ["venueId": Self.graphQLID(venueID), "code": .string(code)],
+            as: ScanPairUpCodeResponse.self
+        ).scanPairUpCode
+    }
+
+    /// Each Pair me up mutation answers with `{ pairUp }` under its own name.
+    private func pairUpMutation(_ document: String, _ variables: [String: GraphQLValue]) async throws -> PairUpState? {
+        try await query(document, variables: variables, as: [String: PairUpPayload].self).values.first?.pairUp
+    }
+
+    private static func graphQLID(_ id: UUID) -> GraphQLValue {
+        .string(id.uuidString.lowercased())
+    }
+
     // MARK: - Safety
 
     /// Who the user blocked and whether they've agreed to the terms of use.
@@ -990,6 +1052,65 @@ extension HotMessAPI {
         }
         """
 
+        static let pairUpMatchFields = """
+        id accepted partnerAccepted bonus metAt endReason topic { key text }
+        partner { id name avatarUrl lookFor }
+        """
+
+        static let pairUpStateFields = """
+        status lookFor metCount match { \(pairUpMatchFields) } bonus { \(pairUpMatchFields) }
+        """
+
+        static let venuePairUp = """
+        query VenuePairUp($id: ID!) {
+          venues { venue(id: $id) { pairUp { here mine { \(pairUpStateFields) } } } }
+        }
+        """
+
+        static let joinPairUp = """
+        mutation JoinPairUp($venueId: ID!, $lookFor: String) {
+          joinPairUp(input: { venueId: $venueId, lookFor: $lookFor }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let acceptPairUp = """
+        mutation AcceptPairUp($matchId: ID!) {
+          acceptPairUp(input: { matchId: $matchId }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let skipPairUp = """
+        mutation SkipPairUp($matchId: ID!, $what: PairUpSkip!) {
+          skipPairUp(input: { matchId: $matchId, what: $what }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let cancelPairUp = """
+        mutation CancelPairUp($matchId: ID!) {
+          cancelPairUp(input: { matchId: $matchId }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let leavePairUp = """
+        mutation LeavePairUp($venueId: ID!) {
+          leavePairUp(input: { venueId: $venueId }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let showPairUpCode = """
+        mutation ShowPairUpCode($matchId: ID!) {
+          showPairUpCode(input: { matchId: $matchId }) { code }
+        }
+        """
+
+        static let scanPairUpCode = """
+        mutation ScanPairUpCode($venueId: ID!, $code: String!) {
+          scanPairUpCode(input: { venueId: $venueId, code: $code }) {
+            outcome match { \(pairUpMatchFields) } pairUp { \(pairUpStateFields) }
+          }
+        }
+        """
+
         static let me = """
         query Me {
           me { self { id name first_name: firstName last_name: lastName avatar_url: avatarUrl photo { cdn_url: cdnUrl } } }
@@ -1417,4 +1538,28 @@ extension Data {
     var hexEncodedString: String {
         map { String(format: "%02x", $0) }.joined()
     }
+}
+
+// MARK: - Pair me up
+
+/// `venues { venue(id:) { pairUp } }`; a venue without it has no `pairUp`.
+struct VenuePairUpResponse: Decodable, Sendable {
+    struct Venues: Decodable, Sendable { let venue: Venue? }
+    struct Venue: Decodable, Sendable { let pairUp: VenuePairUp? }
+
+    let venues: Venues?
+}
+
+struct PairUpPayload: Decodable, Sendable {
+    let pairUp: PairUpState?
+}
+
+struct ShowPairUpCodeResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let code: String }
+
+    let showPairUpCode: Payload
+}
+
+struct ScanPairUpCodeResponse: Decodable, Sendable {
+    let scanPairUpCode: PairUpScan
 }
