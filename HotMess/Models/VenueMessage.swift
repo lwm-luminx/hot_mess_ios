@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import Foundation
 
 /// One line in a venue's chat room.
@@ -46,6 +47,9 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// Whether the sender can be reached now, where the API says (GraphQL
     /// previews). Room frames don't carry it; the room's roster does.
     var presence: PresenceState? = nil
+    /// The song request or karaoke signup a request line made, with where it
+    /// is in the queue. The room re-sends the line as the host works it.
+    var request: ChatSongRequest? = nil
 
     init(
         id: UUID = UUID(),
@@ -114,10 +118,57 @@ enum ChatKind: String, Hashable, Sendable {
     case photo
     /// A title and body that stop showing at `endsAt`.
     case special
+    /// A song request or karaoke signup, anyone's in a venue's room, with
+    /// their note to the host as its body.
+    case request
 
     init?(wire: String) {
         self.init(rawValue: wire.lowercased())
     }
+}
+
+/// The song request or karaoke signup on a request line, as the room sends
+/// it (the frame's `request`, GraphQL's `request { … }`): the song, who's
+/// singing a signup, and where it is in the queue.
+struct ChatSongRequest: Hashable, Sendable {
+    let id: String
+    let kind: SongRequest.Kind
+    let title: String
+    var artist: String? = nil
+    /// Who's singing a karaoke signup; `nil` for a song request.
+    var singer: String? = nil
+    var state: SongRequest.State = .queued
+
+    /// "Song request", "Karaoke signup".
+    var label: String {
+        kind == .song ? String(localized: "Song request") : String(localized: "Karaoke signup")
+    }
+
+    /// The request in words: "Dancing Queen by ABBA", or for a signup "Ada to
+    /// sing Waterloo by ABBA".
+    var headline: String {
+        let song = artist.flatMap { $0.isEmpty ? nil : String(localized: "\(title) by \($0)") } ?? title
+        guard kind != .song, let singer, !singer.isEmpty else { return song }
+        return String(localized: "\(singer) to sing \(song)")
+    }
+
+    /// Where it stands, worded for its kind: "In the queue", "Playing now",
+    /// "Played", "Skipped" for a song; "On the list", "Singing now", "Sang",
+    /// "Passed" for a signup.
+    var status: String {
+        let song = kind == .song
+        return switch state {
+        case .queued: song ? String(localized: "In the queue") : String(localized: "On the list")
+        case .up: song ? String(localized: "Playing now") : String(localized: "Singing now")
+        case .done: song ? String(localized: "Played") : String(localized: "Sang")
+        case .skipped: song ? String(localized: "Skipped") : String(localized: "Passed")
+        case .withdrawn: String(localized: "Withdrawn")
+        case .unknown: String(localized: "Requested")
+        }
+    }
+
+    /// Played, sung, skipped or withdrawn: nothing more happens to it.
+    var isFinished: Bool { !state.isOpen && state != .unknown }
 }
 
 /// The event an event message shares, as much of it as the room sends.
@@ -164,9 +215,10 @@ extension VenueMessage {
         let postedAsVenue: Bool
         let personID: UUID?
         let presence: PresenceState?
+        let request: ChatSongRequest?
 
         enum CodingKeys: String, CodingKey {
-            case id, message, name, role, kind, title, body, event, pinned, presence
+            case id, message, name, role, kind, title, body, event, pinned, presence, request
             case userID = "user_id"
             case avatarURL = "avatar_url"
             case sentAt = "sent_at"
@@ -185,6 +237,10 @@ extension VenueMessage {
         private enum EventKeys: String, CodingKey {
             case id, name
             case startAt = "start_at"
+        }
+
+        private enum RequestKeys: String, CodingKey {
+            case id, kind, title, artist, singer, state
         }
 
         init(from decoder: any Decoder) throws {
@@ -224,6 +280,24 @@ extension VenueMessage {
             } else {
                 event = nil
             }
+
+            // The room and GraphQL send it alike; one without an ID or a song is dropped.
+            if (try? container.decodeNil(forKey: .request)) == false,
+               let line = try? container.nestedContainer(keyedBy: RequestKeys.self, forKey: .request),
+               let requestID = try? line.decode(String.self, forKey: .id),
+               let songTitle = try? line.decode(String.self, forKey: .title) {
+                let wire = { (key: RequestKeys) in ((try? line.decodeIfPresent(String.self, forKey: key)) ?? nil)?.uppercased() }
+                request = ChatSongRequest(
+                    id: requestID,
+                    kind: wire(.kind).flatMap(SongRequest.Kind.init(rawValue:)) ?? .unknown,
+                    title: songTitle,
+                    artist: (try? line.decodeIfPresent(String.self, forKey: .artist)) ?? nil,
+                    singer: (try? line.decodeIfPresent(String.self, forKey: .singer)) ?? nil,
+                    state: wire(.state).flatMap(SongRequest.State.init(rawValue:)) ?? .unknown
+                )
+            } else {
+                request = nil
+            }
         }
 
         /// The room and GraphQL both send plain ISO 8601.
@@ -253,6 +327,7 @@ extension VenueMessage {
         postedAsVenue = payload.postedAsVenue
         personID = payload.personID
         presence = payload.presence
+        request = payload.request
     }
 }
 

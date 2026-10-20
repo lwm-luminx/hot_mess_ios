@@ -47,6 +47,37 @@ struct VenueLineupTests {
         #expect(!lineup([host], nil, nil).showsKaraoke)
     }
 
+    @Test("Song requests show when the venue takes them, or the viewer still has one waiting or playing")
+    func showsSongRequests() {
+        let host = entry("b", role: .host, state: .on, person: hostID)
+        let lineup = { (window: SongRequestWindow?) in
+            VenueLineup(venueID: "v", venueName: "The Stud", entries: [host], songRequests: window)
+        }
+        let waiting = SongRequest(id: "q1", kind: .song, title: "Toxic", mine: true, state: .queued)
+        let played = SongRequest(id: "q2", kind: .song, title: "Believe", mine: true, state: .done)
+        #expect(lineup(SongRequestWindow(permitted: true, open: false, closedReason: "Requests open when a DJ is on"))
+            .showsSongRequests)
+        #expect(lineup(SongRequestWindow(permitted: false, open: false, mine: [waiting])).showsSongRequests)
+        #expect(!lineup(SongRequestWindow(permitted: false, open: false, mine: [played])).showsSongRequests)
+        #expect(!lineup(nil).showsSongRequests)
+    }
+
+    @Test("Counts the requests ahead of the viewer's and lists theirs newest first")
+    func songQueue() {
+        let playing = SongRequest(id: "q1", kind: .song, title: "Dancing Queen", state: .up)
+        let other = SongRequest(id: "q2", kind: .song, title: "Believe")
+        let mine = SongRequest(id: "q3", kind: .song, title: "Toxic", mine: true)
+        let earlier = SongRequest(id: "q0", kind: .song, title: "Waterloo", mine: true, state: .skipped)
+        let window = SongRequestWindow(permitted: true, open: true, mine: [earlier, mine], queue: [playing, other, mine])
+        let lineup = VenueLineup(venueID: "v", venueName: "The Stud", entries: [], songRequests: window)
+
+        #expect(window.playing?.id == "q1")
+        #expect(window.requestsBefore(mine) == 2)
+        #expect(window.requestsBefore(earlier) == nil)
+        #expect(lineup.mySongRequests.map(\.id) == ["q3", "q0"])
+        #expect(!lineup.showsKaraoke)
+    }
+
     @Test("An act opens its first person's page; a singer or a break opens nothing")
     func personID() {
         #expect(entry("b", role: .host, state: .on, person: hostID).personID == UUID(uuidString: hostID))
@@ -86,5 +117,22 @@ struct VenueLineupTests {
         #expect(singer.displayName == "Ada")
         #expect(singer.personID == nil)
         #expect(singer.songRequest?.songLine == "Waterloo · ABBA")
+    }
+
+    @Test("Decodes the SDK's song window with the viewer's request and the queue")
+    func decodesSongWindow() throws {
+        let request = """
+        { "id": "q1", "kind": "SONG", "title": "Dancing Queen", "artist": "ABBA", "singer": null, "mine": true,
+          "state": "UP", "summary": "Dancing Queen by ABBA", "position": 0, "note": "For Bo" }
+        """
+        let json = """
+        { "permitted": true, "open": false, "paused": true, "closedReason": "Requests are paused",
+          "mine": { "nodes": [\(request)] }, "queue": { "nodes": [\(request)] } }
+        """
+        let window = try JSONDecoder().decode(SongRequestWindow.self, from: Data(json.utf8))
+        #expect(window.paused && !window.open && window.closedReason == "Requests are paused")
+        #expect(window.mine.first?.isSong == true)
+        #expect(window.playing?.note == "For Bo")
+        #expect(window.mine.first?.state.songStatus == "Playing now")
     }
 }
