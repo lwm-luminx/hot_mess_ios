@@ -2,9 +2,9 @@
   "originHash" : "4cc799c464fbef4d724b67507959e3742b86f94ad6609face5001b1229c5500f",
   "pins" : [
     {
-      "identity" : "audience-kit-sdk-swift",
+      "identity" : "audience-kit-sdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/lwm-luminx/audience-kit-sdk-swift.git",
+      "location" : "https://github.com/lwm-luminx/audience-kit-sdk.git",
       "state" : {
         "revision" : "4d9691f5ba864e75e05fc066b69f6b643ac6c2a6"
       }
