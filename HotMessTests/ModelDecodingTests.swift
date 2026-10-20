@@ -650,6 +650,61 @@ struct VenueMessageTests {
         ))
     }
 
+    @Test("Decodes a song request line and follows its state")
+    func songRequestFrame() throws {
+        let frame = { (state: String) in
+            try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+            {
+              "type": "updated",
+              "id": "1b2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b",
+              "message": "Song request: Dancing Queen by ABBA",
+              "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+              "name": "Ada L.",
+              "kind": "request",
+              "body": "For Bo",
+              "request": { "id": "7c0a1f2e-0000-4000-8000-000000000001", "kind": "song", "title": "Dancing Queen",
+                           "artist": "ABBA", "singer": null, "state": "\(state)", "position": 0 }
+            }
+            """.utf8))
+        }
+
+        let message = VenueMessage(payload: try frame("up"))
+        #expect(message.kind == .request)
+        let request = try #require(message.request)
+        #expect(request.kind == .song && request.state == .up)
+        #expect(request.label == "Song request")
+        #expect(request.headline == "Dancing Queen by ABBA")
+        #expect(request.status == "Playing now")
+        #expect(message.richContent == .request(request, note: "For Bo"))
+
+        #expect(VenueMessage(payload: try frame("done")).request?.status == "Played")
+        #expect(VenueMessage(payload: try frame("skipped")).request?.status == "Skipped")
+        #expect(VenueMessage(payload: try frame("queued")).request?.status == "In the queue")
+        #expect(VenueMessage(payload: try frame("done")).request?.isFinished == true)
+    }
+
+    @Test("Words a karaoke signup line by its singer, and drops a request without a song")
+    func karaokeRequestLine() throws {
+        let signup = ChatSongRequest(id: "r1", kind: .karaoke, title: "Waterloo", artist: "ABBA", singer: "Ada",
+                                     state: .up)
+        #expect(signup.label == "Karaoke signup")
+        #expect(signup.headline == "Ada to sing Waterloo by ABBA")
+        #expect(signup.status == "Singing now")
+        #expect(ChatSongRequest(id: "r1", kind: .karaoke, title: "Waterloo", state: .skipped).status == "Passed")
+
+        let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        {
+          "message": "Song request: ",
+          "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "kind": "REQUEST",
+          "request": { "id": "7c0a1f2e-0000-4000-8000-000000000001", "kind": "SONG" }
+        }
+        """.utf8))
+        let message = VenueMessage(payload: payload)
+        #expect(message.kind == .request && message.request == nil)
+        #expect(message.richContent == nil)
+    }
+
     @Test("Shows an unknown or incomplete rich message as its summary")
     func unknownKind() throws {
         let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""

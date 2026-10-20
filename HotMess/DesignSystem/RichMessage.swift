@@ -6,9 +6,10 @@
 import SwiftUI
 
 /// What hosts, the venue and staff can post besides text (design system
-/// "RichMessage"): an announcement, a shared event, a photo or a special.
-/// Each stands alone in the thread, up to 320 wide (or 85% of the room),
-/// except a photo, which is at most 240.
+/// "RichMessage"): an announcement, a shared event, a photo or a special;
+/// and anyone's song request or karaoke signup. Each stands alone in the
+/// thread, up to 320 wide (or 85% of the room), except a photo, which is at
+/// most 240.
 struct RichMessageView: View {
     let content: ChatRichContent
 
@@ -22,6 +23,8 @@ struct RichMessageView: View {
             photo(url: url, caption: caption)
         case let .special(title, text, endsAt):
             special(title: title, text: text, endsAt: endsAt)
+        case let .request(request, note):
+            self.request(request, note: note)
         }
     }
 
@@ -91,6 +94,38 @@ struct RichMessageView: View {
         .background(Color.hotMessAccentSoft, in: shape)
         .overlay {
             shape.strokeBorder(Color.hotMessAccentInk, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+        }
+    }
+
+    /// A raised card: "Song request · Playing now" (or "Karaoke signup · On
+    /// the list"), the request in words and the note to the host. It follows
+    /// the request as the host works the queue: green while it's playing or
+    /// the singer is on, faded once it's finished.
+    private func request(_ request: ChatSongRequest, note: String?) -> some View {
+        let shape = RoundedRectangle(cornerRadius: ChatMetrics.bubbleRadius, style: .continuous)
+        let isUp = request.state == .up
+
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: request.kind == .song ? "music.note" : "music.mic")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isUp ? Color.hotMessSuccess : Color.hotMessAccentInk)
+                .frame(width: 28, height: 28)
+                .background(isUp ? Color.hotMessSuccessSoft : Color.hotMessAccentSoft, in: .circle)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                RichOverline(text: "\(request.label) · \(request.status)")
+                RichTitleAndBody(title: request.headline, text: note)
+            }
+            .opacity(request.isFinished ? 0.6 : 1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isUp ? Color.hotMessSuccessSoft : Color(.secondarySystemGroupedBackground), in: shape)
+        .overlay {
+            if isUp { shape.strokeBorder(Color.hotMessSuccess, lineWidth: 1.5) }
         }
     }
 
@@ -192,6 +227,9 @@ extension VenueMessage {
         case .special:
             guard let title, !title.isEmpty else { return nil }
             return .special(title: title, body: written, endsAt: endsAt)
+        case .request:
+            guard let request else { return nil }
+            return .request(request, note: written)
         }
     }
 

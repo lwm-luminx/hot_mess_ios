@@ -178,6 +178,9 @@ enum ChatRichContent: Hashable, Sendable {
     case photo(URL, caption: String?)
     /// A title and body that show until `endsAt`.
     case special(title: String, body: String?, endsAt: Date?)
+    /// A song request or karaoke signup, where it stands, and the note to
+    /// the host.
+    case request(ChatSongRequest, note: String?)
 }
 
 /// Where one of the reader's own lines is on its way to the room.

@@ -86,6 +86,17 @@ struct EventScreen: View {
                             KaraokeSection(karaoke: karaoke, venue: event.venue)
                         }
 
+                        // On the night, song requests too, when the venue takes them.
+                        if let lineupModel, let lineup = lineupModel.lineup, lineup.showsSongRequests {
+                            SongRequestsSection(
+                                lineup: lineup,
+                                signedIn: model.session.isSignedIn,
+                                onRequest: lineupModel.requestSong,
+                                onWithdraw: lineupModel.remove
+                            )
+                            .audiencePreset(model.brand.preset)
+                        }
+
                         detailsSection(event)
 
                         if let venue = event.venue {
