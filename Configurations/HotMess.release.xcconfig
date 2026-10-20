@@ -28,7 +28,7 @@ FACEBOOK_CLIENT_TOKEN = ee4e193e42709c8aaf8f3aa6b383feab
 
 // The New Relic mobile app's token (one per app in New Relic), which ships in
 // the app, so it is not a secret. Empty leaves the agent off.
-NEW_RELIC_TOKEN =
+NEW_RELIC_TOKEN = AA38d159f775c3c2174a1a01ec13282bb1e4d0be1a-NRMA
 
 BUNDLE_SUFFIX = 
 APNS_ENVIRONMENT = production
