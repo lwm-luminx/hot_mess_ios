@@ -10,6 +10,8 @@
 		AC00000000000000000000A0 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000090 /* FacebookCore */; };
 		AC00000000000000000000A1 /* FacebookLogin in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000091 /* FacebookLogin */; };
 		AC00000000000000000000A2 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000092 /* Kingfisher */; };
+		AC4E00000000000000000001 /* NewRelic in Frameworks */ = {isa = PBXBuildFile; productRef = AC4E00000000000000000010 /* NewRelic */; };
+		AC4E00000000000000000002 /* NewRelic in Frameworks */ = {isa = PBXBuildFile; productRef = AC4E00000000000000000010 /* NewRelic */; };
 		AC00000000000000000000A3 /* AudienceKit in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000093 /* AudienceKit */; };
 		AC00000000000000000000A4 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000094 /* StripePaymentSheet */; };
 		AC00000000000000000000A5 /* SquareInAppPaymentsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000095 /* SquareInAppPaymentsSDK */; };
@@ -114,6 +116,7 @@
 				ACAD00000000000000000002 /* AudienceKitUI in Frameworks */,
 				AC00000000000000000000A4 /* StripePaymentSheet in Frameworks */,
 				AC00000000000000000000A5 /* SquareInAppPaymentsSDK in Frameworks */,
+				AC4E00000000000000000001 /* NewRelic in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +145,7 @@
 				AC00000000000000000000C7 /* AudienceKitUI in Frameworks */,
 				AC00000000000000000000C8 /* StripePaymentSheet in Frameworks */,
 				AC00000000000000000000C9 /* SquareInAppPaymentsSDK in Frameworks */,
+				AC4E00000000000000000002 /* NewRelic in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,6 +221,7 @@
 				ACAD00000000000000000001 /* AudienceKitUI */,
 				AC0000000000000000000094 /* StripePaymentSheet */,
 				AC0000000000000000000095 /* SquareInAppPaymentsSDK */,
+				AC4E00000000000000000010 /* NewRelic */,
 			);
 			productName = HotMess;
 			productReference = AC0000000000000000000020 /* HotMess.app */;
@@ -289,6 +294,7 @@
 				ACAD00000000000000000001 /* AudienceKitUI */,
 				AC0000000000000000000094 /* StripePaymentSheet */,
 				AC0000000000000000000095 /* SquareInAppPaymentsSDK */,
+				AC4E00000000000000000010 /* NewRelic */,
 			);
 			productName = HotMessNext;
 			productReference = AC0000000000000000000023 /* HotMessNext.app */;
@@ -368,9 +374,10 @@
 			packageReferences = (
 				AC0000000000000000000080 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 				AC0000000000000000000081 /* XCRemoteSwiftPackageReference "Kingfisher" */,
-				AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */,
+				AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */,
 				AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */,
 				AC0000000000000000000084 /* XCRemoteSwiftPackageReference "in-app-payments-ios" */,
+				AC4E00000000000000000020 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AC0000000000000000000003 /* Products */;
@@ -1090,6 +1097,14 @@
 				minimumVersion = 18.1.1;
 			};
 		};
+		AC4E00000000000000000020 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/newrelic/newrelic-ios-agent-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.7.8;
+			};
+		};
 		AC0000000000000000000081 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
@@ -1098,9 +1113,9 @@
 				minimumVersion = 8.0.0;
 			};
 		};
-		AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */ = {
+		AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk-swift.git";
+			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
 				revision = 263aaf55015c415a9970771081d38d10cf4ba654;
@@ -1135,6 +1150,11 @@
 			package = AC0000000000000000000080 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
 			productName = FacebookLogin;
 		};
+		AC4E00000000000000000010 /* NewRelic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC4E00000000000000000020 /* XCRemoteSwiftPackageReference "newrelic-ios-agent-spm" */;
+			productName = NewRelic;
+		};
 		AC0000000000000000000092 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AC0000000000000000000081 /* XCRemoteSwiftPackageReference "Kingfisher" */;
@@ -1142,7 +1162,7 @@
 		};
 		AC0000000000000000000093 /* AudienceKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
 			productName = AudienceKit;
 		};
 		AC0000000000000000000094 /* StripePaymentSheet */ = {
@@ -1157,7 +1177,7 @@
 		};
 		ACAD00000000000000000001 /* AudienceKitUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk-swift" */;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
 			productName = AudienceKitUI;
 		};
 /* End XCSwiftPackageProductDependency section */

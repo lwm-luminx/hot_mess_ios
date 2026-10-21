@@ -28,6 +28,10 @@ AUDIENCEKIT_ENVIRONMENT = production
 // environment; login reports an error at runtime while this is empty.
 FACEBOOK_CLIENT_TOKEN =
 
+// The New Relic mobile app's token (one per app in New Relic), which ships in
+// the app, so it is not a secret. Empty leaves the agent off.
+NEW_RELIC_TOKEN =
+
 BUNDLE_SUFFIX = Development
 APNS_ENVIRONMENT = development
 

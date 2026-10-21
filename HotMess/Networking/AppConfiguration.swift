@@ -33,6 +33,9 @@ struct AppConfiguration: Sendable, Hashable {
     /// The build's `aps-environment`, `development` or `production`, from
     /// `APNS_ENVIRONMENT`.
     let apnsEnvironment: String?
+    /// The New Relic mobile app's token, from `NEW_RELIC_TOKEN`. Without one
+    /// the agent doesn't start.
+    let newRelicToken: String?
 
     static let defaultBaseURL = URL(string: "https://api.audiencekit.com")!
     static let defaultAudienceHost = "hotmess.admin.audiencekit.com"
@@ -72,6 +75,7 @@ struct AppConfiguration: Sendable, Hashable {
         audienceHost = host
         audienceID = (bundle.object(forInfoDictionaryKey: "AudienceKitAudienceID") as? String).nonEmpty
         environment = env
+        newRelicToken = (bundle.object(forInfoDictionaryKey: "NewRelicToken") as? String).nonEmpty
         applePayMerchantID = (bundle.object(forInfoDictionaryKey: "ApplePayMerchantID") as? String).nonEmpty
             .flatMap { $0.hasPrefix("merchant.") ? $0 : nil }
         version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0"
@@ -90,7 +94,8 @@ struct AppConfiguration: Sendable, Hashable {
         applePayMerchantID: String? = nil,
         version: String = "0.0",
         build: Int = 0,
-        apnsEnvironment: String? = nil
+        apnsEnvironment: String? = nil,
+        newRelicToken: String? = nil
     ) {
         self.baseURL = baseURL
         self.beaconUUID = beaconUUID
@@ -102,6 +107,7 @@ struct AppConfiguration: Sendable, Hashable {
         self.version = version
         self.build = build
         self.apnsEnvironment = apnsEnvironment
+        self.newRelicToken = newRelicToken
     }
 
     /// Whether this build's push tokens belong to APNs' sandbox: the

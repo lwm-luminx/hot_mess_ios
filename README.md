@@ -20,7 +20,7 @@ Dependencies resolve through Swift Package Manager on first open:
 | --- | --- |
 | [facebook-ios-sdk](https://github.com/facebook/facebook-ios-sdk) | Login |
 | [Kingfisher](https://github.com/onevcat/Kingfisher) | Remote image loading and caching |
-| [AudienceKit Swift SDK](https://github.com/audience-kit/audience-kit-sdk-swift) 0.19.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
+| [AudienceKit SDK](https://github.com/lwm-luminx/audience-kit-sdk) 0.21.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
 | [Stripe](https://github.com/stripe/stripe-ios-spm) (`StripePaymentSheet`) | Paying cover at Stripe venues |
 | [Square In-App Payments](https://github.com/square/in-app-payments-ios) (`SquareInAppPaymentsSDK`) | Paying cover at Square venues |
 
@@ -236,11 +236,11 @@ Scripts/testflight.sh --export-only   # stop at build/testflight/export/HotMess.
 - Sign-in requests only `public_profile` while App Review is pending. Revisit
   additional permissions after approval.
 
-The shared Swift package is the AudienceKit Swift SDK, resolved from
-`https://github.com/audience-kit/audience-kit-sdk-swift.git`. It follows the SDK's
-`main` branch, which carries 0.19.0 (the pre-release sweep); the SDK repository has
-no tags yet, so when it starts tagging, change the requirement in `HotMess.xcodeproj`
-to `upToNextMinorVersion` from `0.19.0`. Consumer
+The shared Swift package is the public AudienceKit SDK, resolved from
+`https://github.com/lwm-luminx/audience-kit-sdk.git` (formerly `audience-kit-sdk-swift`;
+the repository now also holds the Kotlin Multiplatform core and the Android SDK on one
+version). The project pins a revision, 0.21.0's release commit; once the SDK is tagged,
+change the requirement in `HotMess.xcodeproj` to `upToNextMinorVersion`. Consumer
 services come from `AudienceKit`; shared design tokens and UI come from
 `AudienceKitUI`, both built on `AudienceCore`. The app's realtime cable is the SDK's
 `AudienceCable`, which signs its handshake the way every call is signed

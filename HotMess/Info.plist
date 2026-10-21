@@ -55,6 +55,8 @@
 	<false/>
 	<key>FacebookClientToken</key>
 	<string>$(FACEBOOK_CLIENT_TOKEN)</string>
+	<key>NewRelicToken</key>
+	<string>$(NEW_RELIC_TOKEN)</string>
 	<key>FacebookDisplayName</key>
 	<string>Hot Mess</string>
 	<key>HotMessAPNSEnvironment</key>

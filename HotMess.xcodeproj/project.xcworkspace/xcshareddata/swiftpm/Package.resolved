@@ -2,9 +2,9 @@
   "originHash" : "4cc799c464fbef4d724b67507959e3742b86f94ad6609face5001b1229c5500f",
   "pins" : [
     {
-      "identity" : "audience-kit-sdk-swift",
+      "identity" : "audience-kit-sdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/lwm-luminx/audience-kit-sdk-swift.git",
+      "location" : "https://github.com/lwm-luminx/audience-kit-sdk.git",
       "state" : {
         "revision" : "263aaf55015c415a9970771081d38d10cf4ba654"
       }
@@ -34,6 +34,15 @@
       "state" : {
         "revision" : "8648fe649c5d62be38721110f835821906e9242a",
         "version" : "8.13.0"
+      }
+    },
+    {
+      "identity" : "newrelic-ios-agent-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/newrelic/newrelic-ios-agent-spm",
+      "state" : {
+        "revision" : "06e6b7a9543c3847139c5278ee61d44e0077c8ee",
+        "version" : "7.7.8"
       }
     },
     {
