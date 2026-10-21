@@ -39,7 +39,7 @@ extension HotMessAPI {
             variables: ["id": .string(id.uuidString.lowercased())],
             as: PostResponse.self
         )
-        return response.audience?.posts.post.map { (post: $0.post, comments: $0.comments.nodes) }
+        return response.posts.post.map { (post: $0.post, comments: $0.comments.nodes) }
     }
 
     func commentOnPost(_ postID: UUID, body: String) async throws -> PostComment {
@@ -97,13 +97,13 @@ enum PostDocuments {
 
     static let localePosts = """
     query LocalePosts($id: ID!, $first: Int!, $from: PostsFrom!) {
-      audience { locale(id: $id) { posts { list(first: $first, from: $from) { nodes { \(postFields) } } } } }
+      locale(id: $id) { posts { list(first: $first, from: $from) { nodes { \(postFields) } } } }
     }
     """
 
     static let post = """
     query Post($id: ID!) {
-      audience { posts { post(id: $id) { \(postFields) comments(first: 100) { nodes { \(commentFields) } } } } }
+      posts { post(id: $id) { \(postFields) comments(first: 100) { nodes { \(commentFields) } } } }
     }
     """
 
@@ -126,7 +126,7 @@ enum PostDocuments {
     """
 }
 
-/// Any of the lists: `{venues|events|people|audience} { <one> { posts { list } } }`.
+/// Any of the lists: `{venues|events|people} { <one> { posts { list } } }`, or `locale { posts { list } }`.
 struct PostsResponse: Decodable, Sendable {
     let posts: [Post]
 
@@ -141,9 +141,14 @@ struct PostsResponse: Decodable, Sendable {
     }
 
     init(from decoder: any Decoder) throws {
-        // One root ("venues"), holding one field ("venue"), holding the posts.
+        // One root ("venues"), holding one field ("venue"), holding the posts; a locale is at the root itself.
         let root = try decoder.container(keyedBy: DynamicKey.self)
         guard let rootKey = root.allKeys.first else { posts = []; return }
+        if rootKey.stringValue == "locale" {
+            posts = try root.decodeIfPresent(Owner.self, forKey: rootKey)?.posts.list.nodes ?? []
+            return
+        }
+        guard (try? root.decodeNil(forKey: rootKey)) == false else { posts = []; return }
         let parent = try root.nestedContainer(keyedBy: DynamicKey.self, forKey: rootKey)
         guard let ownerKey = parent.allKeys.first else { posts = []; return }
         posts = try parent.decodeIfPresent(Owner.self, forKey: ownerKey)?.posts.list.nodes ?? []
@@ -164,9 +169,8 @@ struct PostResponse: Decodable, Sendable {
     }
 
     struct Posts: Decodable, Sendable { let post: Detail? }
-    struct Audience: Decodable, Sendable { let posts: Posts }
 
-    let audience: Audience?
+    let posts: Posts
 }
 
 struct CreatePostCommentResponse: Decodable, Sendable {
