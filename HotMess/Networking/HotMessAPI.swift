@@ -577,7 +577,7 @@ struct HotMessAPI: Sendable {
         ))
     }
 
-    private func query<Response: Decodable & Sendable>(
+    func query<Response: Decodable & Sendable>(
         _ document: String,
         variables: [String: GraphQLValue],
         as type: Response.Type

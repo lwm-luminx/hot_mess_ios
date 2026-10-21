@@ -35,6 +35,10 @@ struct VenuesScreen: View {
                             }
                         }
                     }
+
+                    if model.session.isSignedIn {
+                        ThinCityCard(venueCount: collection.venues.count, cityName: model.location.locale?.name)
+                    }
                 }
                 .padding(.vertical, 16)
             }

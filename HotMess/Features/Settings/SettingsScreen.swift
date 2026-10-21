@@ -190,6 +190,13 @@ struct SettingsScreen: View {
     private var feedbackSection: some View {
         Section {
             NavigationLink {
+                YourSuggestionsScreen()
+            } label: {
+                Label(String(localized: "Your Suggestions"), systemImage: "lightbulb")
+            }
+            .accessibilityIdentifier("me.suggestions")
+
+            NavigationLink {
                 ReportProblemScreen()
             } label: {
                 Label(String(localized: "Report a Problem"), systemImage: "exclamationmark.bubble")
