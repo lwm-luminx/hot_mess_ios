@@ -106,6 +106,8 @@ enum ReportTarget: String, Hashable, Sendable {
     case ping = "PING"
     case photo = "PHOTO"
     case message = "MESSAGE"
+    case post = "POST"
+    case postComment = "POST_COMMENT"
 }
 
 /// Something the user is reporting: what it is, its ID, and the person behind
@@ -127,6 +129,8 @@ struct ReportSubject: Identifiable, Hashable, Sendable {
         case .ping: String(localized: "Why are you reporting this ping?")
         case .photo: String(localized: "Why are you reporting this photo?")
         case .message: String(localized: "Why are you reporting this message?")
+        case .post: String(localized: "Why are you reporting this post?")
+        case .postComment: String(localized: "Why are you reporting this comment?")
         }
     }
 }
