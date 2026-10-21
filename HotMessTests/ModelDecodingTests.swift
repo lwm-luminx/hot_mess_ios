@@ -789,6 +789,200 @@ struct VenueMessageTests {
         #expect(rows.map(\.isLastInGroup) == [true, true, false, true])
     }
 
+    @Test("Decodes a prompt from the legacy socket, posted as the audience")
+    func promptFrame() throws {
+        let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        {
+          "type": "incoming",
+          "id": "3b2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b",
+          "message": "Who won the very first season?",
+          "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "name": "Hot Mess",
+          "avatar_url": null,
+          "sent_at": "2026-10-11T04:00:00Z",
+          "role": null,
+          "kind": "prompt",
+          "body": "Who won the very first season?",
+          "pinned": false,
+          "automatic": true,
+          "posted_as_venue": false,
+          "posted_as_person": false,
+          "prompt": { "id": "7d1e0aac-1d01-42d1-9de5-f0279842d9c0", "kind": "trivia",
+                      "text": "Who won the very first season?", "answer": "BeBe Zahara Benet",
+                      "reveal_at": "2026-10-11T04:10:00Z", "shown_as": "card", "number": 3, "total": 6,
+                      "next_at": "2026-10-11T04:45:00Z" },
+          "prompt_id": null
+        }
+        """.utf8))
+
+        let message = VenueMessage(payload: payload)
+        #expect(message.kind == .prompt)
+        // The frame has no `posted_as_audience`; a prompt is the audience's anyway.
+        #expect(message.postedAsAudience == false)
+        #expect(message.isFromAudience && message.isFromListing)
+        #expect(message.promptID == nil)
+        #expect(message.richContent == nil)
+
+        let prompt = try #require(message.prompt)
+        #expect(prompt.id == "7d1e0aac-1d01-42d1-9de5-f0279842d9c0")
+        #expect(prompt.kind == .trivia && prompt.isTrivia)
+        #expect(prompt.answer == "BeBe Zahara Benet")
+        #expect(prompt.shownAs == .card)
+        #expect(prompt.number == 3 && prompt.total == 6)
+        #expect(prompt.revealAt == Date(timeIntervalSince1970: 1_791_691_800))
+        #expect(prompt.nextAt == Date(timeIntervalSince1970: 1_791_693_900))
+        #expect(prompt.overline == "Trivia · 3 of 6")
+        #expect(prompt.label == "Trivia")
+        #expect(!prompt.isRevealed(at: Date(timeIntervalSince1970: 1_791_691_799)))
+        #expect(prompt.isRevealed(at: Date(timeIntervalSince1970: 1_791_691_800)))
+        #expect(!message.isPinnedPrompt)
+
+        let line = message.threadMessage(currentUserID: nil, online: [message.userID])
+        #expect(line.promptCard == prompt)
+        #expect(line.isFromAudience)
+        #expect(line.presence == nil)
+        #expect(line.authorName == "Hot Mess")
+        #expect(line.authorID == "audience:\(message.userID.uuidString)")
+        // A peek shows a prompt as its text.
+        #expect(message.threadMessage(currentUserID: nil, rich: false).promptCard == nil)
+    }
+
+    @Test("Reads a GraphQL prompt and a pinned one's place in the night")
+    func graphQLPrompt() throws {
+        let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        {
+          "message": "Who should have won last season?",
+          "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "name": "Hot Mess",
+          "kind": "PROMPT",
+          "posted_as_audience": true,
+          "prompt_id": null,
+          "prompt": { "id": "7d1e0aac-1d01-42d1-9de5-f0279842d9c0", "kind": "CONVERSATION",
+                      "text": "Who should have won last season?", "answer": null, "reveal_at": null,
+                      "shown_as": "PINNED", "number": 2, "total": 6, "next_at": null }
+        }
+        """.utf8))
+
+        let message = VenueMessage(payload: payload)
+        #expect(message.postedAsAudience)
+        #expect(message.isPinnedPrompt)
+        #expect(message.prompt?.kind == .conversation)
+        #expect(message.prompt?.overline == "Tonight's prompt · 2 of 6")
+        #expect(message.prompt?.nextAt == nil)
+        #expect(message.threadMessage(currentUserID: nil).promptCard == nil)
+    }
+
+    @Test("An answer carries its prompt's ID and a Prompt label")
+    func promptAnswer() throws {
+        let frame = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Plane Jane", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "kind": "text",
+          "prompt_id": "7d1e0aac-1d01-42d1-9de5-f0279842d9c0" }
+        """.utf8))
+        let message = VenueMessage(payload: frame)
+        #expect(message.promptID == "7d1e0aac-1d01-42d1-9de5-f0279842d9c0")
+        #expect(!message.isFromAudience)
+        #expect(message.threadMessage(currentUserID: nil).promptLabel == "Prompt")
+        #expect(message.threadMessage(
+            currentUserID: nil, promptKinds: ["7d1e0aac-1d01-42d1-9de5-f0279842d9c0": .trivia]
+        ).promptLabel == "Trivia")
+
+        // A numeric ID from a server that sends one still reads.
+        let numbered = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "hi", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "prompt_id": 42 }
+        """.utf8))
+        #expect(numbered.promptID == "42")
+    }
+
+    @Test("An older server's line, an unknown kind or a prompt without its question still reads")
+    func promptFallbacks() throws {
+        let older = VenueMessage(payload: try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "hi", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44" }
+        """.utf8)))
+        #expect(older.prompt == nil && older.promptID == nil && !older.postedAsAudience)
+        #expect(older.threadMessage(currentUserID: nil).promptLabel == nil)
+
+        let unknown = VenueMessage(payload: try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Vote: best lip sync", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "kind": "POLL",
+          "prompt": "nonsense" }
+        """.utf8)))
+        #expect(unknown.kind == .text)
+        #expect(unknown.prompt == nil)
+
+        let bare = VenueMessage(payload: try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Find someone who disagrees", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "kind": "PROMPT", "prompt": { "id": "p1", "kind": "QUIZ", "shown_as": "BANNER" } }
+        """.utf8)))
+        #expect(bare.kind == .prompt && bare.prompt == nil)
+        #expect(!bare.isPinnedPrompt)
+        let line = bare.threadMessage(currentUserID: nil)
+        #expect(line.promptCard == nil && line.text == "Find someone who disagrees")
+        #expect(line.isFromAudience)
+
+        let odd = VenueMessage(payload: try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Q", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "kind": "PROMPT",
+          "prompt": { "id": "p1", "text": "Q", "kind": "QUIZ", "shown_as": "BANNER", "answer": " " } }
+        """.utf8)))
+        #expect(odd.prompt == ChatPrompt(id: "p1", text: "Q"))
+        #expect(odd.prompt?.overline == "Tonight's prompt")
+    }
+
+    @Test("A PromptCard stands alone, saying how long the room was quiet")
+    func promptCardRows() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        func message(_ id: String, card: ChatPrompt? = nil, minutes: Double) -> ChatThreadMessage {
+            ChatThreadMessage(
+                id: id, authorID: card == nil ? "sam" : "audience", authorName: card == nil ? "Sam" : "Hot Mess",
+                avatarURL: nil, text: id, sentAt: start.addingTimeInterval(minutes * 60), isOwn: false,
+                isFromListing: card != nil, isFromAudience: card != nil, promptCard: card
+            )
+        }
+        let card = ChatPrompt(id: "p1", text: "Ask whoever is next to you", shownAs: .card)
+
+        let rows = ChatThreadRow.rows(for: [
+            message("a", minutes: 0),
+            message("b", card: card, minutes: 10.5),
+            message("c", minutes: 11),
+            message("d", minutes: 12),
+        ])
+
+        #expect(rows.map(\.isFirstInGroup) == [true, true, true, false])
+        #expect(rows.map(\.quietMinutes) == [nil, 10, nil, nil])
+    }
+
+    @Test("Chat avatars are tiny, except the venue and talent's listing photos")
+    func tinyAvatars() {
+        func message(listing: Bool = false, audience: Bool = false) -> ChatThreadMessage {
+            ChatThreadMessage(
+                id: "1", authorID: "a", authorName: "Sam", avatarURL: nil, text: "hi", sentAt: nil, isOwn: false,
+                isFromListing: listing || audience, isFromAudience: audience
+            )
+        }
+
+        #expect(ChatMetrics.avatarDiameter(for: message()) == 24)
+        #expect(ChatMetrics.avatarDiameter(for: message(), compact: true) == 20)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true)) == 28)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true), compact: true) == 28)
+        #expect(ChatMetrics.avatarDiameter(for: message(audience: true)) == 24)
+        #expect(Avatar.presenceSize(for: 24) == 9)
+        #expect(Avatar.presenceSize(for: 28) == 10)
+        #expect(Avatar.presenceSize(for: 44) == 12)
+        #expect(Avatar.initialsSize(for: 24) == 10)
+        #expect(Avatar.initialsSize(for: 20) == 9)
+        // The same initials always land on the same band.
+        #expect(Avatar.spectrumIndex(for: "RM") == Avatar.spectrumIndex(for: "RM"))
+        #expect((0 ..< 6).contains(Avatar.spectrumIndex(for: "ZZ")))
+    }
+
+    @Test("Words the PromptBar's footer")
+    func promptFooter() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(PromptFooter.text(answers: 0, nextAt: nil, now: now) == nil)
+        #expect(PromptFooter.text(answers: 1, nextAt: nil, now: now) == "1 answer")
+        #expect(PromptFooter.text(answers: 14, nextAt: now.addingTimeInterval(-60), now: now) == "14 answers")
+        let next = PromptFooter.text(answers: 14, nextAt: now.addingTimeInterval(900), now: now)
+        #expect(next?.hasPrefix("14 answers · Next one at ") == true)
+    }
+
     @Test("Reads a friend's presence")
     func friendPresence() throws {
         let friends = try decode([HotMess.Friend].self, from: """

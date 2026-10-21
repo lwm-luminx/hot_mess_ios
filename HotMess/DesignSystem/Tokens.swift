@@ -66,6 +66,13 @@ extension Color {
          .token(\.spectrum4), .token(\.spectrum5), .token(\.spectrum6)]
     }
 
+    /// `on-spectrum-1` to `on-spectrum-6`: text on each spectrum band, like
+    /// a chat avatar's initials.
+    static var hotMessOnSpectrum: [Color] {
+        [.token(\.onSpectrum1), .token(\.onSpectrum2), .token(\.onSpectrum3),
+         .token(\.onSpectrum4), .token(\.onSpectrum5), .token(\.onSpectrum6)]
+    }
+
     /// `glass`: the dark fill of a pill over a photo, laid over
     /// `.ultraThinMaterial`. The same in every theme.
     static var hotMessGlass: Color { Color(DesignTokens.hotMess.glass) }
