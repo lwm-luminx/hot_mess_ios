@@ -278,13 +278,14 @@ struct NowScreen: View {
         }
     }
 
-    /// At a venue: tonight as its page shows it, the host, the lineup strip and
-    /// karaoke signups. Until that loads, or from an older API, who's on and up
+    /// At a venue: tonight as its page shows it, the host, the lineup strip,
+    /// karaoke signups and song requests. Until that loads, or from an older API, who's on and up
     /// next, and the event's karaoke session when it has one (held back while
     /// loading, so its pointer doesn't flash before the signups).
     @ViewBuilder
     private func stageSection(_ now: Now) -> some View {
-        if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke {
+        if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke
+            || lineup.showsSongRequests {
             VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
         } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {

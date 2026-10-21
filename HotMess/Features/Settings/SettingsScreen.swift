@@ -205,11 +205,14 @@ struct SettingsScreen: View {
     }
 
     private var aboutSection: some View {
-        Section(String(localized: "About")) {
+        Section {
             InfoRow(
                 title: String(localized: "Version"),
                 value: "\(model.configuration.version) (\(model.configuration.build))"
             )
+            // Installed from, Beta updates / Updates, Last checked, Check
+            // for updates and Open in TestFlight / on the App Store.
+            AboutUpdateRows(updates: model.updates)
             // Which Facebook app and API a build talks to matters only to
             // testers; App Store builds leave it out.
             if model.configuration.isTestBuild {
@@ -222,6 +225,10 @@ struct SettingsScreen: View {
                     value: model.configuration.baseURL.absoluteString
                 )
             }
+        } header: {
+            Text("About")
+        } footer: {
+            AboutUpdateFootnote(updates: model.updates)
         }
     }
 

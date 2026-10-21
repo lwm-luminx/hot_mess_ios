@@ -55,6 +55,8 @@
 	<false/>
 	<key>FacebookClientToken</key>
 	<string>$(FACEBOOK_CLIENT_TOKEN)</string>
+	<key>NewRelicToken</key>
+	<string>$(NEW_RELIC_TOKEN)</string>
 	<key>FacebookDisplayName</key>
 	<string>Hot Mess</string>
 	<key>HotMessAPNSEnvironment</key>
@@ -74,6 +76,8 @@
 		<string>fb-messenger-share-api</string>
 		<string>fbauth2</string>
 		<string>fbshareextension</string>
+		<string>itms-beta</string>
+		<string>itms-apps</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -83,7 +87,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Hot Mess uses your camera to scan your payment card when you pay a venue’s cover charge.</string>
+	<string>Hot Mess uses your camera to scan your payment card when you pay a venue’s cover charge, and to scan your Pair me up match’s code when you meet.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Hot Mess notices when you arrive at or leave a venue, even with the app closed, so your friends see where you are and venues can tell how busy they are.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

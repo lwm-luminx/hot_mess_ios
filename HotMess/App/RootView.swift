@@ -3,6 +3,8 @@
 //  HotMess
 //
 
+import AudienceKit
+import AudienceKitUI
 import SwiftUI
 
 /// Chooses between the launch, login, update-required and signed-in states.
@@ -25,6 +27,11 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.session.state)
+        // TestFlight and App Store update prompts: checked on foreground at
+        // most once a day; the blocking one covers everything, including
+        // UpdateRequiredView.
+        .audienceUpdatePrompts(model.updates)
+        .audiencePreset(model.brand.preset)
     }
 }
 
@@ -125,22 +132,48 @@ struct RouteDestination: View {
     }
 }
 
-/// The hard stop the API can impose on old builds.
+/// The hard stop the API imposes on builds it no longer serves (`GET
+/// /v1/status`'s `clients.ios.minimumVersion`), which holds even without a
+/// release config. The release config's own blocking prompt
+/// (`.audienceUpdatePrompts`) covers this screen when it applies too. Where
+/// to update comes from StoreKit's install environment, as the prompts'
+/// does.
 struct UpdateRequiredView: View {
     let versionInfo: VersionInfo?
 
     @Environment(AppModel.self) private var model
-    @State private var isTestFlight = false
+    @Environment(\.openURL) private var openURL
+    @State private var source: InstallSource?
 
     var body: some View {
         ContentUnavailableView {
             Label(String(localized: "Update Required"), systemImage: "arrow.down.circle")
         } description: {
             Text(description)
+        } actions: {
+            if canUpdate {
+                Button(buttonTitle) {
+                    Task {
+                        if await model.updates.openUpdate() { return }
+                        if let storeURL = versionInfo?.storeURL { openURL(storeURL) }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
         .task {
-            isTestFlight = await model.configuration.isTestFlight
+            source = await InstallSource.current
         }
+    }
+
+    private var isTestFlight: Bool { source == .testFlight }
+
+    private var canUpdate: Bool {
+        model.updates.release != nil || versionInfo?.storeURL != nil
+    }
+
+    private var buttonTitle: String {
+        isTestFlight ? String(localized: "Update in TestFlight") : String(localized: "Update on the App Store")
     }
 
     private var description: String {

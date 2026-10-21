@@ -16,6 +16,8 @@ struct VenueScreen: View {
     @Environment(\.openURL) private var openURL
     @State private var viewModel: VenueViewModel?
     @State private var lineupModel: VenueLineupModel?
+    @State private var pairUpModel: PairUpModel?
+    @State private var isPairingUp = false
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var pingSeed: PingSeed?
@@ -85,6 +87,12 @@ struct VenueScreen: View {
                             join: { Task { await viewModel?.joinHere(userID: model.session.userID) } },
                             leave: { Task { await viewModel?.leaveHere(userID: model.session.userID) } }
                         )
+
+                        // Pair me up, where the venue has it: once you're here,
+                        // or while you're in it tonight.
+                        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
+                            PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
+                        }
 
                         aboutSection(venue)
 
@@ -172,6 +180,10 @@ struct VenueScreen: View {
             ensureViewModel()
             await viewModel?.load()
         }
+        .task {
+            ensureViewModel()
+            await pairUpModel?.load()
+        }
         .keepsLineupFresh(lineupModel)
         // Who a karaoke signup goes under.
         .task { await model.session.refreshUser() }
@@ -180,6 +192,12 @@ struct VenueScreen: View {
         .sheet(item: $pingSeed) { seed in
             PingSheet(seed: seed)
                 .environment(model)
+        }
+        .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
+            if let pairUpModel {
+                PairUpSheet(model: pairUpModel, venueName: viewModel?.state.value?.venue.name ?? "")
+                    .environment(model)
+            }
         }
         .alert(
             String(localized: "Couldn't update ping"),
@@ -273,6 +291,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.stopSimulating()
                             await viewModel?.load()
+                            await pairUpModel?.load()
                         }
                     }
                 } else {
@@ -281,6 +300,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.simulate(at: coordinate, venueName: venue.name, allowed: isReview)
                             await viewModel?.load()
+                            await pairUpModel?.load()
                         }
                     }
                 }
@@ -317,6 +337,9 @@ struct VenueScreen: View {
         if lineupModel == nil {
             lineupModel = VenueLineupModel(api: model.api, venueID: venueID)
         }
+        if pairUpModel == nil {
+            pairUpModel = PairUpModel(api: model.api, venueID: venueID)
+        }
     }
 
     private func reload() {
@@ -324,6 +347,7 @@ struct VenueScreen: View {
             ensureViewModel()
             await viewModel?.load()
             await lineupModel?.refresh()
+            await pairUpModel?.load()
         }
     }
 }

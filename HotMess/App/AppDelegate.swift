@@ -5,6 +5,7 @@
 
 import FacebookCore
 import Foundation
+import NewRelic
 import os
 import UIKit
 import UserNotifications
@@ -19,6 +20,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // First, so it sees the launch and any crash after it.
+        if let token = AppConfiguration().newRelicToken {
+            NewRelic.start(withApplicationToken: token)
+        }
+
         ApplicationDelegate.shared.application(
             application,
             didFinishLaunchingWithOptions: launchOptions
