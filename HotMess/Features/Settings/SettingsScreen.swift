@@ -28,6 +28,7 @@ struct SettingsScreen: View {
     var body: some View {
         List {
             profileSection
+            chatPhotoSection
             facebookSection
             coverSection
             locationSection
@@ -102,6 +103,22 @@ struct SettingsScreen: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    /// How the user looks in chat, and initials instead of their photo. The
+    /// setting is on their account, so only for someone signed in.
+    @ViewBuilder
+    private var chatPhotoSection: some View {
+        if model.session.isSignedIn {
+            Section {
+                NavigationLink {
+                    ChatPhotoScreen()
+                } label: {
+                    Label(String(localized: "Chat Photo"), systemImage: "person.crop.circle")
+                }
+                .accessibilityIdentifier("me.chatPhoto")
+            }
         }
     }
 

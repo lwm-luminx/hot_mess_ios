@@ -574,6 +574,44 @@ struct ChatIdentifierTests {
         #expect(HotMessAPI.Documents.sendMyChatMessage.contains("sendMyChatMessage(input: $input)"))
     }
 
+    @Test("An answer sends its prompt's ID; other lines name none")
+    func sendAnswerVariables() throws {
+        let id = try #require(UUID(uuidString: "0A1E0AAC-1D01-42D1-9DE5-F0279842D9C0"))
+        let room = ChatRoom(kind: .venue, id: id, name: "The Wildrose")
+
+        #expect(HotMessAPI.sendMyChatMessageVariables("Plane Jane", in: room, promptID: "7d1e0aac") == [
+            "input": ["venueId": "0a1e0aac-1d01-42d1-9de5-f0279842d9c0", "message": "Plane Jane", "promptId": "7d1e0aac"],
+        ])
+        #expect(HotMessAPI.sendMyChatMessageVariables("hi", in: room, promptID: nil) == [
+            "input": ["venueId": "0a1e0aac-1d01-42d1-9de5-f0279842d9c0", "message": "hi"],
+        ])
+    }
+
+    @Test("Chat lines select prompts, aliased to the room frame's keys")
+    func promptFields() {
+        let prompt = "prompt { id kind text answer reveal_at: revealAt shown_as: shownAs number total next_at: nextAt }"
+        for fields in [HotMessAPI.Documents.messageFields, HotMessAPI.Documents.roomMessageFields] {
+            #expect(fields.contains(prompt))
+            #expect(fields.contains("prompt_id: promptId"))
+            #expect(fields.contains("posted_as_audience: postedAsAudience"))
+        }
+        #expect(HotMessAPI.Documents.sendMyChatMessage.contains("prompt_id: promptId"))
+        let room = ChatRoom(kind: .venue, id: UUID(), name: "The Wildrose")
+        #expect(VenueChatConnection.subscriptionDocument(for: room).contains(prompt))
+    }
+
+    @Test("Reads and sets initials instead of a photo in chat")
+    func chatInitials() throws {
+        #expect(HotMessAPI.Documents.chatInitials.contains("me { chat_initials: chatInitials }"))
+        #expect(HotMessAPI.Documents.setChatInitials.contains("setChatInitials(input: { enabled: $enabled })"))
+
+        let me = Data(#"{ "me": { "chat_initials": true } }"#.utf8)
+        #expect(try JSONDecoder.hotMess.decode(ChatInitialsResponse.self, from: me).me?.chatInitials == true)
+
+        let set = Data(#"{ "setChatInitials": { "chat_initials": false } }"#.utf8)
+        #expect(try JSONDecoder.hotMess.decode(SetChatInitialsResponse.self, from: set).setChatInitials.chatInitials == false)
+    }
+
     @Test("Reads and sets pushes about rooms the user just left")
     func recentChatPush() throws {
         #expect(HotMessAPI.Documents.setRecentChatPush.contains("setRecentChatPush(input: { enabled: $enabled })"))

@@ -42,6 +42,9 @@ struct VenueChatScreen: View {
     /// Someone in the Here now strip being reported or blocked.
     @State private var personReport: ReportSubject?
     @State private var personBlock: BlockedUser?
+    /// PromptCards the user put away with "Not now", by message ID: hidden
+    /// for them only.
+    @State private var dismissedPrompts: Set<String> = []
 
     var body: some View {
         Group {
@@ -204,9 +207,11 @@ struct VenueChatScreen: View {
                         }
                     )
                 }
-                // Each minute, so a special leaves the room when it ends.
+                // Each minute, so a special leaves the room when it ends,
+                // and a trivia answer shows at its reveal time.
                 TimelineView(.everyMinute) { timeline in
                     let messages = threadMessages(viewModel, at: timeline.date)
+                    let prompt = viewModel.pinnedPrompt?.prompt
                     ChatThreadView(
                         messages: messages,
                         roomName: room.name,
@@ -217,7 +222,17 @@ struct VenueChatScreen: View {
                         },
                         onReport: { reportTarget = $0 },
                         onBlock: { blockTarget = $0 },
-                        onDelete: { deleteTarget = $0 }
+                        onDelete: { deleteTarget = $0 },
+                        prompt: prompt,
+                        promptAnswers: prompt.map { viewModel.answerCount(for: $0) } ?? 0,
+                        now: timeline.date,
+                        onAnswer: { viewModel.answer($0) },
+                        onDismissPrompt: { message in
+                            dismissedPrompts.insert(message.id)
+                            if viewModel.answering?.id == message.promptCard?.id {
+                                viewModel.answering = nil
+                            }
+                        }
                     )
                 }
                 composer(viewModel)
@@ -234,15 +249,17 @@ struct VenueChatScreen: View {
     /// Throws when it didn't go through, which the sheet shows.
     private func report(_ message: ChatThreadMessage, reason: ChatReportReason, block: Bool) async throws {
         guard let id = UUID(uuidString: message.id) else { return }
-        // A post as the venue has no sender to block; the API ignores `block` for it.
-        let author: BlockedUser? = message.isFromPlace ? nil : sender(of: message)
+        // A post as the venue (or a prompt, the audience's) has no sender to
+        // block; the API ignores `block` for it.
+        let author: BlockedUser? = message.isFromPlace || message.isFromAudience ? nil : sender(of: message)
         try await model.safety.report(messageID: id, sender: author, reason: reason, block: block && author != nil)
         didReport = true
     }
 
     /// Who the sheet offers to block too: the sender, unless it's the venue or they're already blocked.
     private func blockable(_ message: ChatThreadMessage) -> BlockedUser? {
-        guard !message.isFromPlace, !model.safety.isBlocked(UUID(uuidString: message.authorID)) else { return nil }
+        guard !message.isFromPlace, !message.isFromAudience,
+              !model.safety.isBlocked(UUID(uuidString: message.authorID)) else { return nil }
         return sender(of: message)
     }
 
@@ -341,19 +358,24 @@ struct VenueChatScreen: View {
     /// The room's messages, then the reader's own lines still on their way.
     /// Friends show by their full name, everyone in the room now with a green
     /// dot, and friends a notification reaches with a yellow one. Specials that
-    /// have ended, and people the user blocked, are left out.
+    /// have ended, and people the user blocked, are left out, and so are
+    /// rotating prompts, which show under the title, and PromptCards the
+    /// user said "Not now" to.
     private func threadMessages(_ viewModel: VenueChatViewModel, at date: Date) -> [ChatThreadMessage] {
         let friends = model.friends.byID
         let blocked = model.safety.blockedIDs
+        let promptKinds = viewModel.promptKinds
         let sent = viewModel.messages
             .filter { $0.isShowing(at: date) }
             .filter { $0.isFromListing || !blocked.contains($0.userID) }
+            .filter { !$0.isPinnedPrompt && !dismissedPrompts.contains($0.id.uuidString) }
             .map { message in
                 message.threadMessage(
                     currentUserID: viewModel.userID,
                     friends: friends,
                     online: viewModel.onlineUserIDs,
-                    reachable: viewModel.reachableUserIDs
+                    reachable: viewModel.reachableUserIDs,
+                    promptKinds: promptKinds
                 )
             }
 
@@ -366,7 +388,8 @@ struct VenueChatScreen: View {
                 text: message.body,
                 sentAt: message.createdAt,
                 isOwn: true,
-                delivery: message.state == .failed ? .failed : .sending
+                delivery: message.state == .failed ? .failed : .sending,
+                promptLabel: message.prompt?.label
             )
         }
 
@@ -390,7 +413,12 @@ struct VenueChatScreen: View {
     private func composer(_ viewModel: VenueChatViewModel) -> some View {
         @Bindable var viewModel = viewModel
 
-        return ChatComposer(text: $viewModel.draft, canSend: viewModel.canSend && !isConnectingFacebook) {
+        return ChatComposer(
+            text: $viewModel.draft,
+            canSend: viewModel.canSend && !isConnectingFacebook,
+            answering: viewModel.answering,
+            stopAnswering: { viewModel.answering = nil }
+        ) {
             handleChatSend(viewModel)
         }
     }

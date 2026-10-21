@@ -286,10 +286,10 @@ private struct ChatPeekRow: View {
         HStack(alignment: .bottom, spacing: 8) {
             if !message.isOwn {
                 if row.isLastInGroup {
-                    ChatAvatar(message: message, presenceRing: .hotMessSurfaceSunken)
+                    ChatAvatar(message: message, presenceRing: .hotMessSurfaceSunken, compact: true)
                 } else {
                     Color.clear
-                        .frame(width: ChatMetrics.avatarSize, height: 1)
+                        .frame(width: ChatMetrics.avatarDiameter(for: message, compact: true), height: 1)
                 }
             }
 
@@ -306,7 +306,8 @@ private struct ChatPeekRow: View {
                     isLastInGroup: row.isLastInGroup,
                     isRole: message.role?.tintsBubble == true,
                     lineLimit: 2,
-                    isSelectable: false
+                    isSelectable: false,
+                    label: message.promptLabel
                 )
             }
             .frame(maxWidth: maxBubbleWidth, alignment: message.isOwn ? .trailing : .leading)
