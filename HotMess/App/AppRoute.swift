@@ -17,6 +17,12 @@ enum AppRoute: Hashable, Sendable {
     case eventChat(ChatRoom)
     /// A locale's chat room, for people out in it who aren't at a venue.
     case localeChat(AppLocale)
+    /// A post and its comments.
+    case post(UUID)
+    /// Every post on a page, from its section's "See all".
+    case posts(PostsSubject, title: String)
+    /// A locale's updates feed, from Now.
+    case updates(AppLocale)
 
     /// Which tab the route belongs in.
     var tab: AppTab {
@@ -24,7 +30,16 @@ enum AppRoute: Hashable, Sendable {
         case .venue, .venueChat, .karaokeList: .venues
         case .event: .events
         case .person: .people
-        case .localeChat, .eventChat: .now
+        case .localeChat, .eventChat, .updates: .now
+        case let .posts(subject, _):
+            switch subject {
+            case .venue: .venues
+            case .event: .events
+            case .person: .people
+            case .locale: .now
+            }
+        // A post opens wherever it's linked from; a link from outside lands on Now.
+        case .post: .now
         }
     }
 }
@@ -105,6 +120,7 @@ enum DeepLink {
         case "venues": return .venue(id)
         case "events": return .event(id)
         case "people": return .person(id)
+        case "posts": return .post(id)
         default: return nil
         }
     }

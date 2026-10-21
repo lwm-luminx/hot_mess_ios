@@ -70,8 +70,10 @@ struct NowScreen: View {
                         // The lineup or karaoke, small talk, the next three events, then venues.
                         stageSection(now)
                         venueChatSection(now)
+                        tonightPostsSection(now)
                         localeChatSection(now)
                         eventsSection(now)
+                        localePostsSection(now)
                         nearbySection(now)
                         friendVenuesSection(now)
                         pingsSection(now)
@@ -428,6 +430,33 @@ struct NowScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    /// At an event or venue: its posts from the last 24 hours.
+    @ViewBuilder
+    private func tonightPostsSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
+            let subject: PostsSubject = now.event.map { .event($0.id) } ?? .venue(venue.id)
+            let title = now.event.map(\.name) ?? venue.name
+            NowPostsSection(
+                title: String(localized: "Latest from tonight"),
+                subject: subject,
+                withinHours: 24,
+                seeAll: .posts(subject, title: title)
+            )
+        }
+    }
+
+    /// Away from venues: the locale's updates.
+    @ViewBuilder
+    private func localePostsSection(_ now: Now) -> some View {
+        if now.venue == nil, let locale = now.locale {
+            NowPostsSection(
+                title: String(localized: "Updates in \(locale.name)"),
+                subject: .locale(locale),
+                seeAll: .updates(locale)
+            )
         }
     }
 

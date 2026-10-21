@@ -103,6 +103,8 @@ struct VenueScreen: View {
                             PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
                         }
 
+                        PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
+
                         aboutSection(venue)
 
                         let socialLinks = overview.socialLinks.filter { $0.url != nil }
