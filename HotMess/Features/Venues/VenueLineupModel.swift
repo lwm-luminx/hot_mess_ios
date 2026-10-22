@@ -116,10 +116,11 @@ extension VenueLineup {
         entries.first { $0.role == .host && $0.state == .on } ?? karaoke?.host
     }
 
-    /// Whether `KaraokeQueue` shows anything: a partner's session to join, or
-    /// AudienceKit signups that are taken or have singers.
+    /// Whether `KaraokeQueue` shows anything: a partner's session to join on a
+    /// karaoke night, or AudienceKit signups that are taken (only on karaoke
+    /// nights) or have singers.
     var showsKaraoke: Bool {
-        if let session = karaokeSession, session.provider != nil, !session.isAudienceKit { return true }
+        if let session = karaokeSession, session.isPartnerSessionTonight { return true }
         guard let karaoke else { return false }
         return karaoke.permitted || !singers.isEmpty
     }

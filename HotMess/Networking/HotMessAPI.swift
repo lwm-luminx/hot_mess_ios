@@ -90,6 +90,7 @@ struct HotMessAPI: Sendable {
         guard let venue = response.venue else { throw APIError.notFound }
         return VenueOverview(
             venue: venue.venue,
+            bannerPhotos: venue.bannerPhotos,
             events: venue.events,
             friends: venue.friends,
             socialLinks: venue.socialLinks,
@@ -949,6 +950,7 @@ extension HotMessAPI {
         query Venue($id: ID!) {
           venues { venue(id: $id) {
             \(venueFields)
+            banner_photos: bannerPhotos { url }
             events { upcoming { nodes { \(eventFields) } } }
             friends { list { nodes { \(friendFields) } } }
             \(profileSocialLinks)
@@ -1284,6 +1286,8 @@ struct PersonResponse: Decodable, Sendable {
 /// A venue and its events, which GraphQL returns as one object.
 struct VenueWithEvents: Decodable, Sendable {
     let venue: Venue
+    /// Its banner images, in the order the hero rotates through them.
+    let bannerPhotos: [URL]
     let events: [Event]
     let friends: [Friend]
     let socialLinks: [SocialLink]
@@ -1303,11 +1307,16 @@ struct VenueWithEvents: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case events, friends, tickets, profile, ping, chat, people
+        case bannerPhotos = "banner_photos"
     }
+
+    private struct BannerPhoto: Decodable { let url: String? }
 
     init(from decoder: any Decoder) throws {
         venue = try Venue(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        bannerPhotos = ((try? container.decodeIfPresent([BannerPhoto].self, forKey: .bannerPhotos)) ?? nil)?
+            .compactMap { $0.url.flatMap(URL.init(string:)) } ?? []
         // The tickets mixin (holding the cover mixin) is left out where the
         // audience has neither module, which reads as no cover. A missing
         // events or friends mixin reads as none.
