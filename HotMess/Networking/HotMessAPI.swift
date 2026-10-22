@@ -115,6 +115,27 @@ struct HotMessAPI: Sendable {
         }
     }
 
+    /// A venue's show tonight (segments, scenes, projected times, the next
+    /// curtain call's counts and its latest trivia round), from the SDK. Throws
+    /// on an API without show control, which callers treat as "no show".
+    func show(venueID: UUID) async throws -> VenueShow? {
+        do {
+            return try await audienceKit.show(venueID: venueID.uuidString)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// Votes in a venue's trivia round, or changes the vote. The server's
+    /// refusal (not at the venue, voting closed) comes back worded for the room.
+    func voteTrivia(roundID: String, choice: String) async throws -> TriviaRound {
+        do {
+            return try await audienceKit.voteTrivia(roundID: roundID, choice: choice)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
     /// Signs the user up to sing at a venue. The server's refusal (not at the
     /// venue, signups closed) comes back worded for the room.
     func signUpToSing(venueID: UUID, _ signup: KaraokeSignup) async throws {
