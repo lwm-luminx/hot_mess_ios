@@ -88,13 +88,13 @@ struct Avatar: View {
     }
 
     /// 12 on 40 and up, 9 on a 24 TinyAvatar or smaller, 10 between.
-    static func presenceSize(for size: CGFloat) -> CGFloat {
+    nonisolated static func presenceSize(for size: CGFloat) -> CGFloat {
         if size >= 40 { return 12 }
         return size <= 24 ? 9 : 10
     }
 
     /// 10 on a 24 TinyAvatar, 9 on ChatPeek's 20; else in proportion.
-    static func initialsSize(for size: CGFloat) -> CGFloat {
+    nonisolated static func initialsSize(for size: CGFloat) -> CGFloat {
         if size <= 20 { return 9 }
         if size <= 24 { return 10 }
         return size * 0.38
@@ -102,7 +102,7 @@ struct Avatar: View {
 
     /// Which spectrum band someone's initials sit on: the same one for the
     /// same initials on every launch (`hashValue` changes between launches).
-    static func spectrumIndex(for initials: String, bands: Int = 6) -> Int {
+    nonisolated static func spectrumIndex(for initials: String, bands: Int = 6) -> Int {
         initials.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % bands
     }
 
