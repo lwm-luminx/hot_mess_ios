@@ -39,7 +39,9 @@ struct PairUpSheet: View {
             .navigationTitle(String(localized: "Quickie"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                // On the right, out of the way: the end of a quickie is the
+                // two choices at the bottom of the "You met!" card.
+                ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Close")) { dismiss() }
                 }
             }
@@ -248,26 +250,86 @@ struct PairUpSheet: View {
         .card()
     }
 
+    /// The end of a quickie: share it if you both like, then go again or
+    /// call it a night. Each person chooses for themselves.
     private func met(_ state: PairUpState) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Label(String(localized: "You met!"), systemImage: "sparkles")
                 .font(.hotMess(.title2, semibold: true))
             if let name = state.match?.partner?.name {
-                Text("Hope you and \(name) are having fun.")
+                Text("Hope you and \(name) had a good chat.")
                     .font(.hotMess(.subheadline))
             }
             badge(state)
-            Button {
-                Task { await model.join(lookFor: nil) }
-            } label: {
-                Text("Another quickie").frame(maxWidth: .infinity)
+            if let match = state.match {
+                shareRow(match)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            Button(String(localized: "I'm done for tonight")) { Task { await model.leave() } }
+
+            VStack(spacing: 10) {
+                Button {
+                    Task { await model.join(lookFor: nil) }
+                } label: {
+                    Text("Let's go again").font(.hotMess(.body, semibold: true)).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("quickie.again")
+
+                Button {
+                    Task {
+                        await model.leave()
+                        dismiss()
+                    }
+                } label: {
+                    Text("I'm done").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityIdentifier("quickie.done")
+            }
+
+            if let partner = state.match?.partner {
+                Button(String(localized: "Something not right? Report or block")) {
+                    reportSubject = ReportSubject(
+                        target: .person,
+                        targetID: partner.id.uuidString.lowercased(),
+                        sender: BlockedUser(id: partner.id, name: partner.name)
+                    )
+                }
+                .font(.hotMess(.footnote))
+                .frame(maxWidth: .infinity)
+            }
         }
         .disabled(model.isBusy)
         .card()
+    }
+
+    /// Nothing names them in the venue's chat unless both say so.
+    @ViewBuilder
+    private func shareRow(_ match: PairUpMatch) -> some View {
+        if match.isShared {
+            Label(String(localized: "Shared in the venue chat"), systemImage: "checkmark.bubble")
+                .font(.hotMess(.subheadline, semibold: true))
+        } else if match.shared {
+            Label(String(localized: "Waiting for them to share too"), systemImage: "hourglass")
+                .font(.hotMess(.subheadline))
+                .foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    Task { await model.share() }
+                } label: {
+                    Label(String(localized: "Share in the venue chat"), systemImage: "bubble.left.and.text.bubble.right")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                Text(match.partnerShared
+                    ? String(localized: "They'd like to share. If you do too, the chat gets your first names and topic.")
+                    : String(localized: "If you both share, the chat gets your first names and what you talked about."))
+                    .font(.hotMess(.caption))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -368,13 +430,16 @@ private struct NoticeCard: View {
     }
 }
 
-/// The night's badge: how many people they met.
+/// The night's badge: how many conversations they had (the same person
+/// twice is two conversations).
 struct MetBadge: View {
     let count: Int
 
     var body: some View {
         Label {
-            Text(count == 1 ? String(localized: "Met someone new tonight") : String(localized: "Met \(count) people tonight"))
+            Text(count == 1
+                ? String(localized: "You've had a conversation tonight")
+                : String(localized: "You've had \(count) conversations tonight"))
                 .font(.hotMess(.subheadline, semibold: true))
         } icon: {
             Image(systemName: "rosette")

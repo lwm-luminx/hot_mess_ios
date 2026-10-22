@@ -416,6 +416,11 @@ struct HotMessAPI: Sendable {
         try await pairUpMutation(Documents.leavePairUp, ["venueId": Self.graphQLID(venueID)])
     }
 
+    /// Agrees to share the meeting in the venue's chat; it's posted once both have.
+    func sharePairUp(matchID: UUID) async throws -> PairUpState? {
+        try await pairUpMutation(Documents.sharePairUp, ["matchId": Self.graphQLID(matchID)])
+    }
+
     /// A fresh single-use code to show the partner.
     func showPairUpCode(matchID: UUID) async throws -> String {
         try await query(Documents.showPairUpCode, variables: ["matchId": Self.graphQLID(matchID)], as: ShowPairUpCodeResponse.self)
@@ -1083,7 +1088,7 @@ extension HotMessAPI {
         """
 
         static let pairUpMatchFields = """
-        id accepted partnerAccepted bonus metAt endReason topic { key text }
+        id accepted partnerAccepted shared partnerShared bonus metAt endReason topic { key text }
         partner { id name avatarUrl lookFor }
         """
 
@@ -1124,6 +1129,12 @@ extension HotMessAPI {
         static let leavePairUp = """
         mutation LeavePairUp($venueId: ID!) {
           leavePairUp(input: { venueId: $venueId }) { pairUp { \(pairUpStateFields) } }
+        }
+        """
+
+        static let sharePairUp = """
+        mutation SharePairUp($matchId: ID!) {
+          sharePairUp(input: { matchId: $matchId }) { pairUp { \(pairUpStateFields) } }
         }
         """
 

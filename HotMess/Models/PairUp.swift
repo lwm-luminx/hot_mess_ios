@@ -19,7 +19,8 @@ struct PairUpState: Decodable, Sendable, Equatable {
     let status: PairUpStatus
     /// The hint their partner sees once both accept.
     let lookFor: String?
-    /// How many people they met tonight: the night's badge.
+    /// How many conversations they had tonight (meeting the same person
+    /// twice counts twice): the night's badge.
     let metCount: Int
     /// Their pairing. While searching, the last one when it ended.
     let match: PairUpMatch?
@@ -50,6 +51,9 @@ struct PairUpMatch: Decodable, Sendable, Equatable, Identifiable {
     let id: UUID
     let accepted: Bool
     let partnerAccepted: Bool
+    /// Whether they agreed to share the meeting in the venue's chat.
+    let shared: Bool
+    let partnerShared: Bool
     /// A fresh topic from scanning the wrong code: accepted, no code needed.
     let bonus: Bool
     let metAt: Date?
@@ -58,6 +62,9 @@ struct PairUpMatch: Decodable, Sendable, Equatable, Identifiable {
     let topic: PairUpTopic
     /// Who to look for, once both accepted; nil before and once either cancels.
     let partner: PairUpPartner?
+
+    /// Both agreed, so the venue's chat says who met and what they talked about.
+    var isShared: Bool { shared && partnerShared }
 }
 
 struct PairUpTopic: Decodable, Sendable, Equatable {
