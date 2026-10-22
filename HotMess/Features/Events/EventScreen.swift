@@ -100,6 +100,8 @@ struct EventScreen: View {
 
                         PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
 
+                        PhotosSection(subject: .event(event.id))
+
                         detailsSection(event)
 
                         if let venue = event.venue {
