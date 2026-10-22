@@ -244,7 +244,7 @@ struct PostBodyText: View {
     }
 
     /// Plain text with its web links made tappable; no other formatting.
-    static func linked(_ text: String) -> AttributedString {
+    nonisolated static func linked(_ text: String) -> AttributedString {
         var attributed = AttributedString(text)
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
             return attributed
