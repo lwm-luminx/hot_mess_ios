@@ -34,7 +34,15 @@ struct VenueScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
-                        HeroHeader(url: venue.bannerURL ?? venue.photoURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
+                        // Its photos in turn, over a firmer scrim than a still
+                        // hero so the name reads the same on each.
+                        HeroHeader(
+                            urls: overview.heroPhotos,
+                            topInset: proxy.safeAreaInsets.top,
+                            tone: $heroTone,
+                            minimumContrast: 7,
+                            minimumScrim: ImageTone.accessibleScrimFloor
+                        ) {
                             heroText(venue)
                         }
 
@@ -77,6 +85,27 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
+                        // The next two events sit up top, above the fold; the
+                        // rest wait at the bottom.
+                        if !overview.comingUp.isEmpty {
+                            CardSection(String(localized: "Coming Up")) {
+                                ForEach(overview.comingUp) { event in
+                                    EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .personFirst, venueFallback: venue))
+                                }
+                            }
+                        }
+
+                        if overview.chatOpen {
+                            LiveChatPeek(
+                                title: String(localized: "Chat"),
+                                room: .venue(venue),
+                                messages: overview.recentMessages,
+                                route: .venueChat(venue),
+                                onMessage: lineupChanged
+                            )
+                            .padding(.horizontal, 16)
+                        }
+
                         // Tonight from AudienceKit: the host, the lineup and
                         // karaoke. Until it loads, or if it can't, the venue
                         // query's whole night, else just who's on (an older API).
@@ -103,36 +132,16 @@ struct VenueScreen: View {
                             PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
                         }
 
-                        PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
-
-                        aboutSection(venue)
-
-                        let socialLinks = overview.socialLinks.filter { $0.url != nil }
-                        if !socialLinks.isEmpty {
-                            DetailSection(String(localized: "Elsewhere")) {
-                                ForEach(socialLinks) { link in
-                                    SocialLinkRow(link: link)
-                                }
-                            }
-                        }
-
-                        if overview.chatOpen {
-                            LiveChatPeek(
-                                title: String(localized: "Chat"),
-                                room: .venue(venue),
-                                messages: overview.recentMessages,
-                                route: .venueChat(venue),
-                                onMessage: lineupChanged
-                            )
-                            .padding(.horizontal, 16)
-                        }
-
                         if !overview.friends.isEmpty {
                             DetailSection(String(localized: "Friends Here")) {
                                 FriendStrip(friends: overview.friends)
                                     .padding(.horizontal, -20)
                             }
                         }
+
+                        PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
+
+                        aboutSection(venue, links: SocialLink.aboutLinks(overview.socialLinks, facebookURL: venue.facebookURL))
 
                         testingSection(venue)
 
@@ -141,9 +150,9 @@ struct VenueScreen: View {
                                 Text("No upcoming events.")
                                     .foregroundStyle(.secondary)
                             }
-                        } else {
-                            CardSection(String(localized: "Events")) {
-                                ForEach(overview.events) { event in
+                        } else if !overview.laterEvents.isEmpty {
+                            CardSection(String(localized: "More Events")) {
+                                ForEach(overview.laterEvents) { event in
                                     EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .personFirst, venueFallback: venue))
                                 }
                             }
@@ -258,8 +267,10 @@ struct VenueScreen: View {
         }
     }
 
+    /// What it is, where, how to reach it, and its links elsewhere in one
+    /// order (`SocialLink.aboutLinks`), each row naming where it goes.
     @ViewBuilder
-    private func aboutSection(_ venue: Venue) -> some View {
+    private func aboutSection(_ venue: Venue, links: [SocialLink]) -> some View {
         DetailSection(String(localized: "About")) {
             if let subtitle = venue.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
@@ -289,14 +300,8 @@ struct VenueScreen: View {
                 )
             }
 
-            if let facebookURL = venue.facebookURL {
-                Link(destination: facebookURL) {
-                    InfoRow(
-                        title: String(localized: "Open in Facebook"),
-                        value: nil,
-                        systemImage: "arrow.up.right.square"
-                    )
-                }
+            ForEach(links) { link in
+                SocialLinkRow(link: link, namesService: true)
             }
 
             if model.session.isSignedIn {

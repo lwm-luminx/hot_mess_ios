@@ -9,6 +9,8 @@ import Observation
 /// A venue plus the events and friends shown alongside it on its screen.
 struct VenueOverview: Sendable, Equatable {
     var venue: Venue
+    /// Its banner images, in the order the hero rotates through them.
+    var bannerPhotos: [URL] = []
     var events: [Event] = []
     var friends: [Friend] = []
     var socialLinks: [SocialLink] = []
@@ -28,6 +30,19 @@ struct VenueOverview: Sendable, Equatable {
     var onNow: OnNow = []
     /// Friends' Pings that pick this venue or one of its events.
     var friendPings: [Ping] = []
+
+    /// What the hero rotates through: its banner (its Google photo when it
+    /// has one) and then its banner images, else its own photo.
+    var heroPhotos: [URL] {
+        var seen = Set<URL>()
+        let photos = ([venue.bannerURL].compactMap { $0 } + bannerPhotos).filter { seen.insert($0).inserted }
+        return photos.isEmpty ? [venue.photoURL].compactMap { $0 } : photos
+    }
+
+    /// The next two events, shown near the top of the page.
+    var comingUp: ArraySlice<Event> { events.prefix(2) }
+    /// The events after those, at the bottom.
+    var laterEvents: ArraySlice<Event> { events.dropFirst(2) }
 }
 
 @MainActor

@@ -232,7 +232,8 @@ struct VenueChatScreen: View {
                             if viewModel.answering?.id == message.promptCard?.id {
                                 viewModel.answering = nil
                             }
-                        }
+                        },
+                        clearMark: viewModel.clearMark
                     )
                 }
                 composer(viewModel)
