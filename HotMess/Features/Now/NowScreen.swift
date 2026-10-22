@@ -25,6 +25,9 @@ struct NowScreen: View {
     /// Tonight at the venue you're at (or your event's): the host, the
     /// lineup and karaoke signups, as its page shows them.
     @State private var lineupModel: VenueLineupModel?
+    /// Pair me up at the venue you're at, or your event's.
+    @State private var pairUpModel: PairUpModel?
+    @State private var isPairingUp = false
 
     /// How often Now reloads while it's on screen. Standing still sends no new
     /// position, but the chat, the lineup and who's here keep changing.
@@ -70,6 +73,7 @@ struct NowScreen: View {
                         // The lineup or karaoke, small talk, the next three events, then venues.
                         stageSection(now)
                         venueChatSection(now)
+                        pairUpSection
                         tonightPostsSection(now)
                         localeChatSection(now)
                         eventsSection(now)
@@ -142,6 +146,7 @@ struct NowScreen: View {
             await model.location.refreshPosition()
             while !Task.isCancelled {
                 await viewModel?.load(from: model.location)
+                await pairUpModel?.load()
                 try? await Task.sleep(for: Self.refreshInterval)
             }
         }
@@ -152,6 +157,16 @@ struct NowScreen: View {
             lineupModel = VenueLineupModel.reusing(lineupModel, for: tonightVenueID, api: model.api)
         }
         .keepsLineupFresh(lineupModel)
+        .task(id: tonightVenueID) {
+            pairUpModel = tonightVenueID.map { PairUpModel(api: model.api, venueID: $0) }
+            await pairUpModel?.load()
+        }
+        .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
+            if let pairUpModel {
+                PairUpSheet(model: pairUpModel, venueName: viewModel?.state.value.flatMap { $0.venue?.name ?? $0.event?.venue?.name } ?? "")
+                    .environment(model)
+            }
+        }
         // Who a karaoke signup goes under.
         .task { await model.session.refreshUser() }
         .contentReporting(report: $reportSubject, block: $blockTarget)
@@ -313,6 +328,15 @@ struct NowScreen: View {
             if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
                 KaraokeSection(karaoke: karaoke)
             }
+        }
+    }
+
+    /// Pair me up, just under the chat: once you're at a venue that has it, or
+    /// while you're in it tonight.
+    @ViewBuilder
+    private var pairUpSection: some View {
+        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
+            PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
         }
     }
 
