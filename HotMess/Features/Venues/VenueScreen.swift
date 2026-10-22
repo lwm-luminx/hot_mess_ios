@@ -23,6 +23,9 @@ struct VenueScreen: View {
     @State private var pingSeed: PingSeed?
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
+    /// Whether it's reported closed, and its details as a fix starts from.
+    @State private var suggestionState: VenueSuggestionState?
+    @State private var fixTarget: SuggestionTarget?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { overview in
@@ -33,6 +36,12 @@ struct VenueScreen: View {
                     VStack(spacing: 24) {
                         HeroHeader(url: venue.bannerURL ?? venue.photoURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
                             heroText(venue)
+                        }
+
+                        if suggestionState?.reportedClosed == true {
+                            ReportedClosedNotice(venueID: venue.id) { stillReported in
+                                suggestionState?.reportedClosed = stillReported
+                            }
                         }
 
                         let coverCharge = overview.coverCharge
@@ -93,6 +102,8 @@ struct VenueScreen: View {
                         if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
                             PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
                         }
+
+                        PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
 
                         aboutSection(venue)
 
@@ -156,6 +167,13 @@ struct VenueScreen: View {
                         }
 
                         Menu {
+                            Button {
+                                fixTarget = .venue(venue, suggestionState)
+                            } label: {
+                                Label(String(localized: "Suggest a Fix…"), systemImage: "pencil")
+                            }
+                            .accessibilityIdentifier("venue.suggestFix")
+
                             Button(role: .destructive) {
                                 reportSubject = ReportSubject(target: .venue, targetID: venue.id.uuidString.lowercased())
                             } label: {
@@ -183,6 +201,12 @@ struct VenueScreen: View {
         .task {
             ensureViewModel()
             await pairUpModel?.load()
+        }
+        // Its own request, so an API without suggestions still shows the venue.
+        .task { suggestionState = try? await model.api.venueSuggestionState(venueID) }
+        .sheet(item: $fixTarget) { target in
+            SuggestFixSheet(target: target)
+                .environment(model)
         }
         .keepsLineupFresh(lineupModel)
         // Who a karaoke signup goes under.
@@ -273,6 +297,16 @@ struct VenueScreen: View {
                         systemImage: "arrow.up.right.square"
                     )
                 }
+            }
+
+            if model.session.isSignedIn {
+                Button {
+                    fixTarget = .venue(venue, suggestionState)
+                } label: {
+                    InfoRow(title: String(localized: "Suggest a fix"), value: nil, systemImage: "pencil")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("venue.suggestFixRow")
             }
         }
     }

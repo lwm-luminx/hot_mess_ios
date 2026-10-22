@@ -50,6 +50,14 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// The song request or karaoke signup a request line made, with where it
     /// is in the queue. The room re-sends the line as the host works it.
     var request: ChatSongRequest? = nil
+    /// The prompt a `prompt` line puts to the room, with its place in the
+    /// night's prompts.
+    var prompt: ChatPrompt? = nil
+    /// The prompt a text line answers, if it does: it gets a "Prompt" label.
+    var promptID: String? = nil
+    /// Posted as the room's audience, like a prompt: the audience's name and
+    /// mark, never a person, with no presence.
+    var postedAsAudience = false
 
     init(
         id: UUID = UUID(),
@@ -81,7 +89,19 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// themselves from Backstage. It has no presence, never takes a friend's
     /// name, and groups apart from the sender's own lines.
     var isFromListing: Bool {
-        isFromPlace || personID != nil
+        isFromPlace || personID != nil || isFromAudience
+    }
+
+    /// The audience talking (a prompt), not the venue or a person: drawn with
+    /// the audience's mark, no RoleTag and no presence, and nobody to block.
+    var isFromAudience: Bool {
+        postedAsAudience || kind == .prompt
+    }
+
+    /// A rotating prompt, which the room shows under its title (PromptBar)
+    /// rather than in the thread.
+    var isPinnedPrompt: Bool {
+        kind == .prompt && prompt?.shownAs == .pinned
     }
 
     /// Whether the room still shows it: a special stops at its end time.
@@ -121,6 +141,8 @@ enum ChatKind: String, Hashable, Sendable {
     /// A song request or karaoke signup, anyone's in a venue's room, with
     /// their note to the host as its body.
     case request
+    /// One of an event's chat prompts (`prompt`), posted as the audience.
+    case prompt
 
     init?(wire: String) {
         self.init(rawValue: wire.lowercased())
@@ -171,6 +193,66 @@ struct ChatSongRequest: Hashable, Sendable {
     var isFinished: Bool { !state.isOpen && state != .unknown }
 }
 
+/// The prompt a `prompt` line puts to the room (GraphQL's `ChatPromptFrame`,
+/// the frame's `prompt`): what it asks, a trivia answer to hide until it's
+/// tapped or `revealAt`, how it went up, and where it falls in the night.
+struct ChatPrompt: Hashable, Sendable {
+    enum Kind: String, Hashable, Sendable {
+        /// Something to talk about with the people around you.
+        case conversation
+        /// A question with an answer.
+        case trivia
+    }
+
+    enum ShownAs: String, Hashable, Sendable {
+        /// Rotated in, under the room's title until the next one.
+        case pinned
+        /// Dropped into a quiet room as a card.
+        case card
+    }
+
+    /// What answers send as `promptId`.
+    let id: String
+    var kind: Kind = .conversation
+    let text: String
+    /// A trivia question's answer.
+    var answer: String? = nil
+    /// When the answer shows for everyone.
+    var revealAt: Date? = nil
+    var shownAs: ShownAs = .pinned
+    /// Which prompt of the night it is, from 1, out of at most `total`.
+    var number: Int? = nil
+    var total: Int? = nil
+    /// When the next one rotates in, if one will.
+    var nextAt: Date? = nil
+
+    var isTrivia: Bool { kind == .trivia }
+
+    /// "Prompt" or "Trivia": the label on its answers and its card.
+    var label: String {
+        isTrivia ? String(localized: "Trivia") : String(localized: "Prompt")
+    }
+
+    /// "2 of 6", when the room says.
+    var position: String? {
+        guard let number, number > 0, let total, total >= number else { return nil }
+        return String(localized: "\(number) of \(total)")
+    }
+
+    /// The PromptBar's overline: "Tonight's prompt · 2 of 6", or "Trivia · 3 of 6".
+    var overline: String {
+        let name = isTrivia ? String(localized: "Trivia") : String(localized: "Tonight's prompt")
+        guard let position else { return name }
+        return "\(name) · \(position)"
+    }
+
+    /// Whether a trivia answer shows for everyone by `date`.
+    func isRevealed(at date: Date) -> Bool {
+        guard let revealAt else { return false }
+        return revealAt <= date
+    }
+}
+
 /// The event an event message shares, as much of it as the room sends.
 struct SharedEvent: Hashable, Sendable {
     let id: UUID
@@ -216,9 +298,14 @@ extension VenueMessage {
         let personID: UUID?
         let presence: PresenceState?
         let request: ChatSongRequest?
+        let prompt: ChatPrompt?
+        let promptID: String?
+        let postedAsAudience: Bool
 
         enum CodingKeys: String, CodingKey {
-            case id, message, name, role, kind, title, body, event, pinned, presence, request
+            case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt
+            case promptID = "prompt_id"
+            case postedAsAudience = "posted_as_audience"
             case userID = "user_id"
             case avatarURL = "avatar_url"
             case sentAt = "sent_at"
@@ -241,6 +328,13 @@ extension VenueMessage {
 
         private enum RequestKeys: String, CodingKey {
             case id, kind, title, artist, singer, state
+        }
+
+        private enum PromptKeys: String, CodingKey {
+            case id, kind, text, answer, number, total
+            case revealAt = "reveal_at"
+            case shownAs = "shown_as"
+            case nextAt = "next_at"
         }
 
         init(from decoder: any Decoder) throws {
@@ -298,6 +392,44 @@ extension VenueMessage {
             } else {
                 request = nil
             }
+
+            // The room sends `prompt_id`, GraphQL `promptId` aliased to it.
+            promptID = Self.identifier(in: container, forKey: .promptID)
+            postedAsAudience = (try? container.decodeIfPresent(Bool.self, forKey: .postedAsAudience)) ?? false
+
+            // GraphQL's uppercase enums or the room's lowercase; one without an
+            // ID or a question is dropped, and the line shows as its text.
+            if (try? container.decodeNil(forKey: .prompt)) == false,
+               let frame = try? container.nestedContainer(keyedBy: PromptKeys.self, forKey: .prompt),
+               let frameID = Self.identifier(in: frame, forKey: .id),
+               let text = try? frame.decode(String.self, forKey: .text) {
+                let wire = { (key: PromptKeys) in ((try? frame.decodeIfPresent(String.self, forKey: key)) ?? nil)?.lowercased() }
+                let answer = (try? frame.decodeIfPresent(String.self, forKey: .answer)) ?? nil
+                prompt = ChatPrompt(
+                    id: frameID,
+                    kind: wire(.kind).flatMap(ChatPrompt.Kind.init(rawValue:)) ?? .conversation,
+                    text: text,
+                    answer: answer.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 },
+                    revealAt: Self.date(in: frame, forKey: .revealAt),
+                    shownAs: wire(.shownAs).flatMap(ChatPrompt.ShownAs.init(rawValue:)) ?? .pinned,
+                    number: (try? frame.decodeIfPresent(Int.self, forKey: .number)) ?? nil,
+                    total: (try? frame.decodeIfPresent(Int.self, forKey: .total)) ?? nil,
+                    nextAt: Self.date(in: frame, forKey: .nextAt)
+                )
+            } else {
+                prompt = nil
+            }
+        }
+
+        /// An ID as a string, or a number from a server that sends one.
+        private static func identifier<Key: CodingKey>(in container: KeyedDecodingContainer<Key>, forKey key: Key) -> String? {
+            if let string = try? container.decodeIfPresent(String.self, forKey: key) {
+                return string.isEmpty ? nil : string
+            }
+            if let number = try? container.decodeIfPresent(Int.self, forKey: key) {
+                return String(number)
+            }
+            return nil
         }
 
         /// The room and GraphQL both send plain ISO 8601.
@@ -328,6 +460,9 @@ extension VenueMessage {
         personID = payload.personID
         presence = payload.presence
         request = payload.request
+        prompt = payload.prompt
+        promptID = payload.promptID
+        postedAsAudience = payload.postedAsAudience
     }
 }
 

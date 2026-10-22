@@ -8,7 +8,8 @@ import UIKit
 
 // The shared chat kit (design system "Chat"): ChatThreadView and ChatBubble for
 // a room's transcript, RoomBanner, PinnedBar, ChatComposer, PresenceDot,
-// RoleTag and ChatLine. Rich messages are in RichMessage.swift.
+// RoleTag and ChatLine. Rich messages are in RichMessage.swift, and an event's
+// chat prompts (PromptBar, TriviaCard, PromptCard) in ChatPrompts.swift.
 // None of these know about venues: rooms pass their title as `roomName`, so a
 // venue room and a locale-wide room share them.
 
@@ -25,8 +26,23 @@ enum ChatMetrics {
     /// Rich messages (cards) are up to this wide, or `richMaxFraction` of the transcript.
     static let richMaxWidth: CGFloat = 320
     static let richMaxFraction: CGFloat = 0.85
-    /// `size-avatar-sm`.
-    static let avatarSize: CGFloat = 28
+    /// A TinyAvatar: chat avatars are small on purpose, so a room is for
+    /// finding friends, not judging strangers' photos.
+    static let avatarSize: CGFloat = 24
+    /// A TinyAvatar in ChatPeek.
+    static let peekAvatarSize: CGFloat = 20
+    /// `size-avatar-sm`: the venue, and talent posting as their listing,
+    /// keep their photos at this size.
+    static let listingAvatarSize: CGFloat = 28
+    /// A PromptCard is at most this wide, centred in the thread.
+    static let promptCardMaxWidth: CGFloat = 330
+
+    /// How big a sender's avatar draws: 28 for the venue and talent posting
+    /// as their listing, else 24 (20 in ChatPeek).
+    static func avatarDiameter(for message: ChatThreadMessage, compact: Bool = false) -> CGFloat {
+        if message.isFromListing, !message.isFromAudience { return listingAvatarSize }
+        return compact ? peekAvatarSize : avatarSize
+    }
     /// Messages from one sender closer together than this form a group.
     static let groupGap: TimeInterval = 5 * 60
     /// A time divider follows any gap at least this long.
@@ -157,9 +173,19 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     var role: ChatRole? = nil
     /// Posted as the venue: its photo in a rounded square, never a presence dot.
     var isFromPlace = false
+    /// Posted as the venue or by talent as their listing: its avatar keeps
+    /// its 28 size.
+    var isFromListing = false
+    /// Posted as the audience (a prompt): the audience's mark, no presence,
+    /// and nobody to block.
+    var isFromAudience = false
     /// What a host, the venue or staff posted besides text. `text` is then
     /// its summary in words, for VoiceOver and previews.
     var rich: ChatRichContent? = nil
+    /// "Prompt" or "Trivia" over a text line that answers a prompt.
+    var promptLabel: String? = nil
+    /// A prompt dropped into a quiet room, drawn as a PromptCard.
+    var promptCard: ChatPrompt? = nil
 
     /// The announcement's title, when this is one.
     var announcementTitle: String? {
@@ -209,8 +235,21 @@ struct ChatThreadView: View {
     /// Delete, in the menu on the reader's own sent messages. Without it
     /// their messages have no menu.
     var onDelete: ((ChatThreadMessage) -> Void)? = nil
+    /// Tonight's prompt, drawn under the title (after any PinnedBar) as a
+    /// PromptBar, or a TriviaCard for trivia.
+    var prompt: ChatPrompt? = nil
+    /// How many answers to `prompt` the room has shown.
+    var promptAnswers = 0
+    /// The time to draw against: when a trivia answer reveals itself.
+    var now: Date = .now
+    /// "Answer" on the PromptBar or a PromptCard. Without it there's no button.
+    var onAnswer: ((ChatPrompt) -> Void)? = nil
+    /// "Not now" on a PromptCard, with its message.
+    var onDismissPrompt: ((ChatThreadMessage) -> Void)? = nil
 
     @State private var width: CGFloat = 0
+    /// Scrolled back from the newest messages: the PromptBar folds to one line.
+    @State private var isScrolledBack = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -219,6 +258,23 @@ struct ChatThreadView: View {
                     PinnedBar(author: pinned.authorName, title: title) {
                         withAnimation { proxy.scrollTo(pinned.id, anchor: .top) }
                     }
+                }
+
+                if let prompt {
+                    // The header never holds more than two strips: under a
+                    // pinned announcement the bar is one line.
+                    PromptBar(
+                        prompt: prompt,
+                        answers: promptAnswers,
+                        isCollapsed: isScrolledBack || pinned?.announcementTitle != nil,
+                        now: now,
+                        onAnswer: onAnswer.map { answer in { answer(prompt) } }
+                    )
+                    .id(prompt.id)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .animation(HotMessMotion.quick, value: isScrolledBack)
                 }
 
                 thread(proxy)
@@ -237,10 +293,13 @@ struct ChatThreadView: View {
                             row: row,
                             maxBubbleWidth: maxBubbleWidth,
                             maxRichWidth: maxRichWidth,
+                            now: now,
                             onRetry: onRetry,
                             onReport: onReport,
                             onBlock: onBlock,
-                            onDelete: onDelete
+                            onDelete: onDelete,
+                            onAnswer: onAnswer,
+                            onDismissPrompt: onDismissPrompt
                         )
                         .id(row.id)
                     }
@@ -256,6 +315,11 @@ struct ChatThreadView: View {
             geometry.size.width
         } action: { newValue in
             width = newValue
+        }
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentSize.height - (geometry.contentOffset.y + geometry.containerSize.height) > 120
+        } action: { _, scrolledBack in
+            isScrolledBack = scrolledBack
         }
         .onChange(of: messages.count) { _, _ in
             guard let last = messages.last else { return }
@@ -283,6 +347,9 @@ struct ChatThreadRow: Identifiable, Hashable, Sendable {
     let isLastInGroup: Bool
     /// The first row of the transcript, which needs no space above.
     let isFirstRow: Bool
+    /// Over a PromptCard: how long the room was quiet before it dropped in,
+    /// in whole minutes ("Quiet for 10 minutes").
+    var quietMinutes: Int? = nil
 
     var id: String { message.id }
 
@@ -303,9 +370,20 @@ struct ChatThreadRow: Identifiable, Hashable, Sendable {
                 divider: dividers[index],
                 isFirstInGroup: isFirst,
                 isLastInGroup: isLast,
-                isFirstRow: index == 0
+                isFirstRow: index == 0,
+                quietMinutes: quietMinutes(at: index, in: messages)
             )
         }
+    }
+
+    /// The quiet a PromptCard broke: the minutes since the line before it.
+    private static func quietMinutes(at index: Int, in messages: [ChatThreadMessage]) -> Int? {
+        guard messages[index].promptCard != nil, index > 0,
+              let sentAt = messages[index].sentAt, let previous = messages[index - 1].sentAt
+        else { return nil }
+
+        let minutes = Int(sentAt.timeIntervalSince(previous) / 60)
+        return minutes > 0 ? minutes : nil
     }
 
     private static func divider(at index: Int, in messages: [ChatThreadMessage]) -> Date? {
@@ -316,9 +394,11 @@ struct ChatThreadRow: Identifiable, Hashable, Sendable {
         return sentAt.timeIntervalSince(previous) >= ChatMetrics.dividerGap ? sentAt : nil
     }
 
-    /// Rich messages stand alone: each shows its sender's name and avatar.
+    /// Rich messages and PromptCards stand alone: each shows its sender's
+    /// name and avatar, and ends any group.
     private static func sameGroup(_ earlier: ChatThreadMessage, _ later: ChatThreadMessage) -> Bool {
         guard earlier.rich == nil, later.rich == nil else { return false }
+        guard earlier.promptCard == nil, later.promptCard == nil else { return false }
         guard earlier.authorID == later.authorID, earlier.isOwn == later.isOwn else { return false }
         guard let earlierAt = earlier.sentAt, let laterAt = later.sentAt else { return true }
 
@@ -330,10 +410,13 @@ private struct ChatThreadRowView: View {
     let row: ChatThreadRow
     let maxBubbleWidth: CGFloat
     let maxRichWidth: CGFloat
+    var now: Date = .now
     let onRetry: ((String) -> Void)?
     var onReport: ((ChatThreadMessage) -> Void)? = nil
     var onBlock: ((ChatThreadMessage) -> Void)? = nil
     var onDelete: ((ChatThreadMessage) -> Void)? = nil
+    var onAnswer: ((ChatPrompt) -> Void)? = nil
+    var onDismissPrompt: ((ChatThreadMessage) -> Void)? = nil
 
     private var message: ChatThreadMessage { row.message }
 
@@ -348,86 +431,117 @@ private struct ChatThreadRowView: View {
         !message.isOwn && message.delivery == .sent && onReport != nil
     }
 
-    /// A post as the venue is the venue's own, so it has no sender to block.
+    /// A post as the venue is the venue's own, and a prompt the audience's,
+    /// so neither has a sender to block.
     private var canBlock: Bool {
-        canReport && !message.isFromPlace && onBlock != nil
+        canReport && !message.isFromPlace && !message.isFromAudience && onBlock != nil
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if let divider = row.divider {
-                Text(ChatTime.divider(divider))
-                    .font(.hotMess(.caption, semibold: true))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
+                ChatDividerLabel(text: ChatTime.divider(divider))
                     .padding(.top, row.isFirstRow ? 0 : 12)
                     .padding(.bottom, 4)
-                    .accessibilityAddTraits(.isHeader)
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                if !message.isOwn {
-                    if row.isLastInGroup {
-                        ChatAvatar(message: message)
-                            .accessibilityHidden(true)
-                    } else {
-                        Color.clear
-                            .frame(width: ChatMetrics.avatarSize, height: 1)
-                    }
-                }
-
-                VStack(alignment: message.isOwn ? .trailing : .leading, spacing: 2) {
-                    // The reader's own posts as the venue name it the way
-                    // everyone else sees them ("Try-Angles [Venue]"); their
-                    // ordinary messages as themselves need no name.
-                    if row.isFirstInGroup, !message.isOwn || message.isFromPlace {
-                        ChatSenderLine(name: message.authorName, role: message.role)
-                            .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
-                            .accessibilityHidden(true)
-                    }
-
-                    Group {
-                        if let rich = message.rich {
-                            RichMessageView(content: rich)
-                        } else {
-                            ChatBubble(
-                                text: message.text,
-                                isOwn: message.isOwn,
-                                isLastInGroup: row.isLastInGroup,
-                                isRole: message.role?.tintsBubble == true
-                            )
-                        }
-                    }
-                    .opacity(message.delivery == .sent ? 1 : 0.6)
-                    .accessibilityElement(children: message.rich == nil ? .ignore : .contain)
-                    .accessibilityLabel(accessibilityLabel)
-                    .contextMenu {
-                        if canReport {
-                            moderationActions
-                        }
-                        if canDelete {
-                            deleteAction
-                        }
-                    }
-                    .accessibilityActions {
-                        if canReport {
-                            moderationActions
-                        }
-                        if canDelete {
-                            deleteAction
-                        }
-                    }
-
-                    deliveryStatus
-                }
-                .frame(
-                    maxWidth: message.rich == nil ? maxBubbleWidth : maxRichWidth,
-                    alignment: message.isOwn ? .trailing : .leading
-                )
+            if let prompt = message.promptCard {
+                promptCard(prompt)
+            } else {
+                line
             }
-            .frame(maxWidth: .infinity, alignment: message.isOwn ? .trailing : .leading)
         }
         .padding(.top, topSpacing)
+    }
+
+    /// A prompt dropped into a quiet room: centred, with why it appeared above it.
+    private func promptCard(_ prompt: ChatPrompt) -> some View {
+        VStack(spacing: 4) {
+            if let minutes = row.quietMinutes {
+                ChatDividerLabel(text: minutes == 1
+                    ? String(localized: "Quiet for 1 minute")
+                    : String(localized: "Quiet for \(minutes) minutes"))
+                    .padding(.top, row.isFirstRow || row.divider != nil ? 0 : 4)
+            }
+
+            PromptCard(
+                prompt: prompt,
+                author: message.authorName,
+                sentAt: message.sentAt,
+                now: now,
+                onAnswer: onAnswer.map { answer in { answer(prompt) } },
+                onDismiss: onDismissPrompt.map { dismiss in { [message] in dismiss(message) } }
+            )
+            .id(prompt.id)
+            .frame(maxWidth: ChatMetrics.promptCardMaxWidth)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+
+    private var line: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if !message.isOwn {
+                if row.isLastInGroup {
+                    ChatAvatar(message: message)
+                        .accessibilityHidden(true)
+                } else {
+                    Color.clear
+                        .frame(width: ChatMetrics.avatarDiameter(for: message), height: 1)
+                }
+            }
+
+            VStack(alignment: message.isOwn ? .trailing : .leading, spacing: 2) {
+                // The reader's own posts as the venue name it the way
+                // everyone else sees them ("Try-Angles [Venue]"); their
+                // ordinary messages as themselves need no name.
+                if row.isFirstInGroup, !message.isOwn || message.isFromPlace {
+                    ChatSenderLine(name: message.authorName, role: message.role)
+                        .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
+                        .accessibilityHidden(true)
+                }
+
+                Group {
+                    if let rich = message.rich {
+                        RichMessageView(content: rich)
+                    } else {
+                        ChatBubble(
+                            text: message.text,
+                            isOwn: message.isOwn,
+                            isLastInGroup: row.isLastInGroup,
+                            isRole: message.role?.tintsBubble == true,
+                            label: message.promptLabel
+                        )
+                    }
+                }
+                .opacity(message.delivery == .sent ? 1 : 0.6)
+                .accessibilityElement(children: message.rich == nil ? .ignore : .contain)
+                .accessibilityLabel(accessibilityLabel)
+                .contextMenu {
+                    if canReport {
+                        moderationActions
+                    }
+                    if canDelete {
+                        deleteAction
+                    }
+                }
+                .accessibilityActions {
+                    if canReport {
+                        moderationActions
+                    }
+                    if canDelete {
+                        deleteAction
+                    }
+                }
+
+                deliveryStatus
+            }
+            .frame(
+                maxWidth: message.rich == nil ? maxBubbleWidth : maxRichWidth,
+                alignment: message.isOwn ? .trailing : .leading
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: message.isOwn ? .trailing : .leading)
     }
 
     @ViewBuilder
@@ -492,36 +606,62 @@ private struct ChatThreadRowView: View {
     }
 
     private var accessibilityLabel: String {
+        // "Prompt answer: …" says what the label on the bubble does.
+        let text = message.promptLabel.map { String(localized: "\($0) answer: \(message.text)") } ?? message.text
         if message.isOwn {
             if let name = message.authorName, !name.isEmpty, let role = message.role {
-                return String(localized: "You, as \(name), \(role.title): \(message.text)")
+                return String(localized: "You, as \(name), \(role.title): \(text)")
             }
-            return String(localized: "You: \(message.text)")
+            return String(localized: "You: \(text)")
         }
         let name = message.authorName.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Someone")
         if let role = message.role {
-            return "\(name), \(role.title): \(message.text)"
+            return "\(name), \(role.title): \(text)"
         }
-        return "\(name): \(message.text)"
+        return "\(name): \(text)"
     }
 }
 
-/// A sender's avatar beside their bubbles: round with presence for people, a
-/// rounded square with no presence for a post as the venue.
+/// A centred caption between lines of the thread: a time divider, or why a
+/// PromptCard appeared.
+struct ChatDividerLabel: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.hotMess(.caption, semibold: true))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A sender's avatar beside their bubbles (a TinyAvatar): round with presence
+/// for people at 24, a rounded square with no presence for a post as the
+/// venue and talent's listing photo at 28, and the audience's mark for a prompt.
 struct ChatAvatar: View {
     let message: ChatThreadMessage
     /// The surface behind the avatar, for the presence dot's ring.
     var presenceRing: Color = Color(.secondarySystemGroupedBackground)
+    /// ChatPeek's 20 instead of 24.
+    var compact = false
 
     var body: some View {
-        Avatar(
-            url: message.avatarURL,
-            initials: message.authorName?.initialsForDisplay,
-            size: ChatMetrics.avatarSize,
-            presence: message.isFromPlace ? nil : message.presence,
-            presenceRing: presenceRing,
-            isPlace: message.isFromPlace
-        )
+        let size = ChatMetrics.avatarDiameter(for: message, compact: compact)
+
+        if message.isFromAudience {
+            AudienceMark(name: message.authorName, size: size)
+        } else {
+            Avatar(
+                url: message.avatarURL,
+                initials: message.authorName?.initialsForDisplay,
+                size: size,
+                presence: message.isFromListing ? nil : message.presence,
+                presenceRing: presenceRing,
+                isPlace: message.isFromPlace,
+                tintsInitials: !message.isFromListing
+            )
+        }
     }
 }
 
@@ -614,6 +754,9 @@ struct ChatBubble: View {
     var lineLimit: Int? = nil
     /// Off where the bubble sits inside a button, like ChatPeek.
     var isSelectable: Bool = true
+    /// "Prompt" or "Trivia" on a line that answers one, in a first line of
+    /// its own with a reply glyph. It doesn't change grouping.
+    var label: String? = nil
 
     var body: some View {
         if isSelectable {
@@ -624,24 +767,39 @@ struct ChatBubble: View {
     }
 
     private var bubble: some View {
-        Text(text)
-            .font(.hotMess(.subheadline))
-            .foregroundStyle(isOwn ? Color.hotMessOnAccent : Color.primary)
-            .lineLimit(lineLimit)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background {
-                if isOwn {
-                    shape.fill(Color.hotMessAccent)
-                } else if isRole {
-                    shape.fill(Color.hotMessAccentSoft)
-                } else {
-                    shape
-                        .fill(Color(.secondarySystemGroupedBackground))
-                        .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
+        VStack(alignment: .leading, spacing: 2) {
+            if let label {
+                Label {
+                    Text(label)
+                } icon: {
+                    Image(systemName: "arrowshape.turn.up.left")
+                        .font(.system(size: 10, weight: .semibold))
                 }
+                .labelStyle(PromptLabelStyle())
+                .font(.hotMess(fixedSize: 12, semibold: true))
+                .foregroundStyle(isOwn ? Color.hotMessOnAccent : Color.secondary)
+                .lineLimit(1)
             }
+
+            Text(text)
+                .font(.hotMess(.subheadline))
+                .foregroundStyle(isOwn ? Color.hotMessOnAccent : Color.primary)
+                .lineLimit(lineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            if isOwn {
+                shape.fill(Color.hotMessAccent)
+            } else if isRole {
+                shape.fill(Color.hotMessAccentSoft)
+            } else {
+                shape
+                    .fill(Color(.secondarySystemGroupedBackground))
+                    .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
+            }
+        }
     }
 
     private var shape: UnevenRoundedRectangle {
@@ -655,6 +813,16 @@ struct ChatBubble: View {
             topTrailingRadius: radius,
             style: .continuous
         )
+    }
+}
+
+/// The Prompt label's glyph and word, close together.
+private struct PromptLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+            configuration.title
+        }
     }
 }
 
@@ -791,11 +959,47 @@ struct ChatComposer: View {
     @Binding var text: String
     /// False while the field is empty or the room is offline.
     let canSend: Bool
+    /// The prompt the next line answers, after "Answer": an answer chip over
+    /// the field and a hint under it.
+    var answering: ChatPrompt? = nil
+    /// The chip's close button.
+    var stopAnswering: () -> Void = {}
     let send: () -> Void
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let answering {
+                AnswerChip(prompt: answering, close: stopAnswering)
+            }
+
+            field
+
+            if answering != nil {
+                Text("Your answer shows in the room with a Prompt label.")
+                    .font(.hotMess(.caption))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(alignment: .top) {
+            Divider()
+        }
+        .animation(HotMessMotion.quick, value: answering?.id)
+        // "Answer" opens the composer.
+        .onChange(of: answering?.id) { _, id in
+            if id != nil { isFocused = true }
+        }
+    }
+
+    private var field: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField(String(localized: "Message"), text: $text, axis: .vertical)
+                .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.hotMess(.body))
                 .lineLimit(1 ... 4)
@@ -820,12 +1024,6 @@ struct ChatComposer: View {
             .buttonStyle(.plain)
             .disabled(!canSend)
             .accessibilityLabel(String(localized: "Send"))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.secondarySystemGroupedBackground))
-        .overlay(alignment: .top) {
-            Divider()
         }
     }
 }
@@ -959,9 +1157,9 @@ private enum ChatPreviewData {
 
 #Preview("Presence") {
     HStack(spacing: 16) {
-        Avatar(url: nil, initials: "SA", size: 28, presence: .online)
-        Avatar(url: nil, initials: "AL", size: 28, presence: .push)
-        Avatar(url: nil, initials: "JO", size: 28, presence: .offline)
+        Avatar(url: nil, initials: "SA", size: 24, presence: .online, tintsInitials: true)
+        Avatar(url: nil, initials: "AL", size: 24, presence: .push, tintsInitials: true)
+        Avatar(url: nil, initials: "JO", size: 20, presence: .offline, tintsInitials: true)
         Avatar(url: nil, initials: "SA", size: 56, presence: .online)
         Avatar(url: nil, initials: "AL", size: 56, presence: .push)
     }

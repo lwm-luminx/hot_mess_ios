@@ -85,7 +85,7 @@ struct AboutUpdateRows: View {
     }
 
     /// How often we look, under the About section.
-    static func footnote(for source: InstallSource?) -> String? {
+    nonisolated static func footnote(for source: InstallSource?) -> String? {
         switch source {
         case .testFlight:
             String(localized: "We check for a new beta when you open Hot Mess, at most once a day.")
@@ -97,7 +97,7 @@ struct AboutUpdateRows: View {
     }
 
     /// "Mon 9:14pm" within the last week, "Oct 12" before that.
-    static func lastChecked(_ date: Date, now: Date = Date(), calendar: Calendar = .current,
+    nonisolated static func lastChecked(_ date: Date, now: Date = Date(), calendar: Calendar = .current,
                             locale: Locale = .current) -> String {
         let formatter = DateFormatter()
         formatter.calendar = calendar

@@ -51,6 +51,42 @@ struct ChatPresenceFrameTests {
         #expect(message.presence == nil)
     }
 
+    @Test("A prompt arrives posted as the audience, and an answer with its prompt's ID")
+    func promptLines() throws {
+        let announcer = UUID()
+        let prompt = events("""
+        { "__typename": "ChatMessagePosted", "sender_presence": null,
+          "message": { "id": "\(UUID())", "user_id": "\(announcer)", "message": "Who should have won last season?",
+            "body": "Who should have won last season?", "name": "Hot Mess", "avatar_url": null, "role": null,
+            "kind": "PROMPT", "pinned": false, "posted_as_venue": false, "posted_as_person": false,
+            "posted_as_audience": true, "prompt_id": null,
+            "prompt": { "id": "7d1e0aac-1d01-42d1-9de5-f0279842d9c0", "kind": "CONVERSATION",
+              "text": "Who should have won last season?", "answer": null, "reveal_at": null, "shown_as": "PINNED",
+              "number": 2, "total": 6, "next_at": "2026-10-11T04:15:00Z" } } }
+        """)
+        guard case let .received(message) = try #require(prompt.first) else {
+            Issue.record("Expected a prompt")
+            return
+        }
+        #expect(message.kind == .prompt)
+        #expect(message.isFromAudience && message.isFromListing && !message.isFromPlace)
+        #expect(message.isPinnedPrompt)
+        #expect(message.prompt?.number == 2 && message.prompt?.total == 6)
+
+        let extra = #", "prompt_id": "7d1e0aac-1d01-42d1-9de5-f0279842d9c0", "posted_as_audience": false, "prompt": null"#
+        let answer = events("""
+        { "__typename": "ChatMessagePosted", "sender_presence": "ONLINE",
+          "message": \(line("Plane Jane", from: sam, extra: extra)) }
+        """)
+        guard case let .received(reply) = try #require(answer.first) else {
+            Issue.record("Expected an answer")
+            return
+        }
+        #expect(reply.kind == .text)
+        #expect(reply.promptID == "7d1e0aac-1d01-42d1-9de5-f0279842d9c0")
+        #expect(!reply.isFromAudience)
+    }
+
     @Test("An automatic \"On now\" announcement shows as the venue's card")
     func onNowAnnouncement() throws {
         // Posted as the venue by its announcer, a venue-device user who is
@@ -604,6 +640,42 @@ struct HereNowTests {
         #expect(viewModel.reachableUserIDs.isEmpty)
     }
 
+    @Test("The newest rotating prompt goes under the title; cards and answers stay in the thread")
+    @MainActor
+    func viewModelPrompts() {
+        let viewModel = makeViewModel(friends: FriendDirectory())
+        func prompt(_ id: String, _ text: String, kind: ChatPrompt.Kind = .conversation, shownAs: ChatPrompt.ShownAs) -> VenueMessage {
+            var message = VenueMessage(id: UUID(), body: text, userID: alex, name: "Hot Mess", avatarURL: nil, sentAt: .now)
+            message.kind = .prompt
+            message.postedAsAudience = true
+            message.prompt = ChatPrompt(id: id, kind: kind, text: text, shownAs: shownAs, number: 1, total: 6)
+            return message
+        }
+        let first = prompt("p1", "Who should have won?", shownAs: .pinned)
+        let card = prompt("p2", "Ask whoever is next to you", shownAs: .card)
+        let trivia = prompt("p3", "Who won season one?", kind: .trivia, shownAs: .pinned)
+        var answer = VenueMessage(id: UUID(), body: "BeBe", userID: sam, name: "Sam K.", avatarURL: nil, sentAt: .now)
+        answer.promptID = "p3"
+
+        viewModel.applyHistory([first, card], pinned: nil)
+        #expect(viewModel.pinnedPrompt?.id == first.id)
+
+        viewModel.receive(trivia)
+        viewModel.receive(answer)
+        #expect(viewModel.pinnedPrompt?.id == trivia.id)
+        #expect(viewModel.answerCount(for: trivia.prompt!) == 1)
+        #expect(viewModel.answerCount(for: first.prompt!) == 0)
+        #expect(viewModel.promptKinds == ["p1": .conversation, "p2": .conversation, "p3": .trivia])
+
+        let thread = answer.threadMessage(currentUserID: me, promptKinds: viewModel.promptKinds)
+        #expect(thread.promptLabel == "Trivia")
+        #expect(card.threadMessage(currentUserID: me).promptCard?.id == "p2")
+        #expect(trivia.threadMessage(currentUserID: me).promptCard == nil)
+
+        viewModel.applyClear()
+        #expect(viewModel.pinnedPrompt == nil)
+    }
+
     @Test("Removed lines go, and clearing the room takes every line and the pin")
     @MainActor
     func viewModelRemovals() {
@@ -653,6 +725,38 @@ struct ChatSendTests {
 
         #expect(viewModel.messages.map(\.id) == [sent.id])
         #expect(viewModel.messages.first?.presence == .online)
+    }
+
+    @Test("Answering a prompt goes with the next line only")
+    @MainActor
+    func answeringPrompt() async {
+        let viewModel = makeViewModel()
+        let prompt = ChatPrompt(id: "p1", text: "Who should have won?", shownAs: .pinned)
+
+        viewModel.answer(prompt)
+        #expect(viewModel.answering == prompt)
+
+        viewModel.draft = "Plane Jane"
+        await viewModel.send()
+        #expect(viewModel.answering == nil)
+        #expect(viewModel.pending.map(\.prompt) == [prompt])
+
+        viewModel.draft = "anyway"
+        await viewModel.send()
+        #expect(viewModel.pending.map(\.prompt) == [prompt, nil])
+    }
+
+    @Test("A watcher can't answer a prompt")
+    @MainActor
+    func watcherCantAnswer() {
+        let viewModel = VenueChatViewModel(
+            room: ChatRoom(kind: .venue, id: UUID(), name: "The Eagle"),
+            watch: true,
+            configuration: AppConfiguration(baseURL: URL(string: "https://api.hotmess.social")!),
+            userID: me
+        )
+        viewModel.answer(ChatPrompt(id: "p1", text: "Who should have won?"))
+        #expect(viewModel.answering == nil)
     }
 
     @Test("Without the API, nothing can be sent")

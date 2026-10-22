@@ -21,6 +21,7 @@ struct EventScreen: View {
     @State private var pingSeed: PingSeed?
     /// Its venue's lineup on the night, for karaoke signups right here.
     @State private var lineupModel: VenueLineupModel?
+    @State private var fixTarget: SuggestionTarget?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { detail in
@@ -97,6 +98,8 @@ struct EventScreen: View {
                             .audiencePreset(model.brand.preset)
                         }
 
+                        PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
+
                         detailsSection(event)
 
                         if let venue = event.venue {
@@ -127,9 +130,28 @@ struct EventScreen: View {
             .ignoresSafeArea(edges: .top)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .toolbar {
-                if let shareURL = event.shareURL {
-                    ShareLink(item: shareURL) {
-                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 12) {
+                        if let shareURL = event.shareURL {
+                            ShareLink(item: shareURL) {
+                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                            }
+                        }
+
+                        if model.session.isSignedIn {
+                            Menu {
+                                Button {
+                                    fixTarget = .event(event)
+                                } label: {
+                                    Label(String(localized: "Suggest a Fix…"), systemImage: "pencil")
+                                }
+                                .accessibilityIdentifier("event.suggestFix")
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.body)
+                            }
+                            .accessibilityIdentifier("event.optionsMenu")
+                        }
                     }
                 }
             }
@@ -151,6 +173,10 @@ struct EventScreen: View {
         .task { await model.session.refreshUser() }
         .sheet(item: $pingSeed) { seed in
             PingSheet(seed: seed)
+                .environment(model)
+        }
+        .sheet(item: $fixTarget) { target in
+            SuggestFixSheet(target: target)
                 .environment(model)
         }
         .alert(

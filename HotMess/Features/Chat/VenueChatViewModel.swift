@@ -35,6 +35,8 @@ final class VenueChatViewModel {
         var state: State
         /// Counts writes, so a timeout from an earlier try can't fail a resend.
         var attempt = 0
+        /// The prompt it answers, sent as `promptId`.
+        var prompt: ChatPrompt? = nil
     }
 
     /// How often to tell the API the user is still here while the room is open.
@@ -71,6 +73,9 @@ final class VenueChatViewModel {
     /// messages the room shows.
     private(set) var pinned: VenueMessage?
     var draft: String = ""
+    /// The prompt the next line answers, after "Answer" on the PromptBar or
+    /// a PromptCard; the composer shows it as an answer chip.
+    var answering: ChatPrompt?
     /// Why the API refused the last line, in its words: terms not accepted
     /// yet, or the content filter. The screen shows it, then clears it.
     var sendError: String?
@@ -147,6 +152,33 @@ final class VenueChatViewModel {
     /// is pinned, else (from older servers) the latest line marked as pinned.
     var pinnedAnnouncement: VenueMessage? {
         pinned ?? messages.last { $0.isPinned && $0.kind == .announcement }
+    }
+
+    /// Tonight's prompt under the room's title: the newest rotating prompt
+    /// in the room's history.
+    var pinnedPrompt: VenueMessage? {
+        messages.last { $0.isPinnedPrompt && $0.prompt != nil }
+    }
+
+    /// The kinds of the prompts the room has shown, by prompt ID, so answers
+    /// to trivia are labelled "Trivia".
+    var promptKinds: [String: ChatPrompt.Kind] {
+        Dictionary(
+            messages.compactMap { message in message.prompt.map { ($0.id, $0.kind) } },
+            uniquingKeysWith: { _, latest in latest }
+        )
+    }
+
+    /// How many lines in the room answer the prompt. The room only knows the
+    /// lines it has sent, so on a long night it can be fewer than all of them.
+    func answerCount(for prompt: ChatPrompt) -> Int {
+        messages.filter { $0.kind == .text && $0.promptID == prompt.id }.count
+    }
+
+    /// "Answer": the next line answers the prompt.
+    func answer(_ prompt: ChatPrompt) {
+        guard !isWatching else { return }
+        answering = prompt
     }
 
     /// The user ("You", while they're in the room), everyone else in the
@@ -366,7 +398,8 @@ final class VenueChatViewModel {
 
         draft = ""
 
-        let message = PendingMessage(id: UUID(), body: body, createdAt: .now, state: .sending)
+        let message = PendingMessage(id: UUID(), body: body, createdAt: .now, state: .sending, prompt: answering)
+        answering = nil
         pending.append(message)
 
         if connectionState == .connected {
@@ -562,6 +595,7 @@ final class VenueChatViewModel {
         pending[index].attempt += 1
         let attempt = pending[index].attempt
         let body = pending[index].body
+        let promptID = pending[index].prompt?.id
 
         guard let api else {
             markFailed(id, attempt: attempt)
@@ -574,7 +608,7 @@ final class VenueChatViewModel {
         }
 
         do {
-            settle(id, with: try await api.sendMyChatMessage(body, in: room))
+            settle(id, with: try await api.sendMyChatMessage(body, in: room, promptID: promptID))
         } catch {
             Log.realtime.error("Chat line not sent: \(error.localizedDescription, privacy: .public)")
             markFailed(id, attempt: attempt)

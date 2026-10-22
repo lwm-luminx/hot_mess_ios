@@ -128,6 +128,12 @@ struct RouteDestination: View {
             VenueChatScreen(room: room)
         case let .localeChat(locale):
             VenueChatScreen(room: .locale(locale))
+        case let .post(id):
+            PostScreen(postID: id)
+        case let .posts(subject, title):
+            PostsScreen(subject: subject, title: title)
+        case let .updates(locale):
+            UpdatesScreen(locale: locale)
         }
     }
 }
