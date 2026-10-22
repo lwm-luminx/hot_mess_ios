@@ -6,6 +6,7 @@
 import AudienceKit
 import Foundation
 import Observation
+import SwiftUI
 import os
 
 /// The app's composition root: it builds the services once and holds the
@@ -102,7 +103,7 @@ final class AppModel {
         brand = BrandStore(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
-        checkout = CoverCheckout(api: api, configuration: configuration)
+        checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
         safety = SafetyStore(api: api)
         // A socket the server refuses as unauthorized signs out the way an
         // HTTP 401 does. The cable reads the credential from the SDK's store
@@ -273,8 +274,33 @@ final class AppModel {
         }
     }
 
+    var shareLinkError: String?
+    @ObservationIgnored private var shareLinkTask: Task<Void, Never>?
+
     func open(_ url: URL) -> Bool {
-        switch DeepLink.destination(for: url) {
+        guard let destination = DeepLink.destination(for: url) else { return false }
+        shareLinkTask?.cancel()
+        let tokens = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.filter { $0.name == "e" } ?? []
+        guard tokens.count <= 1 else { shareLinkError = "This share link is invalid."; return false }
+        guard let token = tokens.first?.value else { return open(destination) }
+        // Validate the opaque signed token before routing, including links received
+        // before sign-in. Never discard expiry or sender attribution on handoff.
+        shareLinkTask = Task {
+            do {
+                let path = url.scheme == "hotmess" ? "/\(url.host ?? "")\(url.path)" : url.path
+                _ = try await audienceKit.data(for: APIRequest(path: "/v1/share", queryItems: [
+                    URLQueryItem(name: "host", value: audienceKit.configuration.host),
+                    URLQueryItem(name: "path", value: path), URLQueryItem(name: "e", value: token)
+                ], authenticated: false))
+                try Task.checkCancellation()
+                _ = open(destination)
+            } catch { if !Task.isCancelled { shareLinkError = error.localizedDescription } }
+        }
+        return true
+    }
+
+    private func open(_ destination: DeepLinkDestination?) -> Bool {
+        switch destination {
         case let .route(route):
             open(route)
             return true

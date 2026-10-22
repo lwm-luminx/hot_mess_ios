@@ -15,6 +15,8 @@
 		<string>webcredentials:hotmess.social</string>
 		<string>applinks:hotmess.social</string>
 		<string>applinks:www.hotmess.social</string>
+		<string>appclips:hotmess.social</string>
+		<string>appclips:www.hotmess.social</string>
 	</array>
 	<key>com.apple.developer.in-app-payments</key>
 	<array>

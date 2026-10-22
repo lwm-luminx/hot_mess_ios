@@ -37,6 +37,13 @@ struct DeepLinkTests {
         #expect(DeepLink.route(for: url) == .person(id))
     }
 
+    @Test("Retains an invitation on the exact Ping screen")
+    func pingInvitation() throws {
+        let url = try #require(URL(string: "https://hotmess.social/pings/\(id.uuidString)?e=v2.opaque"))
+        #expect(DeepLink.destination(for: url) == .route(.ping(id, invitation: "v2.opaque")))
+        #expect(DeepLink.destination(for: URL(string: "https://other.example/pings/\(id.uuidString)")) == nil)
+    }
+
     /// The original indexed `pathComponents[1]` and `[2]` and force-unwrapped
     /// the `UUID`, so each of these took the app down on open.
     @Test(

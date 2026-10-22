@@ -127,11 +127,7 @@ struct EventScreen: View {
             .ignoresSafeArea(edges: .top)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .toolbar {
-                if let shareURL = event.shareURL {
-                    ShareLink(item: shareURL) {
-                        Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                    }
-                }
+                SignedShareButton(path: "/events/\(event.id.uuidString.lowercased())")
             }
         }
         .heroNavigationBar(
