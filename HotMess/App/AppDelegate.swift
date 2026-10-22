@@ -71,22 +71,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 // MARK: - Notifications
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Pings show as banners in the foreground too, and Now picks up the
-    /// change. A notification the app already showed itself (its in-app copy
-    /// came over `myNotifications`, now or within a moment) isn't shown again.
+    /// While the app is open the system shows nothing; Now picks up a Ping's
+    /// change, and the in-app copy (over `myNotifications`) is the only banner.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let userInfo = notification.request.content.userInfo
-        let notificationID = InAppNotification.notificationID(in: userInfo)
-
         if PingNotification(userInfo: userInfo)?.isPing == true {
             await AppDelegate.pingsChanged()
         }
-        guard await AppDelegate.shouldPresentSystemCopy(notificationID: notificationID) else { return [] }
-
-        return [.banner, .list, .sound]
+        return []
     }
 
     /// "I'm in" from a Ping push joins the whole Ping in the background;
@@ -115,11 +110,6 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     @MainActor
     private static func open(_ notification: PingNotification) {
         AppModel.shared.open(notification)
-    }
-
-    @MainActor
-    private static func shouldPresentSystemCopy(notificationID: String?) async -> Bool {
-        await AppModel.shared.notifications.shouldPresentSystemCopy(notificationID: notificationID)
     }
 
     @MainActor

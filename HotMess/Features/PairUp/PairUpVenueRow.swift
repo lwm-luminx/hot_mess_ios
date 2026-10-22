@@ -43,7 +43,7 @@ struct PairUpVenueRow: View {
         case .waiting: String(localized: "Waiting for them to say yes")
         case .revealed: String(localized: "Go find each other")
         case .met: String(localized: "You met someone tonight")
-        case .left, nil: String(localized: "Pair me up to chat")
+        case .left, nil: String(localized: "Quickie")
         }
     }
 
@@ -54,6 +54,6 @@ struct PairUpVenueRow: View {
     }
 
     private var buttonTitle: String {
-        status == nil ? String(localized: "Pair me up") : String(localized: "Open")
+        status == nil ? String(localized: "Start") : String(localized: "Open")
     }
 }

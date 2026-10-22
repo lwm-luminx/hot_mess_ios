@@ -87,7 +87,7 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Hot Mess uses your camera to scan your payment card when you pay a venue’s cover charge, and to scan your Pair me up match’s code when you meet.</string>
+	<string>Hot Mess uses your camera to scan your payment card when you pay a venue’s cover charge, and to scan your Quickie match’s code when you meet.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Hot Mess notices when you arrive at or leave a venue, even with the app closed, so your friends see where you are and venues can tell how busy they are.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
