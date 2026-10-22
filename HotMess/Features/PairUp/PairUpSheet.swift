@@ -36,7 +36,7 @@ struct PairUpSheet: View {
                 .padding(20)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle(String(localized: "Pair me up"))
+            .navigationTitle(String(localized: "Quickie"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -56,7 +56,7 @@ struct PairUpSheet: View {
         }
         .contentReporting(report: $reportSubject, block: $blockTarget)
         .alert(
-            String(localized: "Pair me up"),
+            String(localized: "Quickie"),
             isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
         ) {
             Button(String(localized: "OK"), role: .cancel) {}
@@ -97,7 +97,7 @@ struct PairUpSheet: View {
                 .foregroundStyle(Color.accentColor)
             Text("Meet someone at \(venueName)")
                 .font(.hotMess(.title2, semibold: true))
-            Text("We'll pair you with someone else here tonight who also tapped Pair me up, and give you both something to talk about. You only see each other once you both say yes, and either of you can cancel any time.")
+            Text("We'll pair you with someone else here tonight who also tapped Quickie, and give you both something to talk about. You only see each other once you both say yes, and either of you can cancel any time.")
                 .font(.hotMess(.subheadline))
                 .foregroundStyle(.secondary)
 
@@ -106,7 +106,7 @@ struct PairUpSheet: View {
             Button {
                 Task { await model.join(lookFor: lookFor) }
             } label: {
-                Text("Pair me up to chat")
+                Text("Start a quickie")
                     .font(.hotMess(.body, semibold: true))
                     .frame(maxWidth: .infinity)
             }
@@ -115,7 +115,7 @@ struct PairUpSheet: View {
             .disabled(!model.isHere || model.isBusy)
 
             if !model.isHere {
-                Text("Pair me up opens once you're at \(venueName).")
+                Text("Quickie opens once you're at \(venueName).")
                     .font(.hotMess(.footnote))
                     .foregroundStyle(.secondary)
             }
@@ -161,7 +161,7 @@ struct PairUpSheet: View {
             .buttonStyle(.bordered)
             .disabled(model.isBusy || lookFor == (state.lookFor ?? ""))
 
-            Button(String(localized: "Stop pairing me up"), role: .destructive) {
+            Button(String(localized: "Leave Quickie"), role: .destructive) {
                 Task { await model.leave() }
             }
             .disabled(model.isBusy)
@@ -260,7 +260,7 @@ struct PairUpSheet: View {
             Button {
                 Task { await model.join(lookFor: nil) }
             } label: {
-                Text("Pair me up again").frame(maxWidth: .infinity)
+                Text("Another quickie").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
