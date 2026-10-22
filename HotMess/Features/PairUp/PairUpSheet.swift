@@ -15,7 +15,8 @@ struct PairUpSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var lookFor = ""
-    @State private var showingCode: String?
+    /// The code on screen, for the match and topic it was issued for; a new topic clears the old code.
+    @State private var shownCode: (key: String, code: String)?
     @State private var isScanning = false
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
@@ -50,10 +51,6 @@ struct PairUpSheet: View {
         }
         .task { await model.poll() }
         .onAppear { lookFor = model.state?.lookFor ?? "" }
-        .sheet(item: Binding(get: { showingCode.map { PairUpCode(code: $0) } }, set: { showingCode = $0?.code })) { code in
-            PairUpCodeScreen(code: code.code, partnerName: model.state?.match?.partner?.name)
-                .presentationDetents([.large])
-        }
         .sheet(isPresented: $isScanning) {
             PairUpScanner { code in Task { await model.scan(code) } }
         }
@@ -227,22 +224,21 @@ struct PairUpSheet: View {
                 }
                 TopicCard(topic: match.topic)
 
-                Text("Found each other? One of you shows a code and the other scans it.")
+                Text("Found each other? Either of you scans the other's code.")
                     .font(.hotMess(.subheadline))
-                HStack(spacing: 12) {
-                    Button {
-                        Task { showingCode = await model.code() }
-                    } label: {
-                        Label(String(localized: "Show my code"), systemImage: "qrcode").frame(maxWidth: .infinity)
+                // Both phones show their code straight away, so whoever's
+                // quicker scans: no deciding who shows and who scans.
+                let key = "\(match.id)-\(match.topic.key)"
+                PairUpCodeView(code: shownCode?.key == key ? shownCode?.code : nil)
+                    .task(id: key) {
+                        if let code = await model.code() { shownCode = (key, code) }
                     }
-                    .buttonStyle(.borderedProminent)
-                    Button {
-                        isScanning = true
-                    } label: {
-                        Label(String(localized: "Scan theirs"), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+                Button {
+                    isScanning = true
+                } label: {
+                    Label(String(localized: "Scan theirs"), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.large)
 
                 cancelButton(match)
@@ -290,11 +286,6 @@ struct PairUpSheet: View {
 }
 
 // MARK: - Pieces
-
-private struct PairUpCode: Identifiable {
-    let code: String
-    var id: String { code }
-}
 
 private struct TopicCard: View {
     let topic: PairUpTopic
@@ -421,35 +412,29 @@ private struct MetCelebration: View {
     }
 }
 
-/// The code to show: big, bright, and only for their partner.
-private struct PairUpCodeScreen: View {
-    let code: String
-    let partnerName: String?
-
-    @Environment(\.dismiss) private var dismiss
+/// The code to show, big and bright on white so it scans in a dark room.
+/// It works once, and only for their match.
+private struct PairUpCodeView: View {
+    let code: String?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text(partnerName.map { String(localized: "Let \($0) scan this") } ?? String(localized: "Let them scan this"))
-                    .font(.hotMess(.title3, semibold: true))
-                QRCodeImage(text: code)
-                    .padding(16)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .frame(maxWidth: 320)
-                Text("It works once, and only for your match.")
-                    .font(.hotMess(.footnote))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Done")) { dismiss() }
+        VStack(spacing: 8) {
+            Group {
+                if let code {
+                    QRCodeImage(text: code)
+                } else {
+                    ProgressView()
                 }
             }
+            .frame(maxWidth: 240, minHeight: 200)
+            .aspectRatio(1, contentMode: .fit)
+            .padding(16)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Text("Your code. It works once, and only for your match.")
+                .font(.hotMess(.footnote))
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
