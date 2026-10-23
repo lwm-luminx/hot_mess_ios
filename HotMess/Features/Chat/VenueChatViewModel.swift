@@ -68,6 +68,12 @@ final class VenueChatViewModel {
     /// keeps listing, offline, until each one's `recentUntil`. Nobody here
     /// now is in it.
     private(set) var recentPeople: [UUID: RecentRoomPerson] = [:]
+    /// How each person on tonight's lineup can be reached, by their person
+    /// (listing) ID lowercased, from the room's roster and lineup frames:
+    /// in chat if anyone who manages the listing is, else by push, else
+    /// offline. `nil` while offline, and from servers without lineup
+    /// presence: the lineup then draws no dots.
+    private(set) var lineupPresence: [String: PresenceState]?
     /// The announcement pinned under the room's title, from the history sent
     /// on joining and the room's pin frames; it can be older than the
     /// messages the room shows.
@@ -349,6 +355,8 @@ final class VenueChatViewModel {
                     applyRoster(online: online, people: people, friends: friends, recent: recent)
                 case let .presence(userID, online, name, avatarURL):
                     applyPresence(userID: userID, online: online, name: name, avatarURL: avatarURL)
+                case let .lineupPresence(presence):
+                    applyLineupPresence(presence)
                 case let .reachable(userID):
                     applyPresence(userID: userID, online: false, name: nil, avatarURL: nil)
                     reachableUserIDs.insert(userID)
@@ -461,6 +469,11 @@ final class VenueChatViewModel {
             rosterFriendNames[friend.id] = friend.name
         }
         friends?.rememberNames(roster)
+    }
+
+    /// The lineup's presence, the whole list each time.
+    func applyLineupPresence(_ presence: [String: PresenceState]) {
+        lineupPresence = presence
     }
 
     /// Someone joined or left. A join keeps what's already known about them
@@ -585,6 +598,7 @@ final class VenueChatViewModel {
         roomPeople = [:]
         reachableUserIDs = []
         recentPeople = [:]
+        lineupPresence = nil
         pruneTask?.cancel()
         pruneTask = nil
     }

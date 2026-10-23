@@ -360,16 +360,21 @@ struct NowScreen: View {
                 room: room,
                 messages: now.recentMessages,
                 participants: chatParticipants(now, room: room),
+                venueName: venue.name,
+                lineup: lineupModel?.lineup,
                 route: now.event == nil ? .venueChat(venue) : .eventChat(room)
             )
             .padding(.horizontal, 16)
         }
     }
 
+    /// The venue (an event's too), then you and your friends. The peek puts
+    /// the lineup in chat now between them.
     private func chatParticipants(_ now: Now, room: ChatRoom) -> [ChatPeek.Participant] {
+        guard let venue = room.place else { return viewerAndFriends(now) }
         let place = ChatPeek.Participant(
-            id: "venue-\(room.id)", name: room.name,
-            avatarURL: room.photoURL, isPlace: true
+            id: "venue-\(room.id)", name: venue.name,
+            avatarURL: venue.photoURL, isPlace: true
         )
         return [place] + viewerAndFriends(now)
     }
