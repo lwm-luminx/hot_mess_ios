@@ -100,7 +100,7 @@ struct VenueLineupTests {
         let links = HostLink.links(for: detail)
         #expect(links.map(\.url.absoluteString) == ["https://instagram.com/trixie", "https://open.spotify.com/artist/1"])
         #expect(links.map(\.title) == ["Rick Mark on Instagram", "Rick Mark on Spotify"])
-        #expect(links.map(\.systemImage) == ["camera", "music.note"])
+        #expect(links.map(\.systemImage) == ["link", "music.note"])
         #expect(detail.tipLinks.map(\.tipApp) == ["Venmo"])
     }
 

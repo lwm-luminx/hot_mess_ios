@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import SwiftUI
 
 /// The people tab, replacing `PeopleViewController` — which registered its
@@ -15,6 +16,12 @@ struct PeopleScreen: View {
     @Environment(AppModel.self) private var model
     @State private var viewModel: PeopleViewModel?
     @State private var scope = Scope.local
+    /// The groups' order, ranked by the server; promoted cards go between
+    /// groups, never inside one.
+    @State private var cardLayout: ScreenLayout?
+
+    static let localCards = [CardKind.peoplePlayingThisWeek, CardKind.peopleBasedHere]
+    static let cardKinds = localCards + [CardKind.peopleEveryone, CardKind.web, CardKind.promoSlot]
 
     private enum Scope: Hashable {
         case local
@@ -59,9 +66,15 @@ struct PeopleScreen: View {
             ensureViewModel()
             await viewModel?.load()
         }
+        .task(id: model.location.locale?.id) {
+            ensureViewModel()
+            await loadCards(force: true)
+        }
         .refreshable {
             await model.location.refreshPosition()
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load()
+            await cards
         }
     }
 
@@ -79,8 +92,29 @@ struct PeopleScreen: View {
                 }
             }
         } else {
+            ForEach(localGroupCards) { card in
+                localCard(card, local, layoutID: cardLayout?.layout.id)
+            }
+        }
+    }
+
+    /// The local groups in the server's order (promoted cards between them)
+    /// when it sent them, else the built-in order.
+    private var localGroupCards: [LayoutCard] {
+        let served = (cardLayout?.layout.cards ?? []).filter { $0.kind != CardKind.peopleEveryone }
+        guard served.contains(where: { Self.localCards.contains($0.kind) }) else {
+            return CardLayout.fallback(Self.localCards).cards
+        }
+        return served
+    }
+
+    @ViewBuilder
+    private func localCard(_ card: LayoutCard, _ local: PeopleListing.Local, layoutID: String?) -> some View {
+        switch card.kind {
+        case CardKind.peoplePlayingThisWeek:
+            let ranked = ordered(local.playing, by: card.personIDs, isFallback: card.isFallback)
             CardSection(String(localized: "Playing this week")) {
-                ForEach(local.playing) { playing in
+                ForEach(ranked.isEmpty ? local.playing : ranked) { playing in
                     PersonCardLink(
                         person: playing.entry.person,
                         description: gigLine(playing.gig),
@@ -88,18 +122,27 @@ struct PeopleScreen: View {
                     )
                 }
             }
-
+        case CardKind.peopleBasedHere:
+            let ranked = ordered(local.based, by: card.personIDs, isFallback: card.isFallback)
             CardSection(String(localized: "Based here")) {
-                ForEach(local.based) { entry in
+                ForEach(ranked.isEmpty ? local.based : ranked) { entry in
                     PersonCardLink(person: entry.person, friends: entry.friends)
                 }
             }
+        case CardKind.web:
+            if let content = card.web { WebCardView(content: content) }
+        case CardKind.promoSlot:
+            PromoSlotView(card: card, layoutID: layoutID)
+        default:
+            EmptyView()
         }
     }
 
     private func everyoneSection(_ listing: PeopleListing) -> some View {
-        CardSection {
-            ForEach(listing.everyone) { entry in
+        let card = cardLayout?.layout.card(CardKind.peopleEveryone)
+        let ranked = card.map { ordered(listing.everyone, by: $0.personIDs, isFallback: $0.isFallback) } ?? []
+        return CardSection {
+            ForEach(ranked.isEmpty ? listing.everyone : ranked) { entry in
                 PersonCardLink(person: entry.person, friends: entry.friends)
             }
         }
@@ -118,6 +161,16 @@ struct PeopleScreen: View {
         if viewModel == nil {
             viewModel = PeopleViewModel(audienceKit: model.audienceKit)
         }
+        if cardLayout == nil {
+            cardLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .people, kinds: Self.cardKinds,
+                                      fallback: Self.localCards + [CardKind.peopleEveryone],
+                                      appVersion: model.configuration.version)
+        }
+    }
+
+    private func loadCards(force: Bool) async {
+        await cardLayout?.load(coordinates: model.location.coordinates, localeID: model.location.locale?.id,
+                               force: force)
     }
 
     private func reload() {

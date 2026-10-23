@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import SwiftUI
 import UIKit
 
@@ -28,6 +29,18 @@ struct NowScreen: View {
     /// Pair me up at the venue you're at, or your event's.
     @State private var pairUpModel: PairUpModel?
     @State private var isPairingUp = false
+    /// The order of Now's cards, ranked by the server for where you are.
+    @State private var cardLayout: ScreenLayout?
+
+    /// Every card Now can draw, in its built-in order: the lineup or karaoke,
+    /// the room's chat, tonight's posts, small talk, the next events, the
+    /// locale's updates, venues nearby, where your friends are, then pings.
+    /// Announcements and promoted cards come only from the server.
+    static let fallbackCards = [
+        CardKind.nowStage, CardKind.nowChat, CardKind.postsTonight, CardKind.nowSmallTalk, CardKind.eventsUpcoming,
+        CardKind.postsLocale, CardKind.venuesNearby, CardKind.venuesFriends, CardKind.pings,
+    ]
+    static let cardKinds = fallbackCards + [CardKind.web, CardKind.promoSlot]
 
     /// How often Now reloads while it's on screen. Standing still sends no new
     /// position, but the chat, the lineup and who's here keep changing.
@@ -70,18 +83,18 @@ struct NowScreen: View {
                             }
                         }
 
-                        // The lineup or karaoke, small talk, the next three events, then venues.
-                        stageSection(now)
-                        stagePhotosSection(now)
-                        venueChatSection(now)
-                        pairUpSection
-                        tonightPostsSection(now)
-                        localeChatSection(now)
-                        eventsSection(now)
-                        localePostsSection(now)
-                        nearbySection(now)
-                        friendVenuesSection(now)
-                        pingsSection(now)
+                        // The cards in the server's order (the built-in one
+                        // when it can't be had); a kind this build doesn't
+                        // draw was never asked for.
+                        let layout = cardLayout?.layout ?? .fallback(Self.fallbackCards)
+                        ForEach(layout.cards) { card in
+                            nowCard(card, now, layoutID: layout.id)
+                        }
+                        // Passes and who's out depend on this device, so they
+                        // aren't cards: they go just above pings.
+                        if layout.card(CardKind.pings) == nil {
+                            venueExtrasSection(now)
+                        }
                     }
                     .padding(.bottom, 24)
                 }
@@ -90,7 +103,9 @@ struct NowScreen: View {
                 .refreshable {
                     let started = Date.now
                     await model.location.refreshPosition()
+                    async let cards: Void = loadCards(force: true)
                     await viewModel?.load(from: model.location, sentAfter: started)
+                    await cards
                 }
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
@@ -136,7 +151,9 @@ struct NowScreen: View {
             ensureViewModel()
             let pingsChanged = loadedPingRevision.map { $0 != model.pingRevision } ?? false
             loadedPingRevision = model.pingRevision
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load(from: model.location, sentAfter: pingsChanged ? .now : nil)
+            await cards
         }
         // Coming back to the app, and every minute while it's open. Coming
         // back waits for the fresh fix the app asks for, so Now isn't loaded
@@ -146,7 +163,9 @@ struct NowScreen: View {
             ensureViewModel()
             await model.location.refreshPosition()
             while !Task.isCancelled {
+                async let cards: Void = loadCards()
                 await viewModel?.load(from: model.location)
+                await cards
                 await pairUpModel?.load()
                 try? await Task.sleep(for: Self.refreshInterval)
             }
@@ -238,6 +257,48 @@ struct NowScreen: View {
         return String(localized: "Happening now")
     }
 
+    // MARK: - Cards
+
+    /// One of Now's cards: the section it has always been, drawn where the
+    /// server ranked it.
+    @ViewBuilder
+    private func nowCard(_ card: LayoutCard, _ now: Now, layoutID: String?) -> some View {
+        switch card.kind {
+        case CardKind.nowStage:
+            stageSection(now)
+            stagePhotosSection(now)
+        case CardKind.nowChat:
+            venueChatSection(now)
+            pairUpSection
+        case CardKind.postsTonight:
+            tonightPostsSection(now)
+        case CardKind.nowSmallTalk:
+            localeChatSection(now)
+        case CardKind.eventsUpcoming:
+            eventsSection(now)
+        case CardKind.postsLocale:
+            localePostsSection(now)
+        case CardKind.venuesNearby:
+            nearbySection(now, card: card)
+        case CardKind.venuesFriends:
+            friendVenuesSection(now)
+        case CardKind.pings:
+            venueExtrasSection(now)
+            pingsSection(now)
+        case CardKind.web:
+            if let content = card.web { WebCardView(content: content) }
+        case CardKind.promoSlot:
+            PromoSlotView(card: card, layoutID: layoutID)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func loadCards(force: Bool = false) async {
+        await cardLayout?.load(coordinates: model.location.coordinates, localeID: model.location.locale?.id,
+                               force: force)
+    }
+
     // MARK: - Sections
 
     /// Your own Ping on top, then friends' Pings, newest first.
@@ -279,9 +340,11 @@ struct NowScreen: View {
         }
     }
 
+    /// Venues near you, when you aren't at one, in the server's order.
     @ViewBuilder
-    private func nearbySection(_ now: Now) -> some View {
-        if let venues = now.venues {
+    private func nearbySection(_ now: Now, card: LayoutCard) -> some View {
+        if let nearby = now.venues {
+            let venues = ordered(nearby, by: card.venueIDs, isFallback: card.isFallback)
             if venues.isEmpty {
                 DetailSection(String(localized: "Venues")) {
                     Text("You aren't near any venues right now.")
@@ -294,6 +357,15 @@ struct NowScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    /// At a venue, tonight's pass or the way to skip the line; when Now
+    /// doesn't know where you are, your friends who are out.
+    @ViewBuilder
+    private func venueExtrasSection(_ now: Now) -> some View {
+        if now.venues != nil {
+            EmptyView()
         } else if let venue = now.venue {
             // A pass for tonight leads the venue's cards, ready for the door; otherwise
             // the way to skip the line when the cover can be paid here.
@@ -527,12 +599,18 @@ struct NowScreen: View {
         if viewModel == nil {
             viewModel = NowViewModel(api: model.api, friends: model.friends)
         }
+        if cardLayout == nil {
+            cardLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .now, kinds: Self.cardKinds,
+                                      fallback: Self.fallbackCards, appVersion: model.configuration.version)
+        }
     }
 
     private func reload() {
         Task {
             ensureViewModel()
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load(from: model.location, sentAfter: .now)
+            await cards
         }
     }
 }

@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import MapKit
 import SwiftUI
 
@@ -14,6 +15,14 @@ struct VenuesScreen: View {
     @State private var viewModel: VenuesViewModel?
     @State private var camera: MapCameraPosition = .automatic
     @State private var isMapExpanded = false
+    /// The cards under the map, ranked by the server.
+    @State private var cardLayout: ScreenLayout?
+
+    /// Under the map: every venue, then "help fill your city". The server can
+    /// add what's on tonight, what's nearby, announcements and promoted cards.
+    static let fallbackCards = [CardKind.venuesAll, CardKind.venuesThinCity]
+    static let cardKinds = [CardKind.venuesTonight, CardKind.venuesNearby] + fallbackCards
+        + [CardKind.web, CardKind.promoSlot]
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { collection in
@@ -23,21 +32,12 @@ struct VenuesScreen: View {
                         .clipShape(.rect(cornerRadius: CardMetrics.cornerRadius))
                         .padding(.horizontal, 16)
 
-                    if collection.venues.isEmpty {
-                        DetailSection(model.brand.name) {
-                            Text(emptyMessage)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        CardSection(model.brand.name, edgeToEdge: true) {
-                            ForEach(collection.venues) { venue in
-                                VenueCardLink(venue: venue)
-                            }
-                        }
-                    }
-
-                    if model.session.isSignedIn {
-                        ThinCityCard(venueCount: collection.venues.count, cityName: model.location.locale?.name)
+                    // The server sends no list for a city it doesn't know yet; the
+                    // screen's own order stands in then.
+                    let served = cardLayout?.layout
+                    let layout = served?.card(CardKind.venuesAll) != nil ? served! : .fallback(Self.fallbackCards)
+                    ForEach(layout.cards) { card in
+                        venuesCard(card, collection: collection, layoutID: layout.id)
                     }
                 }
                 .padding(.vertical, 16)
@@ -54,12 +54,66 @@ struct VenuesScreen: View {
         .navigationTitle(model.location.locale?.name ?? String(localized: "Venues"))
         .task(id: model.location.locale?.id) {
             ensureViewModel()
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load(localeID: model.location.locale?.id)
+            await cards
+        }
+        .task {
+            // The ranking moves with the night: ask again when it says to.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(cardLayout?.layout.refreshAfter ?? 60))
+                await loadCards(force: false)
+            }
         }
         .refreshable {
             await model.location.refreshPosition()
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load(localeID: model.location.locale?.id)
+            await cards
         }
+    }
+
+    @ViewBuilder
+    private func venuesCard(_ card: LayoutCard, collection: VenueCollection, layoutID: String?) -> some View {
+        switch card.kind {
+        case CardKind.venuesAll:
+            let ranked = ordered(collection.venues, by: card.venueIDs, isFallback: card.isFallback)
+            let venues = ranked.isEmpty ? collection.venues : ranked
+            if venues.isEmpty {
+                DetailSection(card.title ?? model.brand.name) {
+                    Text(emptyMessage)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                CardSection(card.title ?? model.brand.name, edgeToEdge: true) {
+                    ForEach(venues) { venue in
+                        VenueCardLink(venue: venue)
+                    }
+                }
+            }
+        case CardKind.venuesTonight, CardKind.venuesNearby:
+            // Only the server sends these, with their own heading.
+            CardSection(card.title, edgeToEdge: true) {
+                ForEach(ordered(collection.venues, by: card.venueIDs, isFallback: false)) { venue in
+                    VenueCardLink(venue: venue)
+                }
+            }
+        case CardKind.venuesThinCity:
+            if model.session.isSignedIn {
+                ThinCityCard(venueCount: collection.venues.count, cityName: model.location.locale?.name)
+            }
+        case CardKind.web:
+            if let content = card.web { WebCardView(content: content) }
+        case CardKind.promoSlot:
+            PromoSlotView(card: card, layoutID: layoutID)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func loadCards(force: Bool) async {
+        await cardLayout?.load(coordinates: model.location.coordinates, localeID: model.location.locale?.id,
+                               force: force)
     }
 
     private var emptyMessage: String {
@@ -115,12 +169,18 @@ struct VenuesScreen: View {
         if viewModel == nil {
             viewModel = VenuesViewModel(audienceKit: model.audienceKit)
         }
+        if cardLayout == nil {
+            cardLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .venues, kinds: Self.cardKinds,
+                                      fallback: Self.fallbackCards, appVersion: model.configuration.version)
+        }
     }
 
     private func reload() {
         Task {
             ensureViewModel()
+            async let cards: Void = loadCards(force: true)
             await viewModel?.load(localeID: model.location.locale?.id)
+            await cards
         }
     }
 }
