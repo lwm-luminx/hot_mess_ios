@@ -288,7 +288,7 @@ struct NowScreen: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                CardSection(String(localized: "Venues")) {
+                CardSection(String(localized: "Venues"), edgeToEdge: true) {
                     ForEach(venues.prefix(3)) { venue in
                         VenueCardLink(venue: venue)
                     }
@@ -449,7 +449,7 @@ struct NowScreen: View {
     @ViewBuilder
     private func friendVenuesSection(_ now: Now) -> some View {
         if now.venue == nil, !now.friendVenues.isEmpty {
-            CardSection(String(localized: "Where your friends are")) {
+            CardSection(String(localized: "Where your friends are"), edgeToEdge: true) {
                 ForEach(now.friendVenues) { entry in
                     VenueCardLink(venue: entry.venue) {
                         VenueCard(
