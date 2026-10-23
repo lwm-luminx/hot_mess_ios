@@ -6,6 +6,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import AudienceKit
 import Testing
 
 @testable import HotMess
@@ -135,6 +136,56 @@ struct DeepLinkTests {
         #expect(AppRoute.venue(id).tab == .venues)
         #expect(AppRoute.event(id).tab == .events)
         #expect(AppRoute.person(id).tab == .people)
+    }
+}
+
+@Suite("Share links")
+struct ShareLinkTests {
+    @Test("Reads the expiry of the API's original tokens without the network")
+    func legacyExpiry() {
+        // 1_700_000_000 in base 36.
+        let token = "s44we8.AbCdEf_-01234567"
+
+        #expect(ShareLinkToken.expiry(of: token) == Date(timeIntervalSince1970: 1_700_000_000))
+        #expect(ShareLinkToken.hasExpired(token, at: Date(timeIntervalSince1970: 1_800_000_000)))
+        #expect(!ShareLinkToken.hasExpired(token, at: Date(timeIntervalSince1970: 1_600_000_000)))
+    }
+
+    @Test("Leaves attributed and unreadable tokens to the API rather than calling them expired")
+    func opaqueTokens() {
+        for token in ["v3.q1w2e3r4t5y6u7i8o9p0aa", "v2.abc--def", "S44WE8.AbCdEf_-01234567", "s44we8.short", "s44we8", ""] {
+            #expect(ShareLinkToken.expiry(of: token) == nil, "\(token)")
+            #expect(!ShareLinkToken.hasExpired(token), "\(token)")
+        }
+    }
+
+    @Test("Only the API's 410 means expired; offline or a failing API opens the record")
+    func problems() {
+        let gone = AudienceKitError(code: "EXPIRED", message: "This link has expired", status: 410)
+        let missing = AudienceKitError(code: "NOT_FOUND", message: "Nothing to share at this path", status: 404)
+        let failing = AudienceKitError(code: "INTERNAL", message: "Something went wrong", status: 503)
+        let offline = AudienceKitError(code: "NETWORK", message: "Offline")
+
+        #expect(ShareLinkProblem.from(gone) == .expired)
+        #expect(ShareLinkProblem.from(missing) == .unavailable("Nothing to share at this path"))
+        #expect(ShareLinkProblem.from(failing) == nil)
+        #expect(ShareLinkProblem.from(offline) == nil)
+        #expect(ShareLinkProblem.from(URLError(.notConnectedToInternet)) == nil)
+    }
+
+    @Test("An expired link says so on Venues, without opening the record")
+    @MainActor
+    func expiredLinkOpensVenues() throws {
+        let model = AppModel.shared
+        let id = UUID()
+        let url = try #require(URL(string: "https://hotmess.social/venues/\(id.uuidString.lowercased())?e=s44we8.AbCdEf_-01234567"))
+        model.selectedTab = .now
+
+        #expect(model.open(url))
+        #expect(model.selectedTab == .venues)
+        #expect(model.venuesPath.isEmpty)
+        #expect(model.shareLinkError == .expired)
+        model.shareLinkError = nil
     }
 }
 

@@ -21,8 +21,6 @@ struct Event: Codable, Hashable, Sendable, Identifiable {
 
     var facebookURL: URL? { facebookID?.eventURL }
 
-    var shareURL: URL? { URL(string: "https://hotmess.social/events/\(id.uuidString.lowercased())") }
-
     /// Where an event with no venue yet is.
     static let toBeAnnounced = String(localized: "To be announced")
 

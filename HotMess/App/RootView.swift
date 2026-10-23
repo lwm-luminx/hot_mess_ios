@@ -27,9 +27,9 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.session.state)
-        .alert("Couldn't open this share", isPresented: Binding(
+        .alert(model.shareLinkError?.title ?? "", isPresented: Binding(
             get: { model.shareLinkError != nil }, set: { if !$0 { model.shareLinkError = nil } }
-        )) { Button("OK", role: .cancel) {} } message: { Text(model.shareLinkError ?? "") }
+        )) { Button("OK", role: .cancel) {} } message: { Text(model.shareLinkError?.message ?? "") }
         // TestFlight and App Store update prompts: checked on foreground at
         // most once a day; the blocking one covers everything, including
         // UpdateRequiredView.
