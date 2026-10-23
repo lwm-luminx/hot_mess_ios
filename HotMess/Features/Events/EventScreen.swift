@@ -134,11 +134,7 @@ struct EventScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
-                        if let shareURL = event.shareURL {
-                            ShareLink(item: shareURL) {
-                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                            }
-                        }
+                        SignedShareButton(path: "/events/\(event.id.uuidString.lowercased())")
 
                         if model.session.isSignedIn {
                             Menu {

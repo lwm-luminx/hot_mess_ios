@@ -27,6 +27,9 @@ struct RootView: View {
             }
         }
         .animation(.default, value: model.session.state)
+        .alert("Couldn't open this share", isPresented: Binding(
+            get: { model.shareLinkError != nil }, set: { if !$0 { model.shareLinkError = nil } }
+        )) { Button("OK", role: .cancel) {} } message: { Text(model.shareLinkError ?? "") }
         // TestFlight and App Store update prompts: checked on foreground at
         // most once a day; the blocking one covers everything, including
         // UpdateRequiredView.
@@ -118,6 +121,8 @@ struct RouteDestination: View {
             VenueScreen(venueID: id)
         case let .event(id):
             EventScreen(eventID: id)
+        case let .ping(id, invitation):
+            SharedPingScreen(pingID: id, invitationToken: invitation)
         case let .person(id):
             PersonScreen(personID: id)
         case let .venueChat(venue):

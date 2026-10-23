@@ -13,7 +13,7 @@ import Foundation
 /// of any audience, and the two REST sign-ins the SDK has no call for. The
 /// GraphQL documents alias fields to the snake_case keys the models already
 /// decode, so one set of models serves both.
-struct HotMessAPI: Sendable {
+struct HotMessAPI: CoverPaymentAPI {
     let client: APIClient
 
     init(client: APIClient) {
@@ -335,10 +335,11 @@ struct HotMessAPI: Sendable {
     }
 
     /// "I'm in", on one pick or, with no `targetID`, the whole Ping.
-    func joinPing(_ pingID: String, targetID: String? = nil) async throws -> Ping {
+    func joinPing(_ pingID: String, targetID: String? = nil, invitationToken: String? = nil) async throws -> Ping {
         try await query(
             Documents.joinPing,
-            variables: ["pingId": .string(pingID), "targetId": targetID.map(GraphQLValue.string) ?? .null],
+            variables: ["pingId": .string(pingID), "targetId": targetID.map(GraphQLValue.string) ?? .null,
+                        "invitationToken": invitationToken.map(GraphQLValue.string) ?? .null],
             as: JoinPingResponse.self
         ).joinPing.ping
     }
@@ -667,28 +668,6 @@ extension HotMessAPI {
         static func connectFacebook(_ request: ConnectFacebookRequest) -> Endpoint<Credential> {
             Endpoint("/v1/token", method: .post, body: JSONBody(request))
         }
-    }
-}
-
-/// `POST /v1/token/apple`. Apple gives the name only the first time someone
-/// signs in to the app, so it's sent along then. The authorization code lets
-/// the API get a refresh token from Apple, which it revokes when the account
-/// is deleted.
-struct AppleSignInRequest: Encodable, Sendable {
-    let identityToken: String
-    var authorizationCode: String? = nil
-    let firstName: String?
-    let lastName: String?
-    let host: String?
-    let device: DeviceDescription
-
-    enum CodingKeys: String, CodingKey {
-        case identityToken = "identity_token"
-        case authorizationCode = "authorization_code"
-        case firstName = "first_name"
-        case lastName = "last_name"
-        case host
-        case device
     }
 }
 
@@ -1067,8 +1046,8 @@ extension HotMessAPI {
         """
 
         static let joinPing = """
-        mutation JoinPing($pingId: ID!, $targetId: ID) {
-          joinPing(input: { pingId: $pingId, targetId: $targetId }) { ping { \(pingFields) } }
+        mutation JoinPing($pingId: ID!, $targetId: ID, $invitationToken: String) {
+          joinPing(input: { pingId: $pingId, targetId: $targetId, invitationToken: $invitationToken }) { ping { \(pingFields) } }
         }
         """
 
