@@ -6,8 +6,9 @@
 import Foundation
 
 /// A post by a venue or a talent listing: an announcement, a special, a poster
-/// or photos that stays on their page, unlike chat. Hot Mess only reads posts
-/// and comments on them; venues post from Velvet, talent from Backstage.
+/// or photos that stays on their page, unlike chat. Everyone reads posts and
+/// comments on them; whoever manages the venue or the talent listing also
+/// writes and manages them here, as they do in Velvet and Backstage.
 struct Post: Decodable, Identifiable, Hashable, Sendable {
     /// The event a post is on, for its "on {event}" line and chip.
     struct EventLink: Decodable, Hashable, Sendable {
@@ -37,6 +38,12 @@ struct Post: Decodable, Identifiable, Hashable, Sendable {
     let personID: UUID?
     /// The venue posting it, or a talent post's event venue.
     let venueID: UUID?
+    /// Whether the event's venue hid this talent post from the event. It
+    /// still shows on the person's page.
+    let hiddenFromEvent: Bool
+    /// Public posts are on the web too (hotmess.social, link previews, App
+    /// Clips) while their poster is public; Community ones need sign-in.
+    let visibility: PostVisibility
 
     /// Posted as a venue, not a person: a rounded-square face and the "Venue" tag.
     var isVenuePost: Bool { personID == nil }
@@ -53,16 +60,16 @@ struct Post: Decodable, Identifiable, Hashable, Sendable {
         return venueID.map { .venue($0, name: posterName) }
     }
 
-    /// What Share sends with the post's text: its poster's page, until
-    /// hotmess.social has a page per post.
+    /// What Share sends: the post's own page on hotmess.social. A Public post
+    /// shows there, in link previews and in the App Clip; a Community one asks
+    /// whoever opens it to sign in. In the app it opens the post either way.
     var shareURL: URL? {
-        if let personID { return URL(string: "https://hotmess.social/people/\(personID.uuidString.lowercased())") }
-        return venueID.map { URL(string: "https://hotmess.social/venues/\($0.uuidString.lowercased())")! }
+        URL(string: "https://hotmess.social/posts/\(id.uuidString.lowercased())")
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, body, posterName, roleLabel, actingPersonName, createdAt, edited, pinned, commentsOpen
-        case commentCount, photos, event, person, venue
+        case commentCount, photos, event, person, venue, hiddenFromEvent, visibility
         case posterAvatarURL = "posterAvatarUrl"
     }
 
@@ -86,6 +93,14 @@ struct Post: Decodable, Identifiable, Hashable, Sendable {
         event = try container.decodeIfPresent(EventLink.self, forKey: .event)
         personID = try container.decodeIfPresent(Ref.self, forKey: .person)?.id
         venueID = try container.decodeIfPresent(Ref.self, forKey: .venue)?.id
+        hiddenFromEvent = try container.decodeIfPresent(Bool.self, forKey: .hiddenFromEvent) ?? false
+        visibility = (try? container.decodeIfPresent(PostVisibility.self, forKey: .visibility)) ?? .community
+    }
+
+    /// Who wrote it, for editing: the venue, or the talent listing.
+    var author: PostAuthor? {
+        if let personID { return .person(personID, name: posterName) }
+        return venueID.map { .venue($0, name: posterName) }
     }
 
     /// The metadata line: "Pinned · 2h · Edited · on Drag Bingo". `showsPin`
@@ -207,5 +222,108 @@ enum PostsSubject: Hashable, Sendable {
     var floatsPins: Bool {
         if case .locale = self { return false }
         return true
+    }
+}
+
+
+/// Who a manager posts as: a venue they manage, or a talent listing they
+/// manage or act for (a troupe included).
+enum PostAuthor: Hashable, Identifiable, Sendable {
+    case venue(UUID, name: String)
+    case person(UUID, name: String)
+
+    var id: UUID {
+        switch self {
+        case let .venue(id, _), let .person(id, _): id
+        }
+    }
+
+    var name: String {
+        switch self {
+        case let .venue(_, name), let .person(_, name): name
+        }
+    }
+
+    var isVenue: Bool {
+        if case .venue = self { return true }
+        return false
+    }
+}
+
+/// Where a new post goes: the author's own page, or an event (at the venue,
+/// or one the person is on).
+enum PostTarget: Hashable, Sendable {
+    case page
+    case event(UUID, name: String)
+}
+
+/// The venues and talent the signed-in user manages here, from the staff view
+/// (`me { listings }`); empty for everyone else.
+struct ManagedListings: Hashable, Sendable {
+    var venues: [PostAuthor] = []
+    var people: [PostAuthor] = []
+
+    static let none = ManagedListings()
+
+    var isEmpty: Bool { venues.isEmpty && people.isEmpty }
+
+    func managesVenue(_ id: UUID?) -> Bool { id.map { id in venues.contains { $0.id == id } } ?? false }
+
+    func managesPerson(_ id: UUID?) -> Bool { id.map { id in people.contains { $0.id == id } } ?? false }
+
+    /// Whether they may edit, pin, close comments on or delete it: they manage
+    /// whoever posted it.
+    func canManage(_ post: Post) -> Bool {
+        post.personID != nil ? managesPerson(post.personID) : managesVenue(post.venueID)
+    }
+
+    /// Whether they may hide a talent post from its event: they manage the
+    /// event's venue.
+    func canHideFromEvent(_ post: Post) -> Bool {
+        post.personID != nil && post.event != nil && managesVenue(post.venueID)
+    }
+
+    /// Who they can post as on a page: the venue's or the person's own, or an
+    /// event's (its venue, and whoever on it they manage).
+    func authors(for subject: PostsSubject, eventVenueID: UUID? = nil, eventPeople: [UUID] = []) -> [PostAuthor] {
+        switch subject {
+        case let .venue(id): venues.filter { $0.id == id }
+        case let .person(id): people.filter { $0.id == id }
+        case .event: venues.filter { $0.id == eventVenueID } + people.filter { eventPeople.contains($0.id) }
+        case .locale: []
+        }
+    }
+}
+
+/// Who can see a post: the API's `PostVisibility`.
+enum PostVisibility: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    /// People signed in to Hot Mess. The default.
+    case community = "COMMUNITY"
+    /// The web too: hotmess.social, link previews, App Clips and search,
+    /// while the poster's own page is Public.
+    case `public` = "PUBLIC"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .community: String(localized: "Community")
+        case .public: String(localized: "Public")
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .community: String(localized: "People signed in to Hot Mess. A shared link asks them to sign in.")
+        case .public:
+            String(localized: "On hotmess.social too, in link previews, App Clips and search. Comments stay in the app.")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .community: "person.2"
+        case .public: "globe"
+        }
     }
 }
