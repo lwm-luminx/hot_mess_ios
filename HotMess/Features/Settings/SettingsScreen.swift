@@ -221,6 +221,14 @@ struct SettingsScreen: View {
             }
             .accessibilityIdentifier("me.blocked")
 
+            // Promoted cards the viewer turned off: kept on their devices, never sent.
+            NavigationLink {
+                CardsYouSeeScreen()
+            } label: {
+                Label(String(localized: "Cards You See"), systemImage: "rectangle.stack")
+            }
+            .accessibilityIdentifier("me.cardsYouSee")
+
             Link(destination: LegalLinks.privacy) {
                 Label(String(localized: "Privacy Policy"), systemImage: "hand.raised.square")
             }

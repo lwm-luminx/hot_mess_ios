@@ -37,6 +37,9 @@ final class AppModel {
     /// The update prompts (TestFlight and App Store), from the API's release
     /// config and StoreKit's install environment. RootView presents them.
     let updates: AudienceUpdates
+    /// Which promoted cards the viewer turned off (on the device only), and
+    /// the reports of the ones they saw.
+    let cards: CardSettings
 
     var selectedTab: AppTab = .now
 
@@ -110,6 +113,7 @@ final class AppModel {
         updates = AudienceUpdates.configure(session: audienceKit, appName: String(localized: "Hot Mess"))
 
         brand = BrandStore(audienceKit: audienceKit)
+        cards = CardSettings(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
