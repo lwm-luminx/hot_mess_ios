@@ -17,7 +17,7 @@ struct ChatPhotoScreen: View {
     @State private var isSaving = false
     @State private var didFail = false
 
-    private static let sampleText = String(localized: "anyone want to split a pitcher?")
+    private static let sampleText = String(localized: "anyone know who's on next?")
 
     var body: some View {
         List {

@@ -579,6 +579,18 @@ struct HotMessAPI: Sendable {
         ).setChatInitials.chatInitials
     }
 
+    /// Asks someone to be friends (`sendFriendRequest`), and returns where
+    /// the request stands: `.pending` once sent, `.accepted` when they had
+    /// already asked the user. The API only takes people contact matching
+    /// found (each has the other's number saved); anyone else is not found.
+    func sendFriendRequest(to userID: UUID) async throws -> FriendRequestStatus {
+        try await query(
+            Documents.sendFriendRequest,
+            variables: ["userId": .string(userID.uuidString.lowercased())],
+            as: SendFriendRequestResponse.self
+        ).sendFriendRequest.friendRequest.status
+    }
+
     /// Deletes the account and everything the API keeps about the user. It
     /// can't be undone; the session is gone afterwards.
     func deleteAccount() async throws {
@@ -1241,6 +1253,12 @@ extension HotMessAPI {
         }
         """
 
+        static let sendFriendRequest = """
+        mutation SendFriendRequest($userId: ID!) {
+          sendFriendRequest(input: { userId: $userId }) { friendRequest { status } }
+        }
+        """
+
         static let deleteAccount = """
         mutation DeleteAccount($confirm: Boolean!) {
           deleteAccount(input: { confirm: $confirm }) { deleted }
@@ -1572,6 +1590,26 @@ struct ChatInitialsResponse: Decodable, Sendable {
 
 struct SetChatInitialsResponse: Decodable, Sendable {
     let setChatInitials: ChatInitialsResponse.Payload
+}
+
+/// Where a friend request stands. DISMISSED only reaches the person asked;
+/// the sender keeps seeing PENDING.
+enum FriendRequestStatus: String, Decodable, Hashable, Sendable {
+    case pending = "PENDING"
+    case accepted = "ACCEPTED"
+    case dismissed = "DISMISSED"
+    case withdrawn = "WITHDRAWN"
+
+    init(from decoder: any Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = FriendRequestStatus(rawValue: raw) ?? .pending
+    }
+}
+
+struct SendFriendRequestResponse: Decodable, Sendable {
+    struct Request: Decodable, Sendable { let status: FriendRequestStatus }
+    struct Payload: Decodable, Sendable { let friendRequest: Request }
+    let sendFriendRequest: Payload
 }
 
 struct DeleteAccountResponse: Decodable, Sendable {
