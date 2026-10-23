@@ -72,6 +72,7 @@ struct NowScreen: View {
 
                         // The lineup or karaoke, small talk, the next three events, then venues.
                         stageSection(now)
+                        stagePhotosSection(now)
                         venueChatSection(now)
                         pairUpSection
                         tonightPostsSection(now)
@@ -287,7 +288,7 @@ struct NowScreen: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                CardSection(String(localized: "Venues")) {
+                CardSection(String(localized: "Venues"), edgeToEdge: true) {
                     ForEach(venues.prefix(3)) { venue in
                         VenueCardLink(venue: venue)
                     }
@@ -331,6 +332,15 @@ struct NowScreen: View {
         }
     }
 
+    /// At a venue: its photos, led by the camera. What you take goes on the
+    /// venue's, the event's and the stage's pages.
+    @ViewBuilder
+    private func stagePhotosSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
+            PhotosSection(subject: .venue(venue.id), cameraVenueID: venue.id)
+        }
+    }
+
     /// Pair me up, just under the chat: once you're at a venue that has it, or
     /// while you're in it tonight.
     @ViewBuilder
@@ -355,16 +365,21 @@ struct NowScreen: View {
                 room: room,
                 messages: now.recentMessages,
                 participants: chatParticipants(now, room: room),
+                venueName: venue.name,
+                lineup: lineupModel?.lineup,
                 route: now.event == nil ? .venueChat(venue) : .eventChat(room)
             )
             .padding(.horizontal, 16)
         }
     }
 
+    /// The venue (an event's too), then you and your friends. The peek puts
+    /// the lineup in chat now between them.
     private func chatParticipants(_ now: Now, room: ChatRoom) -> [ChatPeek.Participant] {
+        guard let venue = room.place else { return viewerAndFriends(now) }
         let place = ChatPeek.Participant(
-            id: "venue-\(room.id)", name: room.name,
-            avatarURL: room.photoURL, isPlace: true
+            id: "venue-\(room.id)", name: venue.name,
+            avatarURL: venue.photoURL, isPlace: true
         )
         return [place] + viewerAndFriends(now)
     }
@@ -444,7 +459,7 @@ struct NowScreen: View {
     @ViewBuilder
     private func friendVenuesSection(_ now: Now) -> some View {
         if now.venue == nil, !now.friendVenues.isEmpty {
-            CardSection(String(localized: "Where your friends are")) {
+            CardSection(String(localized: "Where your friends are"), edgeToEdge: true) {
                 ForEach(now.friendVenues) { entry in
                     VenueCardLink(venue: entry.venue) {
                         VenueCard(

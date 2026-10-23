@@ -26,6 +26,9 @@ struct VenueScreen: View {
     /// Whether it's reported closed, and its details as a fix starts from.
     @State private var suggestionState: VenueSuggestionState?
     @State private var fixTarget: SuggestionTarget?
+    /// Whether the app places the user here, so "Get help" shows. Its own
+    /// request, so an API without safety alerts still shows the venue.
+    @State private var safety: VenueSafety?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { overview in
@@ -34,8 +37,17 @@ struct VenueScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
-                        HeroHeader(url: venue.bannerURL ?? venue.photoURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
-                            heroText(venue)
+                        // Its photos in turn, over a firmer scrim than a still
+                        // hero so the name reads the same on each.
+                        HeroHeader(
+                            urls: overview.heroPhotos,
+                            topInset: proxy.safeAreaInsets.top,
+                            tone: $heroTone,
+                            minimumContrast: 7,
+                            minimumScrim: ImageTone.accessibleScrimFloor,
+                            bodyHeight: HeroMetrics.detailHeight
+                        ) {
+                            heroText(overview)
                         }
 
                         if suggestionState?.reportedClosed == true {
@@ -77,6 +89,36 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
+                        // The next event is on the hero and the two after it
+                        // sit up top, above the fold; the rest wait at the bottom.
+                        if !overview.comingUp.isEmpty {
+                            CardSection(String(localized: "Coming Up")) {
+                                ForEach(overview.comingUp) { event in
+                                    EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .personFirst, venueFallback: venue))
+                                }
+                            }
+                        }
+
+                        if overview.chatOpen {
+                            LiveChatPeek(
+                                title: String(localized: "Chat"),
+                                room: .venue(venue),
+                                messages: overview.recentMessages,
+                                route: .venueChat(venue),
+                                onMessage: lineupChanged
+                            )
+                            .padding(.horizontal, 16)
+                        }
+
+                        // Only while the app places the user here: staff can
+                        // only help people who are there.
+                        if safety?.canSend == true {
+                            GetHelpButton {
+                                model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                            }
+                            .padding(.horizontal, 16)
+                        }
+
                         // Tonight from AudienceKit: the host, the lineup and
                         // karaoke. Until it loads, or if it can't, the venue
                         // query's whole night, else just who's on (an older API).
@@ -87,6 +129,10 @@ struct VenueScreen: View {
                         } else if overview.onNow.hasAnything {
                             OnNowSection(onNow: overview.onNow)
                         }
+
+                        // Photos of the venue, and the camera once you're
+                        // here: what you take goes on the stage's pages too.
+                        PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
 
                         PingPlaceStrip(
                             pings: (viewModel?.activePings ?? []).filter { !model.safety.isBlocked($0.user.id) },
@@ -110,34 +156,7 @@ struct VenueScreen: View {
 
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
 
-                        aboutSection(venue)
-
-                        let socialLinks = overview.socialLinks.filter { $0.url != nil }
-                        if !socialLinks.isEmpty {
-                            DetailSection(String(localized: "Elsewhere")) {
-                                ForEach(socialLinks) { link in
-                                    SocialLinkRow(link: link)
-                                }
-                            }
-                        }
-
-                        if overview.chatOpen {
-                            LiveChatPeek(
-                                title: String(localized: "Chat"),
-                                room: .venue(venue),
-                                messages: overview.recentMessages,
-                                route: .venueChat(venue),
-                                onMessage: lineupChanged
-                            )
-                            .padding(.horizontal, 16)
-                        }
-
-                        if !overview.friends.isEmpty {
-                            DetailSection(String(localized: "Friends Here")) {
-                                FriendStrip(friends: overview.friends)
-                                    .padding(.horizontal, -20)
-                            }
-                        }
+                        aboutSection(venue, links: SocialLink.aboutLinks(overview.socialLinks, facebookURL: venue.facebookURL))
 
                         testingSection(venue)
 
@@ -146,9 +165,9 @@ struct VenueScreen: View {
                                 Text("No upcoming events.")
                                     .foregroundStyle(.secondary)
                             }
-                        } else {
-                            CardSection(String(localized: "Events")) {
-                                ForEach(overview.events) { event in
+                        } else if !overview.laterEvents.isEmpty {
+                            CardSection(String(localized: "More Events")) {
+                                ForEach(overview.laterEvents) { event in
                                     EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .personFirst, venueFallback: venue))
                                 }
                             }
@@ -157,7 +176,7 @@ struct VenueScreen: View {
                     .padding(.bottom, 24)
                 }
                 .ignoresSafeArea(edges: .top)
-                .trackingHeroCollapse($heroCollapsed)
+                .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
@@ -165,11 +184,7 @@ struct VenueScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
-                        if let shareURL = venue.shareURL {
-                            ShareLink(item: shareURL) {
-                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                            }
-                        }
+                        SignedShareButton(path: "/venues/\(venue.id.uuidString.lowercased())")
 
                         Menu {
                             Button {
@@ -209,6 +224,7 @@ struct VenueScreen: View {
         }
         // Its own request, so an API without suggestions still shows the venue.
         .task { suggestionState = try? await model.api.venueSuggestionState(venueID) }
+        .task { await loadSafety() }
         .sheet(item: $fixTarget) { target in
             SuggestFixSheet(target: target)
                 .environment(model)
@@ -245,12 +261,27 @@ struct VenueScreen: View {
         }
     }
 
-    private func heroText(_ venue: Venue) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func heroText(_ overview: VenueOverview) -> some View {
+        let venue = overview.venue
+
+        return VStack(alignment: .leading, spacing: 10) {
             Text(venue.name)
                 .font(.hotMess(.title, semibold: true))
                 .lineLimit(3)
                 .accessibilityAddTraits(.isHeader)
+
+            if let next = overview.nextEvent {
+                NavigationLink(value: AppRoute.event(next.id)) {
+                    HStack(spacing: 6) {
+                        Text(next.nextUpLine)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .heroGlass(fillsWidth: false)
+                }
+                .buttonStyle(.plain)
+            }
 
             let details = [venue.address, venue.distance.map(DistanceFormat.string(fromMetres:))]
                 .compactMap { $0 }
@@ -260,48 +291,66 @@ struct VenueScreen: View {
                     .font(.hotMess(.subheadline, semibold: true))
                     .lineLimit(2)
             }
+
+            if !overview.friends.isEmpty {
+                HStack(spacing: 8) {
+                    HeroFaces(friends: overview.friends)
+                    Text(friendsHereLine(overview.friends))
+                        .font(.hotMess(.subheadline, semibold: true))
+                        .lineLimit(1)
+                }
+            }
+
+            HeroActionRow {
+                if venue.coordinate != nil {
+                    Button {
+                        openInMaps(venue)
+                    } label: {
+                        Label(String(localized: "Directions"), systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                            .heroGlass()
+                    }
+                }
+
+                if overview.chatOpen {
+                    NavigationLink(value: AppRoute.venueChat(venue)) {
+                        Label(String(localized: "Chat"), systemImage: "bubble.left.and.bubble.right.fill")
+                            .heroGlass()
+                    }
+                }
+
+                if let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
+                    Link(destination: url) {
+                        Label(String(localized: "Call"), systemImage: "phone.fill")
+                            .heroGlass()
+                    }
+                    .accessibilityLabel(String(localized: "Call \(phone)"))
+                }
+            }
         }
     }
 
+    /// "Sam is here", or "4 friends here".
+    private func friendsHereLine(_ friends: [Friend]) -> String {
+        if friends.count == 1, let friend = friends.first {
+            return String(localized: "\(friend.firstName) is here")
+        }
+        return String(localized: "\(friends.count) friends here")
+    }
+
+    /// What it is, where, how to reach it, and its links elsewhere in one
+    /// order (`SocialLink.aboutLinks`), each row naming where it goes.
     @ViewBuilder
-    private func aboutSection(_ venue: Venue) -> some View {
+    private func aboutSection(_ venue: Venue, links: [SocialLink]) -> some View {
         DetailSection(String(localized: "About")) {
             if let subtitle = venue.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.hotMess(.subheadline))
             }
 
-            if let address = venue.address, !address.isEmpty {
-                Button {
-                    openInMaps(venue)
-                } label: {
-                    InfoRow(title: String(localized: "Address"), value: address, systemImage: "mappin")
-                }
-                .buttonStyle(.plain)
-            }
-
-            if let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
-                Link(destination: url) {
-                    InfoRow(title: String(localized: "Phone"), value: phone, systemImage: "phone")
-                }
-            }
-
-            if let distance = venue.distance {
-                InfoRow(
-                    title: String(localized: "Distance"),
-                    value: DistanceFormat.string(fromMetres: distance),
-                    systemImage: "figure.walk"
-                )
-            }
-
-            if let facebookURL = venue.facebookURL {
-                Link(destination: facebookURL) {
-                    InfoRow(
-                        title: String(localized: "Open in Facebook"),
-                        value: nil,
-                        systemImage: "arrow.up.right.square"
-                    )
-                }
+            // Its address, distance and phone are on the hero, which has
+            // Directions and Call.
+            ForEach(links) { link in
+                SocialLinkRow(link: link, namesService: true)
             }
 
             if model.session.isSignedIn {
@@ -330,6 +379,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.stopSimulating()
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -339,6 +389,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.simulate(at: coordinate, venueName: venue.name, allowed: isReview)
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -387,6 +438,11 @@ struct VenueScreen: View {
             await viewModel?.load()
             await lineupModel?.refresh()
             await pairUpModel?.load()
+            await loadSafety()
         }
+    }
+
+    private func loadSafety() async {
+        if let fresh = try? await model.api.venueSafety(venueID) { safety = fresh }
     }
 }
