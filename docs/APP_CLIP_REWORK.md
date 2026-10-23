@@ -81,7 +81,8 @@ Where the build departs from the mockups:
 
 - **Sign in comes before the payment, for now.** Prices, tiers, tip presets, `buyCover` and `startTip` are GraphQL behind a session; only the share card is public. Tapping Apple Pay without a session shows the sign-in step (one consent sentence, Declared Age Range, Hide My Email welcome) and then the picker. The "Keep the pass" screen (7) returns when the API has a public clip view and guest checkout; follow-up filed on the API repo.
 - **Tip note and "show my first name" are not sent.** `startTip` takes a person and an amount; the tip goes with the signed-in first name. Both fields wait on the API.
-- **Add to Wallet, "few left" and "Pay it forward"** are not built: the first needs a pass type and signing certificate, the second needs capacity from the API, the third is a venue tier if the venue defines one (the picker shows whatever tiers `coverCharge.tiers` returns).
+- **Add to Apple Wallet is wired, the pass itself is the API's.** Rick's comment on the pass screen (2026-10-23, "build this into PassKit"): `ClipWalletPassButton` fetches `GET /v1/admissions/{id}/pass.pkpass` and shows `AddPassToWalletButton` when the API returns a signed pass; until the endpoint exists the button stays hidden and the rotating QR is the pass. The clip entitlements gain `pass-type-identifiers` like the app's. Open question for the API and the door: a Wallet barcode can't rotate every 30 seconds like the HMC1 code, so the pass needs a long-lived signed door token the scanner also accepts (audience-kit #432).
+- **"Few left" and "Pay it forward"** are not built: the first needs capacity from the API, the second is a venue tier if the venue defines one (the picker shows whatever tiers `coverCharge.tiers` returns).
 - **Posts.** Share links to posts are the posts thread's work; its canvas (https://claude.ai/artifact/9BFP8Jd79xP4JZa3r9C1S8) has an App Clip row on these tokens. `ClipLink` still accepts venues, events, people and pings only; a post link shows the unsupported screen until that lands.
 - **Figtree** is not bundled in the clip (size); it uses the system font with the same scale and weights.
 
@@ -90,5 +91,5 @@ Where the build departs from the mockups:
 - [x] Tipping stays in the clip (Rick, 2026-10-23, comment on the mockups).
 - [ ] Agree the clip drops RSVP and Ping join (they stay the app's reasons to install). The merged build has them.
 - [ ] "Pay it forward" tier: real, or cut from the picker.
-- [ ] Add to Wallet on the pass: phase 1 or later (it needs a pass type id and a signing certificate).
+- [x] Add to Wallet on the pass (Rick, 2026-10-23, comment on the pass mockup): clip side built; the signed `.pkpass` is audience-kit #432.
 - [ ] Keep the 15 MB budget (recommended) and swap the payment SDKs before the first archive.

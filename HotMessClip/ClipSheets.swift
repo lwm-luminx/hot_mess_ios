@@ -361,6 +361,7 @@ struct ClipPassView: View {
                 }
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 if let error { Text(error).font(.system(size: 13)).foregroundStyle(Color(hex: 0xFFC9A3)) }
+                if admission.isPaid { ClipWalletPassButton(admission: admission, client: session.client) }
                 Button("Keep this pass in Hot Mess") { getApp() }.buttonStyle(ClipAccentButtonStyle())
                 if admission.isPaid, admission.isRefundable {
                     Button("Refund") { confirmRefund = true }
