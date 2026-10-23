@@ -296,7 +296,8 @@ struct NowScreen: View {
                 }
                 .accessibilityHint(String(localized: "View venue details"))
 
-                if let address = venue.address, !address.isEmpty {
+                // Once you're here the address doesn't matter; the actions do.
+                if helpVenue == nil, let address = venue.address, !address.isEmpty {
                     Text(address)
                         .font(.hotMess(.subheadline, semibold: true))
                         .lineLimit(2)
@@ -328,6 +329,33 @@ struct NowScreen: View {
                         Text(Self.friendsHereLine(now.friends))
                             .font(.hotMess(.subheadline, semibold: true))
                             .lineLimit(1)
+                    }
+                }
+
+                if let helpVenue {
+                    HeroActionRow {
+                        Button {
+                            showingPingSheet = true
+                        } label: {
+                            Label(String(localized: "Ping"), systemImage: "paperplane.fill")
+                                .heroGlass()
+                        }
+                        .accessibilityIdentifier("now.heroPing")
+
+                        Button {
+                            model.helpPresentation = .venue(helpVenue)
+                        } label: {
+                            Label(String(localized: "Safety"), systemImage: "shield.fill")
+                                .heroGlass(selected: true)
+                        }
+                        .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
+                        .accessibilityIdentifier("now.heroSafety")
+
+                        NavigationLink(value: AppRoute.venueChat(venue)) {
+                            Label(String(localized: "Chat"), systemImage: "bubble.left.and.bubble.right.fill")
+                                .heroGlass()
+                        }
+                        .accessibilityIdentifier("now.heroChat")
                     }
                 }
             }
