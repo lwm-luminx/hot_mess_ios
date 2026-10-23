@@ -21,12 +21,13 @@ struct PersonScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
-                        HeroHeader(url: detail.person.bannerURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
-                            heroText(detail.person)
-                        }
-
-                        if !detail.tipLinks.isEmpty {
-                            tipButtons(detail)
+                        HeroHeader(
+                            url: detail.person.bannerURL,
+                            topInset: proxy.safeAreaInsets.top,
+                            tone: $heroTone,
+                            bodyHeight: HeroMetrics.detailHeight
+                        ) {
+                            heroText(detail)
                         }
 
                         DetailSection(String(localized: "Elsewhere")) {
@@ -56,9 +57,10 @@ struct PersonScreen: View {
                                 Text("No upcoming events.")
                                     .foregroundStyle(.secondary)
                             }
-                        } else {
-                            CardSection(String(localized: "Events")) {
-                                ForEach(detail.events) { event in
+                        } else if detail.events.count > 1 {
+                            // The next one is on the hero.
+                            CardSection(String(localized: "More Events")) {
+                                ForEach(detail.events.dropFirst()) { event in
                                     EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .venueFirst, personFallback: detail.person))
                                 }
                             }
@@ -85,7 +87,7 @@ struct PersonScreen: View {
                     .padding(.bottom, 24)
                 }
                 .ignoresSafeArea(edges: .top)
-                .trackingHeroCollapse($heroCollapsed)
+                .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
@@ -120,12 +122,14 @@ struct PersonScreen: View {
 
     // MARK: - Pieces
 
-    private func heroText(_ person: Person) -> some View {
-        HStack(alignment: .bottom, spacing: 14) {
+    private func heroText(_ detail: PersonDetail) -> some View {
+        let person = detail.person
+
+        return VStack(alignment: .leading, spacing: 10) {
             Avatar(
                 url: person.avatarURL,
                 initials: person.name.initialsForDisplay,
-                size: 76
+                size: 104
             )
             .overlay { Circle().strokeBorder(.foreground, lineWidth: 3) }
 
@@ -140,26 +144,75 @@ struct PersonScreen: View {
                         .font(.hotMess(.subheadline, semibold: true))
                 }
             }
-        }
-    }
 
-    /// One button per app they take tips on; each opens that app on their profile.
-    private func tipButtons(_ detail: PersonDetail) -> some View {
-        VStack(spacing: 10) {
-            ForEach(detail.tipLinks) { link in
-                if let url = link.url, let app = link.tipApp {
-                    Link(destination: url) {
-                        Label(String(localized: "Tip on \(app)"), systemImage: "dollarsign.circle.fill")
-                            .font(.hotMess(.body, semibold: true))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 4)
+            if let next = detail.events.first {
+                NavigationLink(value: AppRoute.event(next.id)) {
+                    HStack(spacing: 6) {
+                        Text("Next: \(nextLine(next))")
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel(String(localized: "Tip \(detail.name) on \(app)"))
+                    .heroGlass(fillsWidth: false)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !detail.tipLinks.isEmpty {
+                HeroActionRow {
+                    tipButton(detail)
                 }
             }
         }
-        .padding(.horizontal, 20)
+    }
+
+    /// "Tonight · Neighbours", or "Fri · Neighbours" later on.
+    private func nextLine(_ event: Event) -> String {
+        let day = Calendar.current.isDateInToday(event.startDate)
+            ? String(localized: "Tonight")
+            : event.startDate.formatted(.dateTime.weekday(.abbreviated))
+        let place = event.venue?.name ?? event.name
+        return "\(day) · \(place)"
+    }
+
+    /// Tip: straight to the app they take tips on, or a choice of apps when
+    /// there are several.
+    @ViewBuilder
+    private func tipButton(_ detail: PersonDetail) -> some View {
+        let tips = detail.tipLinks.compactMap(Tip.init)
+
+        if tips.count == 1, let tip = tips.first {
+            Link(destination: tip.url) {
+                Label(String(localized: "Tip on \(tip.app)"), systemImage: "dollarsign.circle.fill")
+                    .heroGlass()
+            }
+            .accessibilityLabel(String(localized: "Tip \(detail.name) on \(tip.app)"))
+        } else if !tips.isEmpty {
+            Menu {
+                ForEach(tips) { tip in
+                    Link(destination: tip.url) {
+                        Text("Tip on \(tip.app)")
+                    }
+                    .accessibilityLabel(String(localized: "Tip \(detail.name) on \(tip.app)"))
+                }
+            } label: {
+                Label(String(localized: "Tip"), systemImage: "dollarsign.circle.fill")
+                    .heroGlass()
+            }
+        }
+    }
+
+    private struct Tip: Identifiable {
+        let id: UUID
+        let url: URL
+        let app: String
+
+        init?(_ link: SocialLink) {
+            guard let url = link.url, let app = link.tipApp else { return nil }
+            id = link.id
+            self.url = url
+            self.app = app
+        }
     }
 
     @ViewBuilder

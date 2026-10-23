@@ -160,7 +160,7 @@ final class AppReviewUITests: XCTestCase {
         sleep(1)
     }
 
-    /// A venue friends are at: Friends Here, then its chat room, where friends are listed first.
+    /// A venue friends are at: who's here on its hero, then its chat room, where friends are listed first.
     private func showFriendVenue() {
         let section = app.staticTexts["Where your friends are"]
         let pill = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] ' friend'")).firstMatch
@@ -174,7 +174,8 @@ final class AppReviewUITests: XCTestCase {
             row.tap()
         }
         sleep(dwell)
-        if scroll(to: app.staticTexts["Friends Here"]) {
+        // Friends here are on the venue's hero, as faces and "4 friends here".
+        if app.staticTexts.matching(NSPredicate(format: "label ENDSWITH ' here'")).firstMatch.waitForExistence(timeout: 5) {
             snapshot("Friends Here")
             sleep(dwell)
         }

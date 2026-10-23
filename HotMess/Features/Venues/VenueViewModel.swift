@@ -39,10 +39,12 @@ struct VenueOverview: Sendable, Equatable {
         return photos.isEmpty ? [venue.photoURL].compactMap { $0 } : photos
     }
 
-    /// The next two events, shown near the top of the page.
-    var comingUp: ArraySlice<Event> { events.prefix(2) }
+    /// The next event, on the hero.
+    var nextEvent: Event? { events.first }
+    /// The two after it, shown near the top of the page.
+    var comingUp: ArraySlice<Event> { events.dropFirst().prefix(2) }
     /// The events after those, at the bottom.
-    var laterEvents: ArraySlice<Event> { events.dropFirst(2) }
+    var laterEvents: ArraySlice<Event> { events.dropFirst(3) }
 }
 
 @MainActor
