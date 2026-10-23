@@ -40,6 +40,10 @@ final class AppModel {
 
     var selectedTab: AppTab = .now
 
+    /// The Get help sheet over every tab: from a venue, or from a push about
+    /// one of the user's safety alerts.
+    var helpPresentation: HelpPresentation?
+
     /// One navigation path per tab, so a deep link can push onto the right
     /// stack without disturbing the others.
     var nowPath: [AppRoute] = []
@@ -321,6 +325,9 @@ final class AppModel {
             } else {
                 openNow()
             }
+            return true
+        case let .safetyAlert(id):
+            helpPresentation = .alert(id: id.uuidString.lowercased())
             return true
         case nil:
             return false

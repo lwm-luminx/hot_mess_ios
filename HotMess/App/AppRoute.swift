@@ -89,6 +89,9 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// A locale's chat room, by the locale's ID (`/locales/<id>/chat`): the
     /// room when it's the user's locale now, else Now.
     case localeChat(UUID)
+    /// One of the user's safety alerts (`/safety-alerts/<id>`, which the
+    /// guest's pushes about it carry): its Get help sheet over any tab.
+    case safetyAlert(UUID)
 }
 
 /// Parses the app's deep links.
@@ -108,6 +111,9 @@ enum DeepLink {
             case "locales": return .localeChat(id)
             default: break
             }
+        }
+        if segments.count >= 2, segments[0] == "safety-alerts", let id = UUID(uuidString: segments[1]) {
+            return .safetyAlert(id)
         }
         if let route = route(for: url) { return .route(route) }
         return segments.first == "pings" ? .now : nil
