@@ -10,6 +10,9 @@ import SwiftUI
 struct PairUpVenueRow: View {
     let pairUp: VenuePairUp
     let open: () -> Void
+    /// After a meeting, starts the next quickie straight from the row rather
+    /// than reopening the finished one.
+    var goAgain: (() -> Void)?
 
     var body: some View {
         DetailSection(String(localized: "Meet someone")) {
@@ -22,7 +25,7 @@ struct PairUpVenueRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Button(action: open) {
+                Button(action: status == .met ? (goAgain ?? open) : open) {
                     Text(buttonTitle).font(.hotMess(.subheadline, semibold: true))
                 }
                 .buttonStyle(.borderedProminent)
@@ -42,18 +45,24 @@ struct PairUpVenueRow: View {
         case .proposed: String(localized: "You've got a match")
         case .waiting: String(localized: "Waiting for them to say yes")
         case .revealed: String(localized: "Go find each other")
-        case .met: String(localized: "You met someone tonight")
+        case .met: String(localized: "You met someone!")
         case .left, nil: String(localized: "Quickie")
         }
     }
 
     private var subtitle: String {
-        status == nil
-            ? String(localized: "Get paired with someone here and a topic to talk about.")
-            : String(localized: "Open to see where you're at.")
+        switch status {
+        case nil: String(localized: "Get paired with someone here and a topic to talk about.")
+        case .met: String(localized: "Up for another quickie?")
+        default: String(localized: "Open to see where you're at.")
+        }
     }
 
     private var buttonTitle: String {
-        status == nil ? String(localized: "Start") : String(localized: "Open")
+        switch status {
+        case nil: String(localized: "Start")
+        case .met: String(localized: "Go again")
+        default: String(localized: "Open")
+        }
     }
 }

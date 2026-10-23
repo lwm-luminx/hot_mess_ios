@@ -146,7 +146,12 @@ struct VenueScreen: View {
                         // Pair me up, where the venue has it: once you're here,
                         // or while you're in it tonight.
                         if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
-                            PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
+                            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
+                                Task {
+                                    await pairUpModel?.join(lookFor: nil)
+                                    isPairingUp = true
+                                }
+                            })
                         }
 
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))

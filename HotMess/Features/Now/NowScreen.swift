@@ -346,7 +346,12 @@ struct NowScreen: View {
     @ViewBuilder
     private var pairUpSection: some View {
         if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
-            PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
+            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
+                Task {
+                    await pairUpModel?.join(lookFor: nil)
+                    isPairingUp = true
+                }
+            })
         }
     }
 
