@@ -26,6 +26,9 @@ struct VenueScreen: View {
     /// Whether it's reported closed, and its details as a fix starts from.
     @State private var suggestionState: VenueSuggestionState?
     @State private var fixTarget: SuggestionTarget?
+    /// Whether the app places the user here, so "Get help" shows. Its own
+    /// request, so an API without safety alerts still shows the venue.
+    @State private var safety: VenueSafety?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { overview in
@@ -103,6 +106,15 @@ struct VenueScreen: View {
                                 route: .venueChat(venue),
                                 onMessage: lineupChanged
                             )
+                            .padding(.horizontal, 16)
+                        }
+
+                        // Only while the app places the user here: staff can
+                        // only help people who are there.
+                        if safety?.canSend == true {
+                            GetHelpButton {
+                                model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                            }
                             .padding(.horizontal, 16)
                         }
 
@@ -217,6 +229,7 @@ struct VenueScreen: View {
         }
         // Its own request, so an API without suggestions still shows the venue.
         .task { suggestionState = try? await model.api.venueSuggestionState(venueID) }
+        .task { await loadSafety() }
         .sheet(item: $fixTarget) { target in
             SuggestFixSheet(target: target)
                 .environment(model)
@@ -334,6 +347,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.stopSimulating()
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -343,6 +357,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.simulate(at: coordinate, venueName: venue.name, allowed: isReview)
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -391,6 +406,11 @@ struct VenueScreen: View {
             await viewModel?.load()
             await lineupModel?.refresh()
             await pairUpModel?.load()
+            await loadSafety()
         }
+    }
+
+    private func loadSafety() async {
+        if let fresh = try? await model.api.venueSafety(venueID) { safety = fresh }
     }
 }

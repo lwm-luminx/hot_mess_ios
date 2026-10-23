@@ -103,6 +103,10 @@ struct MainTabView: View {
         .environment(model)
         .accessibilityIdentifier("main.tabs")
         .coverPresenter()
+        .sheet(item: $model.helpPresentation) { presentation in
+            GetHelpSheet(presentation: presentation, api: model.api)
+                .environment(model)
+        }
         .notificationBannerHost()
     }
 }
