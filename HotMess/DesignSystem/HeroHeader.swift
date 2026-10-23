@@ -9,6 +9,9 @@ import SwiftUI
 enum HeroMetrics {
     /// The photo's height below the status and navigation bars.
     static let bodyHeight: CGFloat = 256
+    /// A venue, event or person page's taller hero, which carries its
+    /// details and actions: 440pt with the navigation bar.
+    static let detailHeight: CGFloat = 396
 }
 
 private let heroCoordinateSpace = "hero"
@@ -30,15 +33,18 @@ struct HeroHeader<Content: View>: View {
     var minimumContrast: Double = 4.5
     /// The least scrim behind the text, for heroes whose photos change under it.
     var minimumScrim: Double = 0
+    /// The photo's height below the bars; pass the same to `trackingHeroCollapse`.
+    var bodyHeight: CGFloat = HeroMetrics.bodyHeight
     @ViewBuilder var content: Content
 
     init(
         url: URL?,
         topInset: CGFloat,
         tone: Binding<HeroTone>,
+        bodyHeight: CGFloat = HeroMetrics.bodyHeight,
         @ViewBuilder content: () -> Content
     ) {
-        self.init(urls: [url].compactMap { $0 }, topInset: topInset, tone: tone, content: content)
+        self.init(urls: [url].compactMap { $0 }, topInset: topInset, tone: tone, bodyHeight: bodyHeight, content: content)
     }
 
     init(
@@ -47,6 +53,7 @@ struct HeroHeader<Content: View>: View {
         tone: Binding<HeroTone>,
         minimumContrast: Double = 4.5,
         minimumScrim: Double = 0,
+        bodyHeight: CGFloat = HeroMetrics.bodyHeight,
         @ViewBuilder content: () -> Content
     ) {
         self.urls = urls
@@ -54,6 +61,7 @@ struct HeroHeader<Content: View>: View {
         _tone = tone
         self.minimumContrast = minimumContrast
         self.minimumScrim = minimumScrim
+        self.bodyHeight = bodyHeight
         self.content = content()
     }
 
@@ -83,7 +91,7 @@ struct HeroHeader<Content: View>: View {
                 .padding(.bottom, urls.count > 1 ? 28 : 20)
                 .animation(HotMessMotion.quick, value: tone)
         }
-        .frame(maxWidth: .infinity, minHeight: topInset + HeroMetrics.bodyHeight, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, minHeight: topInset + bodyHeight, alignment: .bottomLeading)
         .coordinateSpace(.named(heroCoordinateSpace))
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .background {
@@ -281,9 +289,9 @@ extension View {
     }
 
     /// Tracks whether a hero at the top of this scroll view has scrolled under the bars.
-    func trackingHeroCollapse(_ collapsed: Binding<Bool>) -> some View {
+    func trackingHeroCollapse(_ collapsed: Binding<Bool>, bodyHeight: CGFloat = HeroMetrics.bodyHeight) -> some View {
         onScrollGeometryChange(for: Bool.self) { geometry in
-            geometry.contentOffset.y + geometry.contentInsets.top > HeroMetrics.bodyHeight - 8
+            geometry.contentOffset.y + geometry.contentInsets.top > bodyHeight - 8
         } action: { _, isCollapsed in
             collapsed.wrappedValue = isCollapsed
         }

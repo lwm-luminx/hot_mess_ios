@@ -29,7 +29,7 @@ struct VenuesScreen: View {
                                 .foregroundStyle(.secondary)
                         }
                     } else {
-                        CardSection(model.brand.name) {
+                        CardSection(model.brand.name, edgeToEdge: true) {
                             ForEach(collection.venues) { venue in
                                 VenueCardLink(venue: venue)
                             }
