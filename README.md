@@ -272,40 +272,56 @@ On October 9, 2026, an unsigned generic-iOS Staging build of **Hot Mess Next** p
 
 ## App Clip
 
-`HotMessClip/` leads with the action for its invocation link:
+`HotMessClip/` shows the record behind a shared `hotmess.social` link and takes one
+payment with Apple Pay. Design: `docs/APP_CLIP.md`; the screens as built:
+`docs/APP_CLIP_REWORK.md` (mockups linked there).
 
-| Link | Primary action | Additional action |
+| Link | The one action | Hand-off to the app |
 | --- | --- | --- |
-| `/venues/<uuid>` | Pay cover | Show an existing admission pass |
-| `/people/<uuid>` | Tip | Provider links or in-app payment |
-| `/pings/<uuid>?e=…` | I'm in | Invitation preview before sign-in |
-| `/events/<uuid>` | RSVP | Pay the venue's cover for tonight |
+| `/venues/<uuid>` | Pay tonight's cover, or show the pass already held | Who's out, chat |
+| `/events/<uuid>` | Pay the venue's cover for tonight (not an event ticket) | RSVP, lineup, chat |
+| `/people/<uuid>` | Tip the performer (preset chips or another amount) | Follow, posts |
+| `/pings/<uuid>?e=…` | Read the invitation | Join the Ping (the token rides into the app) |
 
-The selected action stays open through Sign in with Apple. Signed-in members go
-straight to the action. Payments show amounts and fees and require an explicit
-confirmation. Event cover is the venue's current-night cover, not an event ticket.
-Stripe and Square use the existing payment services; admission passes reuse the
-main app's rotating QR implementation.
-
-Public basics come from `GET /v1/share`. Ping invitation details come from
+Every screen is built on the Hot Mess preset of the AudienceKit design system, with
+the tokens fixed in `ClipTheme.swift` (the clip doesn't link AudienceKitUI). Public
+basics come from `GET /v1/share`; Ping invitation details come from
 `GET /v1/share/invitation`, which requires an opaque signed `e` capability and is
-private, no-store and noindex. Sharing a Ping authorizes its recipient to join,
-including someone outside the existing friend graph. It does not join them on
-opening the link. The authenticated join mutation checks expiry, the inviter's
-continued access, bans and blocks. Ending the Ping invalidates its invitations.
-The preview includes the note and selected places, never the circle of attendees.
-Forwarding the link also forwards its invitation authority.
+private, no-store and noindex. Everything else (prices, tiers, tip presets, the pass)
+is GraphQL and needs a session, so tapping Apple Pay without one shows Sign in with
+Apple first, with one consent sentence (18+, Terms, Privacy) and the Declared Age
+Range check. A public clip view and guest checkout are API follow-ups; when they
+land, the sign-in step moves after the payment, as the design intends.
+
+Payments are Apple Pay only, through `StripeApplePay` (`ClipCheckout.swift`):
+`buyCover`/`startTip` open a PaymentIntent on the venue's or performer's Stripe
+account, `STPApplePayContext` confirms it, and `confirmCover`/`confirmTip` check it
+with Stripe. Square venues and performers pay in the full app. The Stripe payment
+sheet and the Square SDK are not linked into the clip (15 MB door-code budget), so
+`CoverCheckout.swift` is app-only; the clip compiles the shared models,
+`CoverPass` (rotating QR), `AgeGate` and `SharedAuthentication`.
+
+Sharing a Ping authorizes its recipient to join, including someone outside the
+existing friend graph. It does not join them on opening the link: the clip shows the
+invitation and offers the app, and the app's `AppRoute.ping(_, invitation:)` joins it
+after install, since iOS hands the clip's invocation URL to the full app. The
+authenticated join mutation checks expiry, the inviter's continued access, bans and
+blocks. Ending the Ping invalidates its invitations. The preview includes the note
+and selected places, never the circle of attendees. Forwarding the link also
+forwards its invitation authority.
 
 Native venue, event and Ping share buttons obtain an expiring, attributed link
 before presenting the iOS share sheet. There is no unsigned fallback if link
 creation fails. The main app retains and verifies the invitation when opening it.
 
-The Clip stores credentials separately. On installation, iOS makes the Clip's
-keychain available to its corresponding parent app; the parent migrates that
-credential once, ahead of an older parent credential. This is a Clip-to-app
-handoff, not bidirectional keychain sharing. Account sign-in and server-side ban
-checks are the current authenticated fallback. App Attest/DeviceCheck verification
-is not implemented, and no installation identifier is treated as ban evidence.
+`SKOverlay.AppClipConfiguration` offers the full app from every Get Hot Mess button,
+the pass and the tip receipt. The Clip stores credentials separately. On
+installation, iOS makes the Clip's keychain available to its corresponding parent
+app; the parent migrates that credential once, ahead of an older parent credential.
+This is a Clip-to-app handoff, not bidirectional keychain sharing. Account sign-in
+and server-side ban checks are the current authenticated fallback. App
+Attest/DeviceCheck verification is not implemented, and no installation identifier
+is treated as ban evidence.
 
 Two targets share the source: `HotMessClip` embeds in `HotMess`, and
 `HotMessNextClip` embeds in `HotMessNext`.
@@ -319,11 +335,10 @@ Two targets share the source: `HotMessClip` embeds in `HotMess`, and
 Open `HotMessClip` (Debug/local API) or `HotMessNextClip` (Staging/Next API).
 Replace the zero UUID in `_XCAppClipURL` with a real invocation link. The zero UUID
 is intentionally a missing-record test. Versions must stay aligned with the parent.
-Run the standalone parser checks with `Scripts/test-app-clip.sh`.
+Run the standalone parser and tip-amount checks with `Scripts/test-app-clip.sh`.
 
 Deploy the API invitation contract before distributing these clients. The website's
-AASA source now lists all three Clip application IDs and the HTTPS payment callback
-`/clip/stripe-redirect`. It must be served as JSON on both apex and www without a
+AASA source now lists all three Clip application IDs. It must be served as JSON on both apex and www without a
 redirect; source changes alone do not update Apple's cached association.
 
 Before distribution, register each Clip under its matching parent, configure Apple
