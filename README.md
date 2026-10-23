@@ -20,7 +20,7 @@ Dependencies resolve through Swift Package Manager on first open:
 | --- | --- |
 | [facebook-ios-sdk](https://github.com/facebook/facebook-ios-sdk) | Login |
 | [Kingfisher](https://github.com/onevcat/Kingfisher) | Remote image loading and caching |
-| [AudienceKit SDK](https://github.com/lwm-luminx/audience-kit-sdk) 0.21.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
+| [AudienceKit SDK](https://github.com/lwm-luminx/audience-kit-sdk) 0.29.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
 | [Stripe](https://github.com/stripe/stripe-ios-spm) (`StripePaymentSheet`) | Paying cover at Stripe venues |
 | [Square In-App Payments](https://github.com/square/in-app-payments-ios) (`SquareInAppPaymentsSDK`) | Paying cover at Square venues |
 
