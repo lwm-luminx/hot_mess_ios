@@ -78,7 +78,7 @@ final class SessionStore {
     /// credential JSON there (`token userId audienceId role endpoint`), not
     /// the raw token the previous wrapper stored under `token`; an install
     /// from before reads as signed out and signs in again through Facebook.
-    static let credentialStore = KeychainCredentialStore(service: "social.hotmess.account", account: "credential")
+    static let credentialStore = HotMessAuthentication.mainStore
 
     private(set) var state: AuthenticationState = .restoring
     private(set) var user: User?

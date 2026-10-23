@@ -253,7 +253,8 @@ struct VenueChatScreen: View {
                             if viewModel.answering?.id == message.promptCard?.id {
                                 viewModel.answering = nil
                             }
-                        }
+                        },
+                        clearMark: viewModel.clearMark
                     )
                 }
                 // A venue post may be a trivia round going up or its reveal.

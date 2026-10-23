@@ -72,6 +72,7 @@ struct NowScreen: View {
 
                         // The lineup or karaoke, small talk, the next three events, then venues.
                         stageSection(now)
+                        stagePhotosSection(now)
                         venueChatSection(now)
                         pairUpSection
                         tonightPostsSection(now)
@@ -328,6 +329,15 @@ struct NowScreen: View {
             if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
                 KaraokeSection(karaoke: karaoke)
             }
+        }
+    }
+
+    /// At a venue: its photos, led by the camera. What you take goes on the
+    /// venue's, the event's and the stage's pages.
+    @ViewBuilder
+    private func stagePhotosSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
+            PhotosSection(subject: .venue(venue.id), cameraVenueID: venue.id)
         }
     }
 

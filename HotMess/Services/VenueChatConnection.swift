@@ -57,14 +57,18 @@ enum VenueChatConnection {
         /// `reachable` by servers that keep people who were just here.
         case recent(userID: UUID, presence: PresenceState, until: Date)
         /// The room's recent messages, oldest first, and the announcement
-        /// pinned under its title (however old), sent on joining.
-        case history(messages: [VenueMessage], pinned: VenueMessage?)
+        /// pinned under its title (however old), sent on joining, and when the
+        /// room stops showing messages to everyone but its admins (`nil` from
+        /// an API that doesn't say).
+        case history(messages: [VenueMessage], pinned: VenueMessage?, expiresBefore: Date?)
         /// An announcement was pinned (with it), or unpinned (`nil`).
         case pin(id: UUID, announcement: VenueMessage?)
         /// An admin removed a message; nobody sees it again.
         case removed(id: UUID)
-        /// An admin cleared the room: every message so far is gone.
-        case cleared
+        /// An admin cleared the room, or (`expired`) its oldest messages
+        /// expired: every message sent up to `at` is gone (all of them when
+        /// `at` is unreadable).
+        case cleared(at: Date?, expired: Bool)
         /// The socket dropped or went quiet. The cable rejoins the room on its
         /// own (a fresh `ChatJoined`) unless `reconnects` is false: the
         /// session ended.
@@ -93,12 +97,13 @@ enum VenueChatConnection {
               }
               history { ...Posted }
               pinnedMessage { ...Posted }
+              expires_before: expiresBefore
             }
             ... on ChatMessagePosted { ...Posted }
             ... on ChatMessageUpdated { message { ...Line } }
             ... on ChatMessageRemoved { message_id: messageId }
             ... on ChatPinChanged { message_id: messageId is_pinned: pinned announcement { ...Line } }
-            ... on ChatRoomCleared { cleared_at: clearedAt }
+            ... on ChatRoomCleared { cleared_at: clearedAt expired }
             ... on ChatPresenceChanged { user_id: userId presence name avatar_url: avatarUrl recent_until: recentUntil }
             ... on ChatRangeChanged { out_of_range: outOfRange }
             ... on ChatLeft { reason }
@@ -190,6 +195,8 @@ enum VenueChatConnection {
             case isPinned = "is_pinned"
             case messageID = "message_id"
             case clearedAt = "cleared_at"
+            case expiresBefore = "expires_before"
+            case expired
             case userID = "user_id"
             case avatarURL = "avatar_url"
             case recentUntil = "recent_until"
@@ -215,12 +222,14 @@ enum VenueChatConnection {
                     .compactMap { $0.value?.message } ?? []
                 let pinned = ((try? container.decodeIfPresent(Posted.self, forKey: .pinnedMessage)) ?? nil)?.message
                 let outOfRange = ((try? container.decodeIfPresent(Bool.self, forKey: .outOfRange)) ?? nil) ?? false
+                let expiresBefore = ((try? container.decodeIfPresent(String.self, forKey: .expiresBefore)) ?? nil)
+                    .flatMap(HotMessDecoding.date(from:))
 
                 events = [
                     .connected,
                     .range(outOfRange: outOfRange),
                     .roster(online: Set(people.map(\.id)), people: people, friends: friends, recent: recent),
-                    .history(messages: history, pinned: pinned),
+                    .history(messages: history, pinned: pinned, expiresBefore: expiresBefore),
                 ]
             case "ChatMessagePosted":
                 events = (try? Posted(from: decoder).message).map { [.received($0)] } ?? []
@@ -237,7 +246,10 @@ enum VenueChatConnection {
                 let announcement = isPinned ? Self.message(in: container, forKey: .announcement) : nil
                 events = [.pin(id: id, announcement: announcement)]
             case "ChatRoomCleared":
-                events = [.cleared]
+                let at = ((try? container.decodeIfPresent(String.self, forKey: .clearedAt)) ?? nil)
+                    .flatMap(HotMessDecoding.date(from:))
+                let expired = ((try? container.decodeIfPresent(Bool.self, forKey: .expired)) ?? nil) ?? false
+                events = [.cleared(at: at, expired: expired)]
             case "ChatPresenceChanged":
                 guard let userID = Self.id(in: container, forKey: .userID),
                       let presence = ((try? container.decodeIfPresent(String.self, forKey: .presence)) ?? nil)?.uppercased()
@@ -261,6 +273,8 @@ enum VenueChatConnection {
                 }
             case "ChatRangeChanged":
                 let outOfRange = ((try? container.decodeIfPresent(Bool.self, forKey: .outOfRange)) ?? nil) ?? false
+                let expiresBefore = ((try? container.decodeIfPresent(String.self, forKey: .expiresBefore)) ?? nil)
+                    .flatMap(HotMessDecoding.date(from:))
                 events = [.range(outOfRange: outOfRange)]
             case "ChatLeft":
                 // AWAY, BANNED or REMOVED: out of the room either way.

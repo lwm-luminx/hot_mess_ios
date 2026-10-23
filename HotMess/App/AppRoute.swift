@@ -10,6 +10,7 @@ enum AppRoute: Hashable, Sendable {
     case venue(UUID)
     case event(UUID)
     case person(UUID)
+    case ping(UUID, invitation: String?)
     case venueChat(Venue)
     /// Every karaoke singer at a venue tonight, by the venue's ID.
     case karaokeList(UUID)
@@ -30,7 +31,7 @@ enum AppRoute: Hashable, Sendable {
         case .venue, .venueChat, .karaokeList: .venues
         case .event: .events
         case .person: .people
-        case .localeChat, .eventChat, .updates: .now
+        case .localeChat, .eventChat, .ping, .updates: .now
         case let .posts(subject, _):
             switch subject {
             case .venue: .venues
@@ -120,6 +121,7 @@ enum DeepLink {
         case "venues": return .venue(id)
         case "events": return .event(id)
         case "people": return .person(id)
+        case "pings": return .ping(id, invitation: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "e" })?.value)
         case "posts": return .post(id)
         default: return nil
         }
@@ -137,6 +139,10 @@ enum DeepLink {
                 .compactMap { $0 }
                 .flatMap { $0.split(separator: "/").map(String.init) }
         }
+        guard components.scheme == "https",
+              ["hotmess.social", "www.hotmess.social"].contains(components.host?.lowercased() ?? ""),
+              components.user == nil, components.password == nil,
+              components.port == nil || components.port == 443 else { return [] }
         return components.path.split(separator: "/").map(String.init)
     }
 }

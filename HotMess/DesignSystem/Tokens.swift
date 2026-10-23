@@ -144,4 +144,6 @@ enum HotMessOpacity {
 enum HotMessMotion {
     /// 150ms ease-out, for toggles and tone or state changes.
     static var quick: Animation { .easeOut(duration: 0.15) }
+    /// 900ms ease-in-out, for a hero fading from one photo to the next.
+    static var heroFade: Animation { .easeInOut(duration: 0.9) }
 }

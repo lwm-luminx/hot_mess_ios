@@ -209,6 +209,29 @@ enum ChatRichContent: Hashable, Sendable {
     case request(ChatSongRequest, note: String?)
 }
 
+/// Where a transcript divides what has cleared from what is current.
+struct ChatClearMark: Hashable, Sendable {
+    enum Kind: Hashable, Sendable {
+        /// An admin cleared the room at `at`.
+        case cleared
+        /// Lines before `at` have expired for everyone but the room's admins.
+        case expired
+    }
+
+    let at: Date
+    let kind: Kind
+
+    /// What the divider says.
+    var label: String {
+        switch kind {
+        case .cleared:
+            String(localized: "Chat cleared at \(at.formatted(date: .omitted, time: .shortened))")
+        case .expired:
+            String(localized: "Cleared for everyone but admins above")
+        }
+    }
+}
+
 /// Where one of the reader's own lines is on its way to the room.
 enum ChatDelivery: Hashable, Sendable {
     case sent
@@ -246,6 +269,9 @@ struct ChatThreadView: View {
     var onAnswer: ((ChatPrompt) -> Void)? = nil
     /// "Not now" on a PromptCard, with its message.
     var onDismissPrompt: ((ChatThreadMessage) -> Void)? = nil
+    /// Where what has cleared ends and what is current begins, drawn as a
+    /// labelled rule: above the first message sent since, or after them all.
+    var clearMark: ChatClearMark? = nil
 
     @State private var width: CGFloat = 0
     /// Scrolled back from the newest messages: the PromptBar folds to one line.
@@ -285,10 +311,16 @@ struct ChatThreadView: View {
     private func thread(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
             if messages.isEmpty {
+                if let clearMark {
+                    ChatClearDivider(mark: clearMark)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                }
                 ChatEmptyState(roomName: roomName)
             } else {
+                let rows = ChatThreadRow.rows(for: messages, clearMark: clearMark)
                 LazyVStack(spacing: 0) {
-                    ForEach(ChatThreadRow.rows(for: messages)) { row in
+                    ForEach(rows) { row in
                         ChatThreadRowView(
                             row: row,
                             maxBubbleWidth: maxBubbleWidth,
@@ -302,6 +334,10 @@ struct ChatThreadView: View {
                             onDismissPrompt: onDismissPrompt
                         )
                         .id(row.id)
+                    }
+                    if let clearMark, !rows.contains(where: \.opensAfterClear) {
+                        ChatClearDivider(mark: clearMark)
+                            .padding(.top, 12)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -350,11 +386,19 @@ struct ChatThreadRow: Identifiable, Hashable, Sendable {
     /// Over a PromptCard: how long the room was quiet before it dropped in,
     /// in whole minutes ("Quiet for 10 minutes").
     var quietMinutes: Int? = nil
+    /// The first message sent since the room's clear mark, with older ones
+    /// above it: the clear divider goes over it.
+    var clearMark: ChatClearMark? = nil
 
     var id: String { message.id }
 
-    static func rows(for messages: [ChatThreadMessage]) -> [ChatThreadRow] {
+    var opensAfterClear: Bool { clearMark != nil }
+
+    static func rows(for messages: [ChatThreadMessage], clearMark: ChatClearMark? = nil) -> [ChatThreadRow] {
         let dividers = messages.indices.map { index in divider(at: index, in: messages) }
+        let firstAfterClear = clearMark.flatMap { mark in
+            messages.firstIndex { ($0.sentAt ?? .distantFuture) >= mark.at }
+        }
 
         return messages.indices.map { index in
             let message = messages[index]
@@ -371,7 +415,10 @@ struct ChatThreadRow: Identifiable, Hashable, Sendable {
                 isFirstInGroup: isFirst,
                 isLastInGroup: isLast,
                 isFirstRow: index == 0,
-                quietMinutes: quietMinutes(at: index, in: messages)
+                quietMinutes: quietMinutes(at: index, in: messages),
+                // Nothing cleared above the first message: the empty room or
+                // the end of the transcript carries the mark instead.
+                clearMark: index == firstAfterClear && index > 0 ? clearMark : nil
             )
         }
     }
@@ -439,6 +486,12 @@ private struct ChatThreadRowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let clearMark = row.clearMark {
+                ChatClearDivider(mark: clearMark)
+                    .padding(.top, 12)
+                    .padding(.bottom, row.divider == nil ? 4 : 0)
+            }
+
             if let divider = row.divider {
                 ChatDividerLabel(text: ChatTime.divider(divider))
                     .padding(.top, row.isFirstRow ? 0 : 12)
@@ -827,6 +880,35 @@ private struct PromptLabelStyle: LabelStyle {
 }
 
 /// An empty room: "Say hello."
+/// A rule across the transcript with what cleared in the middle: an admin
+/// clearing the room, or the line past which only admins still see messages.
+struct ChatClearDivider: View {
+    let mark: ChatClearMark
+
+    var body: some View {
+        HStack(spacing: 8) {
+            rule
+            Text(mark.label)
+                .font(.hotMess(.caption, semibold: true))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .layoutPriority(1)
+            rule
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(mark.label)
+        .accessibilityIdentifier("chat.clearDivider")
+    }
+
+    private var rule: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.4))
+            .frame(height: 1)
+            .frame(maxWidth: .infinity)
+    }
+}
+
 struct ChatEmptyState: View {
     let roomName: String
 

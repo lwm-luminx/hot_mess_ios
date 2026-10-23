@@ -177,7 +177,7 @@ struct ChatPresenceFrameTests {
               case .connected = events[0],
               case let .range(outOfRange) = events[1],
               case let .roster(online, people, friends, recent) = events[2],
-              case let .history(messages, pinned) = events[3]
+              case let .history(messages, pinned, _) = events[3]
         else {
             Issue.record("Expected connected, range, roster, history")
             return
@@ -225,7 +225,7 @@ struct ChatPresenceFrameTests {
         guard events.count == 4,
               case let .range(outOfRange) = events[1],
               case let .roster(online, people, friends, recent) = events[2],
-              case let .history(messages, pinned) = events[3]
+              case let .history(messages, pinned, _) = events[3]
         else {
             Issue.record("Expected a join")
             return
@@ -394,10 +394,19 @@ struct ChatPresenceFrameTests {
         }
         #expect(removedID == id)
 
-        guard case .cleared = try #require(cleared.first) else {
+        guard case let .cleared(at, expired) = try #require(cleared.first) else {
             Issue.record("Expected cleared")
             return
         }
+        #expect(at == HotMessDecoding.date(from: "2026-10-09T04:00:00.123Z"))
+        #expect(!expired)
+
+        let expiredEvents = events(#"{ "__typename": "ChatRoomCleared", "cleared_at": "2026-10-09T04:00:00Z", "expired": true }"#)
+        guard case let .cleared(_, didExpire) = try #require(expiredEvents.first) else {
+            Issue.record("Expected cleared")
+            return
+        }
+        #expect(didExpire)
     }
 
     @Test("Leaving the room, for any reason, is not being there")
@@ -698,6 +707,37 @@ struct HereNowTests {
         viewModel.applyClear()
         #expect(viewModel.messages.isEmpty)
         #expect(viewModel.pinnedAnnouncement == nil)
+    }
+
+    @Test("Admins see a divider between what cleared for everyone else and tonight's lines")
+    @MainActor
+    func viewModelClearMarks() {
+        let viewModel = makeViewModel(friends: FriendDirectory())
+        let cutoff = Date(timeIntervalSince1970: 1_791_691_800)
+        let old = VenueMessage(id: UUID(), body: "last night", userID: sam, name: "Sam K.", avatarURL: nil,
+                               sentAt: cutoff.addingTimeInterval(-3600))
+        let new = VenueMessage(id: UUID(), body: "tonight", userID: sam, name: "Sam K.", avatarURL: nil,
+                               sentAt: cutoff.addingTimeInterval(60))
+
+        viewModel.applyHistory([new], pinned: nil, expiresBefore: cutoff)
+        #expect(viewModel.clearMark == nil)
+
+        viewModel.applyHistory([old, new], pinned: nil, expiresBefore: cutoff)
+        #expect(viewModel.clearMark == ChatClearMark(at: cutoff, kind: .expired))
+        let rows = ChatThreadRow.rows(for: [old, new].map { $0.threadMessage(currentUserID: me) },
+                                      clearMark: viewModel.clearMark)
+        #expect(rows.map(\.opensAfterClear) == [false, true])
+
+        // Expiring keeps what came after, and the mark goes with what it divided.
+        viewModel.applyClear(at: cutoff, expired: true)
+        #expect(viewModel.messages.map(\.id) == [new.id])
+        #expect(viewModel.clearMark == nil)
+
+        // An admin clearing the room leaves a mark where it happened.
+        let clearedAt = cutoff.addingTimeInterval(120)
+        viewModel.applyClear(at: clearedAt)
+        #expect(viewModel.messages.isEmpty)
+        #expect(viewModel.clearMark == ChatClearMark(at: clearedAt, kind: .cleared))
     }
 }
 
