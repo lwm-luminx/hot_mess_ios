@@ -45,6 +45,10 @@ struct VenueChatScreen: View {
     /// PromptCards the user put away with "Not now", by message ID: hidden
     /// for them only.
     @State private var dismissedPrompts: Set<String> = []
+    /// Tonight's lineup at the room's venue, for its faces in the Here now
+    /// strip and the "In this room" sheet. `nil` in a locale's room.
+    @State private var lineupModel: VenueLineupModel?
+    @State private var isShowingRoom = false
 
     var body: some View {
         Group {
@@ -86,6 +90,22 @@ struct VenueChatScreen: View {
         .onDisappear {
             let viewModel = self.viewModel
             Task { await viewModel?.stop() }
+        }
+        .task(id: room.venueID) {
+            lineupModel = VenueLineupModel.reusing(lineupModel, for: room.venueID, api: model.api)
+        }
+        .keepsLineupFresh(lineupModel)
+        .sheet(isPresented: $isShowingRoom) {
+            if let viewModel {
+                InThisRoomSheet(
+                    subtitle: roomSubtitle,
+                    place: room.place,
+                    lineup: lineupFaces(viewModel),
+                    people: hereNow(viewModel),
+                    onSelectLineup: openPage
+                )
+                .environment(model)
+            }
         }
         .sheet(item: $reportTarget, onDismiss: thankIfReported) { message in
             ReportSheet(
@@ -185,16 +205,18 @@ struct VenueChatScreen: View {
                 if let kind = bannerKind(viewModel) {
                     RoomBanner(kind: kind, roomName: room.name, isLocale: room.kind == .locale)
                 }
-                // Who is here: the venue, which is always in its own room,
-                // then everyone else, friends first. Above the pinned
-                // announcement, which the thread draws at its top.
-                let blocked = model.safety.blockedIDs
-                let hereNow = viewModel.hereNow.filter { !blocked.contains($0.id) }
-                let place = room.kind == .venue ? HereNowPlace(name: room.name, photoURL: room.photoURL) : nil
-                if place != nil || !hereNow.isEmpty {
+                // Who is here: the venue, which is always in its own room (an
+                // event's too), tonight's lineup, then everyone else, friends
+                // first. Above the pinned announcement, which the thread
+                // draws at its top.
+                let people = hereNow(viewModel)
+                let place = room.place
+                let lineup = lineupFaces(viewModel)
+                if place != nil || !lineup.isEmpty || !people.isEmpty {
                     HereNowStrip(
                         place: place,
-                        people: hereNow,
+                        lineup: lineup,
+                        people: people,
                         onReport: { person in
                             personReport = ReportSubject(
                                 target: .person,
@@ -204,7 +226,9 @@ struct VenueChatScreen: View {
                         },
                         onBlock: { person in
                             personBlock = BlockedUser(id: person.id, name: person.name, avatarURL: person.avatarURL)
-                        }
+                        },
+                        onSeeEveryone: { isShowingRoom = true },
+                        onSelectLineup: openPage
                     )
                 }
                 // Each minute, so a special leaves the room when it ends,
@@ -242,6 +266,35 @@ struct VenueChatScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    // MARK: - Who's here
+
+    /// Everyone in the room but people the user blocked, as the strip
+    /// orders them.
+    private func hereNow(_ viewModel: VenueChatViewModel) -> [HereNowPerson] {
+        let blocked = model.safety.blockedIDs
+        return viewModel.hereNow.filter { !blocked.contains($0.id) }
+    }
+
+    /// Tonight's lineup at the venue, without its karaoke singers, with
+    /// whether each act is in chat when the room says.
+    private func lineupFaces(_ viewModel: VenueChatViewModel) -> [HereNowLineupFace] {
+        guard let lineup = lineupModel?.lineup else { return [] }
+        return HereNowLineupFace.faces(for: lineup, presence: viewModel.lineupPresence)
+    }
+
+    /// "Drag Bingo · The Wildrose" at an event, else the room's name.
+    private var roomSubtitle: String {
+        guard let venueName = room.venueName, let eventName = room.eventName else { return room.name }
+        return "\(eventName) · \(venueName)"
+    }
+
+    /// An act's page, from the strip or the sheet.
+    private func openPage(_ face: HereNowLineupFace) {
+        guard let id = face.personID else { return }
+        isShowingRoom = false
+        model.push(.person(id))
     }
 
     // MARK: - Reporting and blocking
