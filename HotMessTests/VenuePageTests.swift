@@ -16,8 +16,8 @@ struct VenuePageTests {
     private let second = URL(string: "https://cdn.example.com/2.jpg")!
     private let photo = URL(string: "https://cdn.example.com/photo.jpg")!
 
-    private func venue(banner: URL? = nil, photo: URL? = nil, facebookLink: URL? = nil) -> Venue {
-        Venue(id: UUID(), name: "Club Triangles", facebookLink: facebookLink, photoURL: photo, bannerURL: banner)
+    private func venue(banner: URL? = nil, photo: URL? = nil, facebookLink: URL? = nil) -> HotMess.Venue {
+        HotMess.Venue(id: UUID(), name: "Club Triangles", facebookLink: facebookLink, photoURL: photo, bannerURL: banner)
     }
 
     @Test("The hero rotates through the banner and then the banner images, once each")
