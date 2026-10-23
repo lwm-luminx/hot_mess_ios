@@ -133,26 +133,34 @@ struct NowScreen: View {
             collapsed: heroCollapsed || viewModel?.state.value == nil
         )
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                // At a venue Ping is in the page, under the chat, so the bar
-                // keeps help in reach as you scroll.
-                if let venue = helpVenue {
+            // At a venue, Safety sits by Ping, big and labelled, so it's in
+            // reach as you scroll. Only where the app places the user, as
+            // staff can only help people who are there.
+            if let venue = helpVenue {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         model.helpPresentation = .venue(venue)
                     } label: {
-                        Label(String(localized: "I feel unsafe"), systemImage: "shield.fill")
-                    }
-                    .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
-                    .accessibilityIdentifier("now.toolbarGetHelp")
-                } else {
-                    Button {
-                        showingPingSheet = true
-                    } label: {
-                        Text("Ping")
+                        Label(String(localized: "Safety"), systemImage: "shield.fill")
+                            .labelStyle(.titleAndIcon)
                             .font(.hotMess(.headline, semibold: true))
                     }
-                    .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.hotMessAccent)
+                    // The light accent carries white text in either mode.
+                    .environment(\.colorScheme, .light)
+                    .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
+                    .accessibilityIdentifier("now.toolbarGetHelp")
                 }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingPingSheet = true
+                } label: {
+                    Text("Ping")
+                        .font(.hotMess(.headline, semibold: true))
+                }
+                .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
             }
         }
         .sheet(isPresented: $showingPingSheet) {
@@ -361,14 +369,8 @@ struct NowScreen: View {
             // Quickie above the chat it leads to, when it's shown.
             pairUpSection
             venueChatSection(now)
-            // Pings sit with the chat: at a venue, with "I feel unsafe".
+            // Pings sit with the chat at a venue.
             if isAtVenue(now) {
-                PingAndHelpRow(
-                    showsHelp: helpVenue != nil,
-                    ping: { showingPingSheet = true },
-                    help: { helpVenue.map { model.helpPresentation = .venue($0) } }
-                )
-                .padding(.horizontal, 16)
                 pingsSection(now)
             }
         case CardKind.postsTonight:

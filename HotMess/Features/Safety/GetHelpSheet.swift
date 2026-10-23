@@ -346,24 +346,28 @@ struct FlowLayout: Layout {
     }
 }
 
-/// "I feel unsafe" on a venue the user is at, with the standard shield: easy
+/// "Safety" on a venue the user is at, with the standard shield: big and easy
 /// to find, but on `accent-soft` rather than a red SOS.
 struct GetHelpButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Image(systemName: "shield.fill")
-                    .font(.title3)
-                    .foregroundStyle(Color.hotMessAccentInk)
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.hotMessAccent, in: .circle)
+                    // The light accent carries white in either mode.
+                    .environment(\.colorScheme, .light)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("I feel unsafe")
-                        .font(.hotMess(.headline, semibold: true))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Safety")
+                        .font(.hotMess(.title3, semibold: true))
                         .foregroundStyle(.primary)
-                    Text("Tell staff quietly, or get other help")
-                        .font(.hotMess(.footnote))
+                    Text("Feel unsafe? Tell staff quietly, or get other help")
+                        .font(.hotMess(.subheadline))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -373,48 +377,16 @@ struct GetHelpButton: View {
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(minHeight: 52)
-            .background(Color.hotMessAccentSoft, in: RoundedRectangle(cornerRadius: HotMessRadius.md))
+            .padding(.vertical, 12)
+            .frame(minHeight: 68)
+            .background(Color.hotMessAccentSoft, in: RoundedRectangle(cornerRadius: HotMessRadius.lg))
+            .overlay {
+                RoundedRectangle(cornerRadius: HotMessRadius.lg)
+                    .strokeBorder(Color.hotMessAccentInk.opacity(0.35), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
         .accessibilityIdentifier("venue.getHelp")
-    }
-}
-
-/// Ping and "I feel unsafe" side by side, just under a venue's chat on Now:
-/// the two things to reach for while you're out. Help shows only where the
-/// app places the user, as staff can only help people who are there.
-struct PingAndHelpRow: View {
-    var showsHelp: Bool
-    let ping: () -> Void
-    let help: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Button(action: ping) {
-                Label(String(localized: "Ping"), systemImage: "paperplane.fill")
-                    .font(.hotMess(.headline, semibold: true))
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .foregroundStyle(Color.hotMessOnAccent)
-                    .background(Color.hotMessAccent, in: RoundedRectangle(cornerRadius: HotMessRadius.md))
-            }
-            .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
-            .accessibilityIdentifier("now.ping")
-
-            if showsHelp {
-                Button(action: help) {
-                    Label(String(localized: "I feel unsafe"), systemImage: "shield.fill")
-                        .font(.hotMess(.headline, semibold: true))
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .foregroundStyle(Color.hotMessAccentInk)
-                        .background(Color.hotMessAccentSoft, in: RoundedRectangle(cornerRadius: HotMessRadius.md))
-                }
-                .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
-                .accessibilityIdentifier("now.getHelp")
-            }
-        }
-        .buttonStyle(.plain)
     }
 }
