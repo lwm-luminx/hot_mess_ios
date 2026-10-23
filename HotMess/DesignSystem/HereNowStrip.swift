@@ -171,6 +171,8 @@ struct HereNowStrip: View {
     var onReport: ((HereNowPerson) -> Void)? = nil
     /// Block someone here, which hides them at once.
     var onBlock: ((HereNowPerson) -> Void)? = nil
+    /// Tapping someone (not the user): their profile sheet.
+    var onSelect: ((HereNowPerson) -> Void)? = nil
     /// "See everyone", and the "+N on the lineup" chip: the "In this room"
     /// sheet.
     var onSeeEveryone: (() -> Void)? = nil
@@ -281,8 +283,8 @@ struct HereNowStrip: View {
                 }
 
                 ForEach(people) { person in
-                    // Nobody reports or blocks themself.
-                    HereNowFace(person: person)
+                    // Nobody reports or blocks themself, or opens their own sheet.
+                    face(person)
                         .contextMenu {
                             if !person.isViewer, onReport != nil || onBlock != nil {
                                 safetyActions(for: person)
@@ -320,6 +322,24 @@ struct HereNowStrip: View {
 
     private var countLabel: String {
         String(localized: "\(hereCount) here now")
+    }
+
+    @ViewBuilder
+    private func face(_ person: HereNowPerson) -> some View {
+        if !person.isViewer, let onSelect {
+            Button {
+                onSelect(person)
+            } label: {
+                HereNowFace(person: person)
+                    // At least 44pt to tap.
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "Shows their profile"))
+        } else {
+            HereNowFace(person: person)
+        }
     }
 
     @ViewBuilder
@@ -585,7 +605,7 @@ private struct FriendBadge: View {
         RoomBanner(kind: .range, roomName: "The Eagle")
         HereNowStrip(place: HereNowPlace(name: "The Eagle", photoURL: nil), lineup: lineup, people: people,
                      onSeeEveryone: {})
-        PinnedBar(author: "The Eagle", title: "Beer bust starts at 3") {}
+        PinnedBar(author: "The Eagle", title: "Doors open at 3") {}
         Spacer()
     }
     .background(Color(.systemGroupedBackground))

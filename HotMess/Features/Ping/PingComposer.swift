@@ -48,6 +48,14 @@ struct PingChoices: Hashable, Sendable {
         NightCalendar.night(of: event.startDate, calendar: calendar) == NightCalendar.night(of: date, calendar: calendar)
     }
 
+    /// Whether `place` is one of the choices.
+    func contains(_ place: PingPlace) -> Bool {
+        switch place {
+        case let .venue(id): venues.contains { $0.id == id }
+        case let .event(id): events.contains { $0.id == id }
+        }
+    }
+
     /// The choices with `seed` in them, at the top of its list, when the
     /// lists didn't already have it.
     func including(_ seed: PingSeed?) -> PingChoices {
@@ -101,12 +109,16 @@ final class PingComposer {
     private let audienceKit: AudienceKitClient
     private let localeID: UUID?
     private let seed: PingSeed?
+    /// A place to pick by ID when the lists have it, for a screen that has
+    /// only the ID (a chat room's venue).
+    private let place: PingPlace?
 
-    init(api: HotMessAPI, audienceKit: AudienceKitClient, localeID: UUID?, seed: PingSeed?) {
+    init(api: HotMessAPI, audienceKit: AudienceKitClient, localeID: UUID?, seed: PingSeed?, place: PingPlace? = nil) {
         self.api = api
         self.audienceKit = audienceKit
         self.localeID = localeID
         self.seed = seed
+        self.place = place
     }
 
     var isEditing: Bool { editing != nil }
@@ -149,6 +161,9 @@ final class PingComposer {
         if let seed {
             choices = choices.including(seed)
             if !selection.contains(seed.place) { selection.append(seed.place) }
+        }
+        if let place, !selection.contains(place), choices.contains(place) {
+            selection.append(place)
         }
 
         state = .loaded(choices)

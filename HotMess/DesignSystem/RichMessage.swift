@@ -297,6 +297,7 @@ extension VenueMessage {
             isFromAudience: isFromAudience,
             rich: rich ? richContent : nil,
             promptLabel: promptLabel(promptKinds: promptKinds),
+            promptID: kind == .text ? promptID : nil,
             promptCard: rich ? promptCard : nil
         )
     }
@@ -335,9 +336,9 @@ extension VenueMessage {
         ),
         ChatThreadMessage(
             id: "5", authorID: "place", authorName: "Neighbours", avatarURL: nil,
-            text: "Special: Two-for-one well drinks", sentAt: start.addingTimeInterval(300), isOwn: false,
+            text: "Special: Free coat check before 10", sentAt: start.addingTimeInterval(300), isOwn: false,
             role: .venue, isFromPlace: true,
-            rich: .special(title: "Two-for-one well drinks", body: "At the back bar.", endsAt: start.addingTimeInterval(7200))
+            rich: .special(title: "Free coat check before 10", body: "At the front door.", endsAt: start.addingTimeInterval(7200))
         ),
         ChatThreadMessage(
             id: "6", authorID: "sam", authorName: "Sam O.", avatarURL: nil,

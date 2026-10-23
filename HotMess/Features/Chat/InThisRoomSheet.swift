@@ -19,6 +19,8 @@ struct InThisRoomSheet: View {
     let people: [HereNowPerson]
     /// Opens an act's page; the sheet closes first.
     var onSelectLineup: ((HereNowLineupFace) -> Void)? = nil
+    /// Opens someone's profile sheet; the sheet closes first. Never the user.
+    var onSelectPerson: ((HereNowPerson) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var personReport: ReportSubject?
@@ -115,6 +117,52 @@ struct InThisRoomSheet: View {
 
     private func guestRow(_ person: HereNowPerson) -> some View {
         HStack(spacing: 12) {
+            if let onSelectPerson, !person.isViewer {
+                Button {
+                    dismiss()
+                    onSelectPerson(person)
+                } label: {
+                    guestIdentity(person).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(String(localized: "Opens their profile"))
+            } else {
+                guestIdentity(person)
+            }
+
+            // Nobody reports or blocks themself.
+            if !person.isViewer {
+                Menu {
+                    safetyActions(for: person)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.hotMess(.body))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel(String(localized: "More for \(person.firstName)"))
+            }
+        }
+        .contextMenu {
+            if !person.isViewer { safetyActions(for: person) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(person.accessibilityLabel)
+        .accessibilityActions {
+            if let onSelectPerson, !person.isViewer {
+                Button(String(localized: "Open profile")) {
+                    dismiss()
+                    onSelectPerson(person)
+                }
+            }
+            if !person.isViewer { safetyActions(for: person) }
+        }
+    }
+
+    /// The avatar and name, which open their profile sheet.
+    private func guestIdentity(_ person: HereNowPerson) -> some View {
+        HStack(spacing: 12) {
             Avatar(
                 url: person.avatarURL,
                 initials: person.name?.initialsForDisplay,
@@ -137,28 +185,6 @@ struct InThisRoomSheet: View {
             }
 
             Spacer(minLength: 8)
-
-            // Nobody reports or blocks themself.
-            if !person.isViewer {
-                Menu {
-                    safetyActions(for: person)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.hotMess(.body))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(.rect)
-                }
-                .accessibilityLabel(String(localized: "More for \(person.firstName)"))
-            }
-        }
-        .contextMenu {
-            if !person.isViewer { safetyActions(for: person) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(person.accessibilityLabel)
-        .accessibilityActions {
-            if !person.isViewer { safetyActions(for: person) }
         }
     }
 

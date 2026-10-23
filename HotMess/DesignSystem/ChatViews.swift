@@ -184,8 +184,18 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     var rich: ChatRichContent? = nil
     /// "Prompt" or "Trivia" over a text line that answers a prompt.
     var promptLabel: String? = nil
+    /// The prompt a text line answers, by ID: its label goes to that prompt.
+    var promptID: String? = nil
     /// A prompt dropped into a quiet room, drawn as a PromptCard.
     var promptCard: ChatPrompt? = nil
+
+    /// Someone the reader can tap for their profile sheet: another person
+    /// posting as themself. Not the venue, talent posting as their listing,
+    /// a prompt (the audience), or the reader's own lines.
+    var opensProfile: Bool {
+        !isOwn && !isFromPlace && !isFromListing && !isFromAudience && delivery == .sent
+            && UUID(uuidString: authorID) != nil
+    }
 
     /// The announcement's title, when this is one.
     var announcementTitle: String? {
@@ -272,10 +282,19 @@ struct ChatThreadView: View {
     /// Where what has cleared ends and what is current begins, drawn as a
     /// labelled rule: above the first message sent since, or after them all.
     var clearMark: ChatClearMark? = nil
+    /// Tapping someone's avatar or name: their profile sheet. Only for
+    /// people posting as themselves (`opensProfile`).
+    var onOpenProfile: ((ChatThreadMessage) -> Void)? = nil
 
     @State private var width: CGFloat = 0
     /// Scrolled back from the newest messages: the PromptBar folds to one line.
     @State private var isScrolledBack = false
+    /// The reader opened the folded PromptBar (tapping it, or an answer's
+    /// label). It folds again once they're back at the newest messages.
+    @State private var isPromptExpanded = false
+    /// The prompt an answer's label just went to, outlined for a moment.
+    @State private var highlightedPromptID: String?
+    @State private var highlightTask: Task<Void, Never>?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -292,9 +311,13 @@ struct ChatThreadView: View {
                     PromptBar(
                         prompt: prompt,
                         answers: promptAnswers,
-                        isCollapsed: isScrolledBack || pinned?.announcementTitle != nil,
+                        isCollapsed: (isScrolledBack || pinned?.announcementTitle != nil) && !isPromptExpanded,
                         now: now,
-                        onAnswer: onAnswer.map { answer in { answer(prompt) } }
+                        isHighlighted: highlightedPromptID == prompt.id,
+                        onAnswer: onAnswer.map { answer in { answer(prompt) } },
+                        onExpand: {
+                            withAnimation(HotMessMotion.quick) { isPromptExpanded = true }
+                        }
                     )
                     .id(prompt.id)
                     .padding(.horizontal, 12)
@@ -319,6 +342,7 @@ struct ChatThreadView: View {
                 ChatEmptyState(roomName: roomName)
             } else {
                 let rows = ChatThreadRow.rows(for: messages, clearMark: clearMark)
+                let reachable = reachablePromptIDs
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { row in
                         ChatThreadRowView(
@@ -331,7 +355,10 @@ struct ChatThreadView: View {
                             onBlock: onBlock,
                             onDelete: onDelete,
                             onAnswer: onAnswer,
-                            onDismissPrompt: onDismissPrompt
+                            onDismissPrompt: onDismissPrompt,
+                            onOpenProfile: onOpenProfile,
+                            onGoToPrompt: goToPromptAction(for: row.message, reachable: reachable, proxy: proxy),
+                            highlightedPromptID: highlightedPromptID
                         )
                         .id(row.id)
                     }
@@ -356,10 +383,55 @@ struct ChatThreadView: View {
             geometry.contentSize.height - (geometry.contentOffset.y + geometry.containerSize.height) > 120
         } action: { _, scrolledBack in
             isScrolledBack = scrolledBack
+            // Back at the newest messages: a bar the reader opened folds
+            // again (under a pinned announcement). Only on the way back, so
+            // the bar growing can't fold it as it opens.
+            if !scrolledBack { isPromptExpanded = false }
         }
         .onChange(of: messages.count) { _, _ in
             guard let last = messages.last else { return }
             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+        }
+    }
+
+    /// The prompts an answer's label can go to: tonight's, in the bar, and
+    /// the PromptCards in the thread. Older pinned prompts aren't drawn in
+    /// the thread, so answers to them have nowhere to go.
+    private var reachablePromptIDs: Set<String> {
+        var ids = Set(messages.compactMap { $0.promptCard?.id })
+        if let prompt { ids.insert(prompt.id) }
+        return ids
+    }
+
+    /// What an answer's label does: go to its prompt, when that's on screen.
+    private func goToPromptAction(
+        for message: ChatThreadMessage,
+        reachable: Set<String>,
+        proxy: ScrollViewProxy
+    ) -> (() -> Void)? {
+        guard let id = message.promptID, reachable.contains(id) else { return nil }
+        return { goToPrompt(id, proxy: proxy) }
+    }
+
+    /// An answer's label: opens and outlines the bar for tonight's prompt,
+    /// or scrolls to the PromptCard and outlines that.
+    private func goToPrompt(_ id: String, proxy: ScrollViewProxy) {
+        if let prompt, prompt.id == id {
+            withAnimation(HotMessMotion.quick) { isPromptExpanded = true }
+            highlight(id)
+        } else if let card = messages.last(where: { $0.promptCard?.id == id }) {
+            withAnimation { proxy.scrollTo(card.id, anchor: .center) }
+            highlight(id)
+        }
+    }
+
+    private func highlight(_ id: String) {
+        highlightTask?.cancel()
+        withAnimation(HotMessMotion.quick) { highlightedPromptID = id }
+        highlightTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.4)) { highlightedPromptID = nil }
         }
     }
 
@@ -464,8 +536,17 @@ private struct ChatThreadRowView: View {
     var onDelete: ((ChatThreadMessage) -> Void)? = nil
     var onAnswer: ((ChatPrompt) -> Void)? = nil
     var onDismissPrompt: ((ChatThreadMessage) -> Void)? = nil
+    var onOpenProfile: ((ChatThreadMessage) -> Void)? = nil
+    /// The answer's label, when the prompt it answers is on screen.
+    var onGoToPrompt: (() -> Void)? = nil
+    var highlightedPromptID: String? = nil
 
     private var message: ChatThreadMessage { row.message }
+
+    /// The sender's avatar and name open their profile sheet.
+    private var canOpenProfile: Bool {
+        message.opensProfile && onOpenProfile != nil
+    }
 
     /// The reader's own message that reached the room.
     private var canDelete: Bool {
@@ -523,7 +604,8 @@ private struct ChatThreadRowView: View {
                 sentAt: message.sentAt,
                 now: now,
                 onAnswer: onAnswer.map { answer in { answer(prompt) } },
-                onDismiss: onDismissPrompt.map { dismiss in { [message] in dismiss(message) } }
+                onDismiss: onDismissPrompt.map { dismiss in { [message] in dismiss(message) } },
+                isHighlighted: highlightedPromptID == prompt.id
             )
             .id(prompt.id)
             .frame(maxWidth: ChatMetrics.promptCardMaxWidth)
@@ -536,8 +618,10 @@ private struct ChatThreadRowView: View {
         HStack(alignment: .bottom, spacing: 8) {
             if !message.isOwn {
                 if row.isLastInGroup {
-                    ChatAvatar(message: message)
-                        .accessibilityHidden(true)
+                    profileButton(horizontalSlop: 8, verticalSlop: 10) {
+                        ChatAvatar(message: message)
+                    }
+                    .accessibilityHidden(true)
                 } else {
                     Color.clear
                         .frame(width: ChatMetrics.avatarDiameter(for: message), height: 1)
@@ -549,9 +633,11 @@ private struct ChatThreadRowView: View {
                 // everyone else sees them ("Try-Angles [Venue]"); their
                 // ordinary messages as themselves need no name.
                 if row.isFirstInGroup, !message.isOwn || message.isFromPlace {
-                    ChatSenderLine(name: message.authorName, role: message.role)
-                        .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
-                        .accessibilityHidden(true)
+                    profileButton(horizontalSlop: 0, verticalSlop: 14) {
+                        ChatSenderLine(name: message.authorName, role: message.role)
+                    }
+                    .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
+                    .accessibilityHidden(true)
                 }
 
                 Group {
@@ -563,7 +649,8 @@ private struct ChatThreadRowView: View {
                             isOwn: message.isOwn,
                             isLastInGroup: row.isLastInGroup,
                             isRole: message.role?.tintsBubble == true,
-                            label: message.promptLabel
+                            label: message.promptLabel,
+                            onLabelTap: onGoToPrompt
                         )
                     }
                 }
@@ -579,6 +666,12 @@ private struct ChatThreadRowView: View {
                     }
                 }
                 .accessibilityActions {
+                    if canOpenProfile, let onOpenProfile {
+                        Button(profileActionTitle) { onOpenProfile(message) }
+                    }
+                    if let onGoToPrompt {
+                        Button(String(localized: "Go to the prompt"), action: onGoToPrompt)
+                    }
                     if canReport {
                         moderationActions
                     }
@@ -595,6 +688,39 @@ private struct ChatThreadRowView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: message.isOwn ? .trailing : .leading)
+    }
+
+    /// The avatar or name as a button to the profile sheet, its hit area
+    /// grown by the slop toward 44pt without moving anything; or as it is,
+    /// for a sender with no profile sheet.
+    @ViewBuilder
+    private func profileButton<Content: View>(
+        horizontalSlop: CGFloat,
+        verticalSlop: CGFloat,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        if canOpenProfile, let onOpenProfile {
+            Button {
+                onOpenProfile(message)
+            } label: {
+                content()
+                    .padding(.horizontal, horizontalSlop)
+                    .padding(.vertical, verticalSlop)
+                    .contentShape(.rect)
+                    .padding(.horizontal, -horizontalSlop)
+                    .padding(.vertical, -verticalSlop)
+            }
+            .buttonStyle(.plain)
+        } else {
+            content()
+        }
+    }
+
+    private var profileActionTitle: String {
+        if let name = message.authorName, !name.isEmpty {
+            return String(localized: "View \(name)'s profile")
+        }
+        return String(localized: "View profile")
     }
 
     @ViewBuilder
@@ -810,6 +936,9 @@ struct ChatBubble: View {
     /// "Prompt" or "Trivia" on a line that answers one, in a first line of
     /// its own with a reply glyph. It doesn't change grouping.
     var label: String? = nil
+    /// Tapping the label: go to the prompt the line answers. Without it the
+    /// label is only text.
+    var onLabelTap: (() -> Void)? = nil
 
     var body: some View {
         if isSelectable {
@@ -822,16 +951,23 @@ struct ChatBubble: View {
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let label {
-                Label {
-                    Text(label)
-                } icon: {
-                    Image(systemName: "arrowshape.turn.up.left")
-                        .font(.system(size: 10, weight: .semibold))
+                if let onLabelTap {
+                    Button(action: onLabelTap) {
+                        promptLabel(label)
+                            // A 44pt target around the small label, without
+                            // making the bubble any taller.
+                            .padding(.vertical, Self.labelHitPadding)
+                            .padding(.horizontal, 8)
+                            .contentShape(.rect)
+                            .padding(.vertical, -Self.labelHitPadding)
+                            .padding(.horizontal, -8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "Go to the prompt"))
+                    .accessibilityIdentifier("chat.promptLabel")
+                } else {
+                    promptLabel(label)
                 }
-                .labelStyle(PromptLabelStyle())
-                .font(.hotMess(fixedSize: 12, semibold: true))
-                .foregroundStyle(isOwn ? Color.hotMessOnAccent : Color.secondary)
-                .lineLimit(1)
             }
 
             Text(text)
@@ -853,6 +989,22 @@ struct ChatBubble: View {
                     .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
             }
         }
+    }
+
+    /// Grows the label's ~16pt line to a 44pt hit area.
+    private static let labelHitPadding: CGFloat = 14
+
+    private func promptLabel(_ label: String) -> some View {
+        Label {
+            Text(label)
+        } icon: {
+            Image(systemName: "arrowshape.turn.up.left")
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .labelStyle(PromptLabelStyle())
+        .font(.hotMess(fixedSize: 12, semibold: true))
+        .foregroundStyle(isOwn ? Color.hotMessOnAccent : Color.secondary)
+        .lineLimit(1)
     }
 
     private var shape: UnevenRoundedRectangle {

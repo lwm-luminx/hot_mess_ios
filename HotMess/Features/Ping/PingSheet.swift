@@ -10,6 +10,9 @@ import SwiftUI
 /// ping". Opening it while you have a Ping edits that Ping.
 struct PingSheet: View {
     var seed: PingSeed?
+    /// A place to pick by ID, when the opener has no Venue or Event to seed
+    /// with (a chat room's venue). Picked only if the lists have it.
+    var place: PingPlace? = nil
     var onSent: (Ping) -> Void = { _ in }
 
     @Environment(AppModel.self) private var model
@@ -48,7 +51,8 @@ struct PingSheet: View {
                     api: model.api,
                     audienceKit: model.audienceKit,
                     localeID: model.location.locale?.id,
-                    seed: seed
+                    seed: seed,
+                    place: place
                 )
             }
             _ = await (safetyLoad, composer?.load())
