@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKitUI
 import SwiftUI
 import UIKit
 
@@ -45,6 +46,8 @@ struct VenueChatScreen: View {
     /// PromptCards the user put away with "Not now", by message ID: hidden
     /// for them only.
     @State private var dismissedPrompts: Set<String> = []
+    /// The venue's group trivia, for the round card above the composer.
+    @State private var trivia: VenueTriviaModel?
 
     var body: some View {
         Group {
@@ -82,6 +85,24 @@ struct VenueChatScreen: View {
             await current.stop()
             guard !Task.isCancelled else { return }
             await current.run()
+        }
+        // The venue's group trivia, while the room is open.
+        .task(id: room.kind == .venue && model.safety.hasAcceptedTerms && scenePhase == .active) {
+            guard room.kind == .venue, model.safety.hasAcceptedTerms, scenePhase == .active else { return }
+            let current = trivia ?? VenueTriviaModel(api: model.api, venueID: room.id)
+            trivia = current
+            await current.run()
+        }
+        .alert(
+            String(localized: "Your vote didn't count"),
+            isPresented: Binding(
+                get: { trivia?.voteError != nil },
+                set: { if !$0 { trivia?.voteError = nil } }
+            )
+        ) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(trivia?.voteError ?? "")
         }
         .onDisappear {
             let viewModel = self.viewModel
@@ -236,6 +257,19 @@ struct VenueChatScreen: View {
                         clearMark: viewModel.clearMark
                     )
                 }
+                // A venue post may be a trivia round going up or its reveal.
+                .onChange(of: viewModel.messages.last?.id) {
+                    Task { await trivia?.refresh() }
+                }
+                if let trivia, let round = trivia.round {
+                    TriviaRoundCard(
+                        round: round,
+                        onVote: viewModel.connectionState == .notPresent ? nil : { await trivia.vote($0) }
+                    )
+                    .audiencePreset(model.brand.preset)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                }
                 composer(viewModel)
             } else {
                 ProgressView()
@@ -370,6 +404,8 @@ struct VenueChatScreen: View {
             .filter { $0.isShowing(at: date) }
             .filter { $0.isFromListing || !blocked.contains($0.userID) }
             .filter { !$0.isPinnedPrompt && !dismissedPrompts.contains($0.id.uuidString) }
+            // The trivia round being shown has its card above the composer.
+            .filter { $0.id.uuidString.lowercased() != trivia?.round?.messageID?.lowercased() }
             .map { message in
                 message.threadMessage(
                     currentUserID: viewModel.userID,
