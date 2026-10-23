@@ -20,6 +20,9 @@ struct HereNowPerson: Identifiable, Hashable, Sendable {
     var presence: PresenceState = .online
     /// The user themself, shown as "You", first in the strip.
     var isViewer = false
+    /// The tribes the user and they both picked: a BothMark on their face
+    /// and the BothLine in the sheet. Only the two of them see it.
+    var sharedTribes: [SharedTribe] = []
 
     /// In the room now, not only here recently.
     var isHere: Bool { presence == .online }
@@ -37,13 +40,17 @@ struct HereNowPerson: Identifiable, Hashable, Sendable {
     /// here recently" for someone who left lately.
     var accessibilityLabel: String {
         if isViewer { return String(localized: "You, here now") }
-        return switch (isFriend, isHere) {
+        let label = switch (isFriend, isHere) {
         case (true, true): String(localized: "\(displayName), friend, here now")
         case (false, true): String(localized: "\(displayName), here now")
         case (true, false): String(localized: "\(displayName), friend, here recently")
         case (false, false): String(localized: "\(displayName), here recently")
         }
+        return sharedTribes.accessibilityPhrase.map { "\(label), \($0)" } ?? label
     }
+
+    /// Shares at least one tribe with the user.
+    var sharesTribes: Bool { !isViewer && !sharedTribes.isEmpty }
 
     /// The user first, then people here now before people here recently; in
     /// each, friends first, then everyone else, each by name. People with no
@@ -388,7 +395,7 @@ struct HereNowFace: View {
                 .opacity(person.isHere ? 1 : 0.55)
                 .padding(Self.ringInset + Self.ringWidth)
                 .overlay {
-                    if person.isFriend {
+                    if person.isFriend || person.sharesTribes {
                         Circle().strokeBorder(Color.hotMessAccent, lineWidth: Self.ringWidth)
                     }
                 }
@@ -398,8 +405,12 @@ struct HereNowFace: View {
                         .offset(x: -1, y: -1)
                 }
                 .overlay(alignment: .topTrailing) {
+                    // A friend's heart wins the corner; the sheet says both.
                     if person.isFriend {
                         FriendBadge(surface: surface)
+                            .offset(x: 3, y: -3)
+                    } else if person.sharesTribes {
+                        BothBadge(size: 13, surface: surface)
                             .offset(x: 3, y: -3)
                     }
                 }

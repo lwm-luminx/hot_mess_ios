@@ -27,6 +27,8 @@ final class AppModel {
     let friends = FriendDirectory()
     /// Who the user blocked, and whether they've agreed to the terms.
     let safety: SafetyStore
+    /// The user's tribes, and whether the API has tribes.
+    let tribes: TribeStore
     /// The user's notifications while the app is in front, shown in the app.
     let notifications: NotificationStream
     /// The app's one realtime connection: every GraphQL subscription (the
@@ -114,6 +116,7 @@ final class AppModel {
         location = LocationProvider(api: api, configuration: configuration)
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
         safety = SafetyStore(api: api)
+        tribes = TribeStore(api: api)
         // A socket the server refuses as unauthorized signs out the way an
         // HTTP 401 does. The cable reads the credential from the SDK's store
         // whenever it (re)opens, so a new sign-in is picked up, and signs the
@@ -192,6 +195,7 @@ final class AppModel {
     private func forgetUser() {
         friends.forget()
         safety.forget()
+        tribes.forget()
         notifications.reset()
         location.forget()
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnPingKey)
