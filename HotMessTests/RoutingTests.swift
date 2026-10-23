@@ -44,6 +44,21 @@ struct DeepLinkTests {
         #expect(DeepLink.destination(for: URL(string: "https://other.example/pings/\(id.uuidString)")) == nil)
     }
 
+    @Test("Passes any invitation token through as it is, and opens a Ping's own link without one")
+    func pingLinks() throws {
+        let short = try #require(URL(string: "https://hotmess.social/pings/\(id.uuidString.lowercased())?e=v3.Ab-9_x"))
+        let scheme = try #require(URL(string: "hotmess://pings/\(id.uuidString)?e=anything"))
+        let push = try #require(URL(string: "https://hotmess.social/pings/\(id.uuidString.lowercased())"))
+
+        #expect(DeepLink.destination(for: short) == .route(.ping(id, invitation: "v3.Ab-9_x")))
+        #expect(DeepLink.destination(for: scheme) == .route(.ping(id, invitation: "anything")))
+        #expect(DeepLink.destination(for: push) == .route(.ping(id, invitation: nil)))
+        #expect(AppRoute.ping(id, invitation: nil).tab == .now)
+        // A `pings` link without a Ping ID still opens Now.
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/pings/ping-1")) == .now)
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/pings")) == .now)
+    }
+
     /// The original indexed `pathComponents[1]` and `[2]` and force-unwrapped
     /// the `UUID`, so each of these took the app down on open.
     @Test(

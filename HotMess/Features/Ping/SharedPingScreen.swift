@@ -44,13 +44,17 @@ struct SharedPingScreen: View {
         loading = true
         defer { loading = false }
         do {
+            // An ended or altered link still shows the Ping when it's a friend's.
             if let invitationToken {
-                invitation = try await ShareInvitation.load(path: "/pings/\(pingID.uuidString.lowercased())",
-                    token: invitationToken, client: model.audienceKit)
+                do {
+                    invitation = try await ShareInvitation.load(path: "/pings/\(pingID.uuidString.lowercased())",
+                        token: invitationToken, client: model.audienceKit)
+                } catch { message = error.localizedDescription }
             }
             let result = try await model.api.pings()
             ping = ([result.myPing].compactMap { $0 } + result.friendPings)
                 .first { UUID(uuidString: $0.id) == pingID }
+            if ping != nil { message = nil }
         } catch { message = error.localizedDescription }
     }
     @MainActor private func joinInvitation() async {

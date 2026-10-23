@@ -75,9 +75,10 @@ enum AppTab: Hashable, Sendable, CaseIterable {
     }
 }
 
-/// Where a link leads: a screen to push, or Now from the top (a Ping, which
-/// Now shows; `https://hotmess.social/pings/<id>` is what a Ping's push
-/// carries as its `url`).
+/// Where a link leads: a screen to push, or Now from the top. A Ping's link
+/// (`https://hotmess.social/pings/<id>`, what its push carries as its `url`,
+/// or a texted invitation with `?e=<token>`) opens that Ping on Now; a
+/// `pings` link without a Ping ID opens Now.
 enum DeepLinkDestination: Hashable, Sendable {
     case route(AppRoute)
     case now

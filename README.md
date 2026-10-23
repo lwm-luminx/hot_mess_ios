@@ -81,7 +81,14 @@ empty and failure states are handled the same way everywhere.
   venues in the user's locale (or none), reaches the user's friends (or
   friends of everyone in its circle) and clears at 5am. It's sent from the
   Now screen or "Ping here" on a venue or event, and friends answer with
-  "I'm in", also from the `PING` push's `PING_JOIN` action. The documents alias fields to the snake_case keys the
+  "I'm in", also from the `PING` push's `PING_JOIN` action. "Add contacts"
+  in the send sheet picks people from the phone (the system picker, so no
+  Contacts permission; numbers stay on the phone): once the Ping is sent the
+  app signs a link to it (`shareLink(path: "/pings/<id>", lifetime: DAY)`)
+  and opens Messages addressed to them, or the share sheet where the device
+  can't text. `/pings/<id>?e=<token>` opens that Ping; a recipient who can't
+  see it yet gets the invitation (`GET /v1/share/invitation`) and joins with
+  `joinPing`'s `invitationToken`. The token is opaque. The documents alias fields to the snake_case keys the
   models decode, and failures map to `APIError`.
 - **REST.** Only the client status (`GET /v1/status`, which says the oldest
   version of the app the API still serves) and the two sign-ins the SDK has no

@@ -6,8 +6,8 @@
 import SwiftUI
 
 /// The send sheet: tonight's events and the locale's venues to pick from,
-/// an optional note, who can see it, and "Send ping". Opening it while you
-/// have a Ping edits that Ping.
+/// an optional note, who can see it, contacts to text a link to, and "Send
+/// ping". Opening it while you have a Ping edits that Ping.
 struct PingSheet: View {
     var seed: PingSeed?
     var onSent: (Ping) -> Void = { _ in }
@@ -17,6 +17,10 @@ struct PingSheet: View {
     @State private var composer: PingComposer?
     @State private var isPromptingFacebook = false
     @State private var connectErrorMessage: String?
+    /// The text to the picked contacts, shown over the sheet once the Ping
+    /// is sent; the sheet closes when Messages does.
+    @State private var invitation: PingInvitation?
+    @State private var invitationErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -71,6 +75,21 @@ struct PingSheet: View {
         } message: {
             Text("Connecting Facebook is required to see your friends and share your pings with them.")
         }
+        .sheet(item: $invitation, onDismiss: { dismiss() }) { invitation in
+            PingInvitationComposer(invitation: invitation) { self.invitation = nil }
+                .ignoresSafeArea()
+        }
+        .alert(
+            String(localized: "Couldn't text your contacts"),
+            isPresented: Binding(
+                get: { invitationErrorMessage != nil },
+                set: { if !$0 { invitationErrorMessage = nil } }
+            )
+        ) {
+            Button(String(localized: "OK"), role: .cancel) { dismiss() }
+        } message: {
+            Text(invitationErrorMessage ?? "")
+        }
         .alert(
             String(localized: "Couldn't connect Facebook"),
             isPresented: Binding(
@@ -95,10 +114,20 @@ struct PingSheet: View {
 
     private func performSend() {
         Task {
-            guard let ping = await composer?.send() else { return }
+            guard let composer, let ping = await composer.send() else { return }
             onSent(ping)
             model.pingsChanged()
-            dismiss()
+            guard !composer.contacts.isEmpty else {
+                dismiss()
+                return
+            }
+
+            // The Ping is out either way; the sheet stays up for Messages.
+            do {
+                invitation = try await composer.invitation(for: ping)
+            } catch {
+                invitationErrorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
         }
     }
 }
@@ -107,6 +136,7 @@ private struct PingComposerForm: View {
     @Environment(AppModel.self) private var model
     @Bindable var composer: PingComposer
     let send: () -> Void
+    @State private var isPickingContacts = false
 
     var body: some View {
         LoadStateView(state: composer.state) { choices in
@@ -169,6 +199,8 @@ private struct PingComposerForm: View {
                             .font(.hotMess(.footnote))
                             .foregroundStyle(.secondary)
                     }
+
+                    contactsSection
                 }
                 .padding(.bottom, 24)
             }
@@ -187,6 +219,38 @@ private struct PingComposerForm: View {
             Button(String(localized: "OK"), role: .cancel) {}
         } message: {
             Text(composer.errorMessage ?? "")
+        }
+    }
+
+    /// People from the phone's contacts to text a link to once it's sent,
+    /// as chips to take off again.
+    private var contactsSection: some View {
+        DetailSection(String(localized: "Text a link")) {
+            if !composer.contacts.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(composer.contacts) { contact in
+                            PingContactChip(contact: contact) { composer.remove(contact) }
+                        }
+                    }
+                }
+            }
+
+            Button {
+                isPickingContacts = true
+            } label: {
+                Label(String(localized: "Add contacts"), systemImage: "person.crop.circle.badge.plus")
+                    .font(.hotMess(.body))
+            }
+        } footer: {
+            Text("They'll get a text from you with a link to this ping, even if they're not on Hot Mess.")
+                .font(.hotMess(.footnote))
+                .foregroundStyle(.secondary)
+        }
+        .background {
+            ContactPicker(isPresented: $isPickingContacts) { composer.add($0) }
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
         }
     }
 
@@ -215,6 +279,31 @@ private struct PingComposerForm: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(.bar)
+    }
+}
+
+/// A contact who'll get the link, with a button to take them off.
+private struct PingContactChip: View {
+    let contact: PingContact
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(contact.name)
+                .font(.hotMess(.subheadline))
+                .lineLimit(1)
+
+            Button(action: remove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Remove \(contact.name)"))
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
+        .background(Color.hotMessControlFill, in: .capsule)
     }
 }
 
