@@ -90,6 +90,7 @@ struct HotMessAPI: CoverPaymentAPI {
         guard let venue = response.venue else { throw APIError.notFound }
         return VenueOverview(
             venue: venue.venue,
+            bannerPhotos: venue.bannerPhotos,
             events: venue.events,
             friends: venue.friends,
             socialLinks: venue.socialLinks,
@@ -508,23 +509,29 @@ struct HotMessAPI: CoverPaymentAPI {
     /// room's subscribers, the user's own included, as a `ChatMessagePosted`;
     /// this returns it as the room sees it, so the app can settle its pending
     /// line by ID.
-    func sendMyChatMessage(_ body: String, in room: ChatRoom) async throws -> VenueMessage {
+    /// `promptID` is the prompt the line answers (a PROMPT line's prompt),
+    /// which labels it "Prompt" in the room.
+    func sendMyChatMessage(_ body: String, in room: ChatRoom, promptID: String? = nil) async throws -> VenueMessage {
         let sent = try await query(
             Documents.sendMyChatMessage,
-            variables: Self.sendMyChatMessageVariables(body, in: room),
+            variables: Self.sendMyChatMessageVariables(body, in: room, promptID: promptID),
             as: SendMyChatMessageResponse.self
         )
         return VenueMessage(payload: sent.sendMyChatMessage.message)
     }
 
-    /// `{ input: { venueId | localeId, message } }`.
-    static func sendMyChatMessageVariables(_ body: String, in room: ChatRoom) -> [String: GraphQLValue] {
-        [
-            "input": .object([
-                room.subscriptionKey: .string(room.id.uuidString.lowercased()),
-                "message": .string(body),
-            ]),
+    /// `{ input: { venueId | localeId, message, promptId? } }`. Only a line
+    /// that answers a prompt names one.
+    static func sendMyChatMessageVariables(_ body: String, in room: ChatRoom, promptID: String? = nil)
+        -> [String: GraphQLValue] {
+        var input: [String: GraphQLValue] = [
+            room.subscriptionKey: .string(room.id.uuidString.lowercased()),
+            "message": .string(body),
         ]
+        if let promptID, !promptID.isEmpty {
+            input["promptId"] = .string(promptID)
+        }
+        return ["input": .object(input)]
     }
 
     /// The audience the app's GraphQL goes to: the build's pinned ID, the
@@ -558,6 +565,21 @@ struct HotMessAPI: CoverPaymentAPI {
         ).setRecentChatPush.recentChatPush
     }
 
+    /// Whether chat rooms show the user's initials instead of their photo.
+    /// Off until they turn it on.
+    func chatInitials() async throws -> Bool {
+        try await query(Documents.chatInitials, variables: [:], as: ChatInitialsResponse.self).me?.chatInitials ?? false
+    }
+
+    /// Turns initials in chat on or off, and returns the setting after the change.
+    func setChatInitials(_ enabled: Bool) async throws -> Bool {
+        try await query(
+            Documents.setChatInitials,
+            variables: ["enabled": .bool(enabled)],
+            as: SetChatInitialsResponse.self
+        ).setChatInitials.chatInitials
+    }
+
     /// Deletes the account and everything the API keeps about the user. It
     /// can't be undone; the session is gone afterwards.
     func deleteAccount() async throws {
@@ -578,7 +600,7 @@ struct HotMessAPI: CoverPaymentAPI {
         ))
     }
 
-    private func query<Response: Decodable & Sendable>(
+    func query<Response: Decodable & Sendable>(
         _ document: String,
         variables: [String: GraphQLValue],
         as type: Response.Type
@@ -775,7 +797,16 @@ extension HotMessAPI {
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
         posted_as_person: postedAsPerson person { id } \
         event { id name start_at: startAt } \
-        request { id kind title artist singer state }
+        request { id kind title artist singer state } \
+        \(promptLineFields)
+        """
+
+        /// What a chat line says about prompts, aliased to the room frame's
+        /// keys: a PROMPT line's prompt, the prompt a text line answers, and
+        /// whether it was posted as the audience.
+        static let promptLineFields = """
+        posted_as_audience: postedAsAudience prompt_id: promptId \
+        prompt { id kind text answer reveal_at: revealAt shown_as: shownAs number total next_at: nextAt }
         """
 
         /// Enough of a person for a card that links to them.
@@ -898,6 +929,7 @@ extension HotMessAPI {
         query Venue($id: ID!) {
           venues { venue(id: $id) {
             \(venueFields)
+            banner_photos: bannerPhotos { url }
             events { upcoming { nodes { \(eventFields) } } }
             friends { list { nodes { \(friendFields) } } }
             \(profileSocialLinks)
@@ -1127,7 +1159,8 @@ extension HotMessAPI {
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
         posted_as_person: postedAsPerson person { id } \
         event { id name start_at: startAt } \
-        request { id kind title artist singer state }
+        request { id kind title artist singer state } \
+        \(promptLineFields)
         """
 
         static let sendMyChatMessage = """
@@ -1171,6 +1204,19 @@ extension HotMessAPI {
         static let setRecentChatPush = """
         mutation SetRecentChatPush($enabled: Boolean!) {
           setRecentChatPush(input: { enabled: $enabled }) { recent_chat_push: recentChatPush }
+        }
+        """
+
+        /// Its own query too, like `recentChatPush`.
+        static let chatInitials = """
+        query ChatInitials {
+          me { chat_initials: chatInitials }
+        }
+        """
+
+        static let setChatInitials = """
+        mutation SetChatInitials($enabled: Boolean!) {
+          setChatInitials(input: { enabled: $enabled }) { chat_initials: chatInitials }
         }
         """
 
@@ -1219,6 +1265,8 @@ struct PersonResponse: Decodable, Sendable {
 /// A venue and its events, which GraphQL returns as one object.
 struct VenueWithEvents: Decodable, Sendable {
     let venue: Venue
+    /// Its banner images, in the order the hero rotates through them.
+    let bannerPhotos: [URL]
     let events: [Event]
     let friends: [Friend]
     let socialLinks: [SocialLink]
@@ -1238,11 +1286,16 @@ struct VenueWithEvents: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case events, friends, tickets, profile, ping, chat, people
+        case bannerPhotos = "banner_photos"
     }
+
+    private struct BannerPhoto: Decodable { let url: String? }
 
     init(from decoder: any Decoder) throws {
         venue = try Venue(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        bannerPhotos = ((try? container.decodeIfPresent([BannerPhoto].self, forKey: .bannerPhotos)) ?? nil)?
+            .compactMap { $0.url.flatMap(URL.init(string:)) } ?? []
         // The tickets mixin (holding the cover mixin) is left out where the
         // audience has neither module, which reads as no cover. A missing
         // events or friends mixin reads as none.
@@ -1481,6 +1534,23 @@ struct RecentChatPushResponse: Decodable, Sendable {
 
 struct SetRecentChatPushResponse: Decodable, Sendable {
     let setRecentChatPush: RecentChatPushResponse.Payload
+}
+
+/// `me { chatInitials }`, and `setChatInitials`'s payload.
+struct ChatInitialsResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable {
+        let chatInitials: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case chatInitials = "chat_initials"
+        }
+    }
+
+    let me: Payload?
+}
+
+struct SetChatInitialsResponse: Decodable, Sendable {
+    let setChatInitials: ChatInitialsResponse.Payload
 }
 
 struct DeleteAccountResponse: Decodable, Sendable {

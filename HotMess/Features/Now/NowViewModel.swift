@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import os
 
 @MainActor
 @Observable
@@ -38,6 +39,12 @@ final class NowViewModel {
         } catch is CancellationError {
             // The view went away; leave whatever was on screen alone.
         } catch {
+            // A refresh that fails keeps what's on screen; Now reloads again
+            // within a minute.
+            guard state.value == nil else {
+                Log.network.error("Now refresh failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             state = LoadState(catching: error)
         }
     }

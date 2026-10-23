@@ -12,6 +12,7 @@ import UIKit
 struct NowScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: NowViewModel?
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
@@ -24,6 +25,13 @@ struct NowScreen: View {
     /// Tonight at the venue you're at (or your event's): the host, the
     /// lineup and karaoke signups, as its page shows them.
     @State private var lineupModel: VenueLineupModel?
+    /// Pair me up at the venue you're at, or your event's.
+    @State private var pairUpModel: PairUpModel?
+    @State private var isPairingUp = false
+
+    /// How often Now reloads while it's on screen. Standing still sends no new
+    /// position, but the chat, the lineup and who's here keep changing.
+    static let refreshInterval: Duration = .seconds(60)
 
     /// Reloads when the position changes or Pings change elsewhere.
     private struct LoadKey: Hashable {
@@ -64,9 +72,13 @@ struct NowScreen: View {
 
                         // The lineup or karaoke, small talk, the next three events, then venues.
                         stageSection(now)
+                        stagePhotosSection(now)
                         venueChatSection(now)
+                        pairUpSection
+                        tonightPostsSection(now)
                         localeChatSection(now)
                         eventsSection(now)
+                        localePostsSection(now)
                         nearbySection(now)
                         friendVenuesSection(now)
                         pingsSection(now)
@@ -126,6 +138,19 @@ struct NowScreen: View {
             loadedPingRevision = model.pingRevision
             await viewModel?.load(from: model.location, sentAfter: pingsChanged ? .now : nil)
         }
+        // Coming back to the app, and every minute while it's open. Coming
+        // back waits for the fresh fix the app asks for, so Now isn't loaded
+        // for wherever you were when you left.
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            ensureViewModel()
+            await model.location.refreshPosition()
+            while !Task.isCancelled {
+                await viewModel?.load(from: model.location)
+                await pairUpModel?.load()
+                try? await Task.sleep(for: Self.refreshInterval)
+            }
+        }
         .onChange(of: model.checkout.revision) {
             reload()
         }
@@ -133,6 +158,16 @@ struct NowScreen: View {
             lineupModel = VenueLineupModel.reusing(lineupModel, for: tonightVenueID, api: model.api)
         }
         .keepsLineupFresh(lineupModel)
+        .task(id: tonightVenueID) {
+            pairUpModel = tonightVenueID.map { PairUpModel(api: model.api, venueID: $0) }
+            await pairUpModel?.load()
+        }
+        .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
+            if let pairUpModel {
+                PairUpSheet(model: pairUpModel, venueName: viewModel?.state.value.flatMap { $0.venue?.name ?? $0.event?.venue?.name } ?? "")
+                    .environment(model)
+            }
+        }
         // Who a karaoke signup goes under.
         .task { await model.session.refreshUser() }
         .contentReporting(report: $reportSubject, block: $blockTarget)
@@ -297,6 +332,24 @@ struct NowScreen: View {
         }
     }
 
+    /// At a venue: its photos, led by the camera. What you take goes on the
+    /// venue's, the event's and the stage's pages.
+    @ViewBuilder
+    private func stagePhotosSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
+            PhotosSection(subject: .venue(venue.id), cameraVenueID: venue.id)
+        }
+    }
+
+    /// Pair me up, just under the chat: once you're at a venue that has it, or
+    /// while you're in it tonight.
+    @ViewBuilder
+    private var pairUpSection: some View {
+        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
+            PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
+        }
+    }
+
     /// At a venue: its room. At an event the room is the event's, named and pictured for it.
     @ViewBuilder
     private func venueChatSection(_ now: Now) -> some View {
@@ -411,6 +464,33 @@ struct NowScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    /// At an event or venue: its posts from the last 24 hours.
+    @ViewBuilder
+    private func tonightPostsSection(_ now: Now) -> some View {
+        if now.venues == nil, let venue = now.venue {
+            let subject: PostsSubject = now.event.map { .event($0.id) } ?? .venue(venue.id)
+            let title = now.event.map(\.name) ?? venue.name
+            NowPostsSection(
+                title: String(localized: "Latest from tonight"),
+                subject: subject,
+                withinHours: 24,
+                seeAll: .posts(subject, title: title)
+            )
+        }
+    }
+
+    /// Away from venues: the locale's updates.
+    @ViewBuilder
+    private func localePostsSection(_ now: Now) -> some View {
+        if now.venue == nil, let locale = now.locale {
+            NowPostsSection(
+                title: String(localized: "Updates in \(locale.name)"),
+                subject: .locale(locale),
+                seeAll: .updates(locale)
+            )
         }
     }
 

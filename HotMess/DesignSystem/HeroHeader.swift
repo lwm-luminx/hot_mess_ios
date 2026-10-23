@@ -19,18 +19,57 @@ private let heroCoordinateSpace = "hero"
 /// Put it first in a `ScrollView` that ignores the top safe area, and pass that
 /// safe area's height as `topInset`. The photo stretches when pulled down.
 /// `tone` reports what was decided so the screen can style its bars to match.
+/// Given several photos it fades from one to the next every few seconds,
+/// re-reading each for the text (it holds on the first with Reduce Motion).
 struct HeroHeader<Content: View>: View {
-    let url: URL?
+    let urls: [URL]
     let topInset: CGFloat
     @Binding var tone: HeroTone
+    /// The contrast the text keeps against the photo: 4.5:1, or 7:1 with
+    /// Increase Contrast on, unless this asks for more.
+    var minimumContrast: Double = 4.5
+    /// The least scrim behind the text, for heroes whose photos change under it.
+    var minimumScrim: Double = 0
     @ViewBuilder var content: Content
+
+    init(
+        url: URL?,
+        topInset: CGFloat,
+        tone: Binding<HeroTone>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(urls: [url].compactMap { $0 }, topInset: topInset, tone: tone, content: content)
+    }
+
+    init(
+        urls: [URL],
+        topInset: CGFloat,
+        tone: Binding<HeroTone>,
+        minimumContrast: Double = 4.5,
+        minimumScrim: Double = 0,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.urls = urls
+        self.topInset = topInset
+        _tone = tone
+        self.minimumContrast = minimumContrast
+        self.minimumScrim = minimumScrim
+        self.content = content()
+    }
 
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    @State private var index = 0
     @State private var image: UIImage?
     @State private var size: CGSize = .zero
     @State private var textFrame: CGRect = .zero
+
+    /// How long each photo shows before the next fades in.
+    static var interval: Duration { .seconds(5) }
+
+    private var url: URL? { urls.isEmpty ? nil : urls[index % urls.count] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -41,7 +80,7 @@ struct HeroHeader<Content: View>: View {
                 .photoTextShadow(tone)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(heroCoordinateSpace)) } action: { textFrame = $0 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(.bottom, urls.count > 1 ? 28 : 20)
                 .animation(HotMessMotion.quick, value: tone)
         }
         .frame(maxWidth: .infinity, minHeight: topInset + HeroMetrics.bodyHeight, alignment: .bottomLeading)
@@ -57,8 +96,47 @@ struct HeroHeader<Content: View>: View {
                     .offset(y: -pull)
             }
         }
+        .overlay(alignment: .bottom) {
+            if urls.count > 1 {
+                pageDots
+            }
+        }
         .task(id: url) { await loadImage() }
+        .task(id: RotationKey(urls: urls, paused: reduceMotion)) { await rotate() }
         .onChange(of: analysisKey, initial: true) { analyze() }
+    }
+
+    private struct RotationKey: Equatable {
+        var urls: [URL]
+        var paused: Bool
+    }
+
+    /// Steps to the next photo every `interval`, once it has loaded, so the
+    /// fade never lands on the placeholder.
+    private func rotate() async {
+        index = 0
+        guard urls.count > 1, !reduceMotion else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: Self.interval)
+            guard !Task.isCancelled else { return }
+            let next = (index + 1) % urls.count
+            _ = try? await KingfisherManager.shared.retrieveImage(with: urls[next])
+            guard !Task.isCancelled else { return }
+            withAnimation(HotMessMotion.heroFade) { index = next }
+        }
+    }
+
+    private var pageDots: some View {
+        HStack(spacing: 6) {
+            ForEach(urls.indices, id: \.self) { position in
+                Circle()
+                    .fill(tone.textColor.opacity(position == index % urls.count ? 0.95 : 0.4))
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.bottom, 10)
+        .animation(HotMessMotion.quick, value: index)
+        .accessibilityHidden(true)
     }
 
     // MARK: - Layers
@@ -66,13 +144,16 @@ struct HeroHeader<Content: View>: View {
     @ViewBuilder
     private var photo: some View {
         if let url {
-            // No fade: the scrim and text are drawn at once, so a fading photo
-            // read as only the part behind the text having loaded.
+            // No fade on load: the scrim and text are drawn at once, so a fading
+            // photo read as only the part behind the text having loaded. Moving
+            // between photos cross-fades instead.
             KFImage(url)
                 .cancelOnDisappear(true)
                 .placeholder { Color.hotMessPhotoPlaceholder }
                 .resizable()
                 .aspectRatio(contentMode: .fill)
+                .id(url)
+                .transition(.opacity)
         } else {
             // The light accent always carries white text (on-accent).
             LinearGradient(
@@ -116,8 +197,10 @@ struct HeroHeader<Content: View>: View {
     private var bandFraction: CGFloat { bandHeight / max(1, bandHeight + 90) }
 
     private var increasedContrast: Bool { colorSchemeContrast == .increased }
-    private var target: Double { increasedContrast ? 7 : 4.5 }
-    private var scrimFloor: Double { increasedContrast || reduceTransparency ? ImageTone.accessibleScrimFloor : 0 }
+    private var target: Double { max(minimumContrast, increasedContrast ? 7 : 4.5) }
+    private var scrimFloor: Double {
+        max(minimumScrim, increasedContrast || reduceTransparency ? ImageTone.accessibleScrimFloor : 0)
+    }
 
     private var cacheKey: String? {
         url.map { "\($0.absoluteString)|\(target)|\(scrimFloor)" }
@@ -136,6 +219,7 @@ struct HeroHeader<Content: View>: View {
     }
 
     private func loadImage() async {
+        let url = url
         image = nil
         guard let url else { return }
         if let key = cacheKey, let cached = HeroToneCache.tone(for: key) {

@@ -809,7 +809,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -831,7 +831,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -853,7 +853,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -992,7 +992,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1014,7 +1014,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1036,7 +1036,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1114,7 +1114,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1136,7 +1136,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1158,7 +1158,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1180,7 +1180,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1202,7 +1202,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1224,7 +1224,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.1;
+    MARKETING_VERSION = 2.3;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1329,7 +1329,7 @@
 			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
-				revision = 4d9691f5ba864e75e05fc066b69f6b643ac6c2a6;
+				revision = bdc405c5bc1e1a0934f3acfb40b1d75cf436456a;
 			};
 		};
 		AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {

@@ -230,7 +230,25 @@ extension VenueMessage {
         case .request:
             guard let request else { return nil }
             return .request(request, note: written)
+        case .prompt:
+            // A PromptCard or the PromptBar, not a rich card (`promptCard`).
+            return nil
         }
+    }
+
+    /// The PromptCard a quiet room got, or `nil`. A rotating prompt shows
+    /// under the room's title instead, and a prompt the room sent without its
+    /// question shows as its text.
+    var promptCard: ChatPrompt? {
+        guard kind == .prompt, let prompt, prompt.shownAs == .card else { return nil }
+        return prompt
+    }
+
+    /// "Prompt" or "Trivia" for a text line that answers a prompt, by the
+    /// prompt's kind where the room has it (`promptKinds`, by prompt ID).
+    func promptLabel(promptKinds: [String: ChatPrompt.Kind] = [:]) -> String? {
+        guard kind == .text, let promptID else { return nil }
+        return promptKinds[promptID] == .trivia ? String(localized: "Trivia") : String(localized: "Prompt")
     }
 
     /// This message as a chat room draws it, for the reader `currentUserID`.
@@ -240,14 +258,17 @@ extension VenueMessage {
     ///     the short one rooms send to everyone.
     ///   - online: who is in the room now, when the room's roster is known.
     ///     Without it, the presence the API sent with the message (if any).
-    ///   - rich: whether to draw rich messages as cards. Peeks show their
-    ///     summary in a bubble instead.
+    ///   - rich: whether to draw rich messages and prompt cards as cards.
+    ///     Peeks show their summary in a bubble instead.
+    ///   - promptKinds: the room's prompts' kinds by ID, so an answer to
+    ///     trivia is labelled "Trivia".
     func threadMessage(
         currentUserID: UUID?,
         friends: [UUID: Friend] = [:],
         online: Set<UUID>? = nil,
         reachable: Set<UUID> = [],
-        rich: Bool = true
+        rich: Bool = true,
+        promptKinds: [String: ChatPrompt.Kind] = [:]
     ) -> ChatThreadMessage {
         let presence: PresenceState? = if isFromListing {
             nil
@@ -259,9 +280,11 @@ extension VenueMessage {
 
         return ChatThreadMessage(
             id: id.uuidString,
-            // A post as the venue or a listing groups apart from the same person's own lines.
+            // A post as the venue, a listing or the audience groups apart
+            // from the same person's own lines.
             authorID: personID.map { "person:\($0.uuidString)" }
-                ?? (isFromPlace ? "place:\(userID.uuidString)" : userID.uuidString),
+                ?? (isFromPlace ? "place:\(userID.uuidString)" : nil)
+                ?? (isFromAudience ? "audience:\(userID.uuidString)" : userID.uuidString),
             authorName: isFromListing ? name : (friends[userID]?.name ?? name),
             avatarURL: avatarURL,
             text: body,
@@ -270,7 +293,11 @@ extension VenueMessage {
             presence: presence,
             role: role,
             isFromPlace: isFromPlace,
-            rich: rich ? richContent : nil
+            isFromListing: isFromListing,
+            isFromAudience: isFromAudience,
+            rich: rich ? richContent : nil,
+            promptLabel: promptLabel(promptKinds: promptKinds),
+            promptCard: rich ? promptCard : nil
         )
     }
 }

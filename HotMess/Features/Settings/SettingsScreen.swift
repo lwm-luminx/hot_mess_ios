@@ -28,6 +28,7 @@ struct SettingsScreen: View {
     var body: some View {
         List {
             profileSection
+            chatPhotoSection
             facebookSection
             coverSection
             locationSection
@@ -102,6 +103,22 @@ struct SettingsScreen: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+    }
+
+    /// How the user looks in chat, and initials instead of their photo. The
+    /// setting is on their account, so only for someone signed in.
+    @ViewBuilder
+    private var chatPhotoSection: some View {
+        if model.session.isSignedIn {
+            Section {
+                NavigationLink {
+                    ChatPhotoScreen()
+                } label: {
+                    Label(String(localized: "Chat Photo"), systemImage: "person.crop.circle")
+                }
+                .accessibilityIdentifier("me.chatPhoto")
+            }
         }
     }
 
@@ -190,6 +207,13 @@ struct SettingsScreen: View {
     private var feedbackSection: some View {
         Section {
             NavigationLink {
+                YourSuggestionsScreen()
+            } label: {
+                Label(String(localized: "Your Suggestions"), systemImage: "lightbulb")
+            }
+            .accessibilityIdentifier("me.suggestions")
+
+            NavigationLink {
                 ReportProblemScreen()
             } label: {
                 Label(String(localized: "Report a Problem"), systemImage: "exclamationmark.bubble")
@@ -205,11 +229,14 @@ struct SettingsScreen: View {
     }
 
     private var aboutSection: some View {
-        Section(String(localized: "About")) {
+        Section {
             InfoRow(
                 title: String(localized: "Version"),
                 value: "\(model.configuration.version) (\(model.configuration.build))"
             )
+            // Installed from, Beta updates / Updates, Last checked, Check
+            // for updates and Open in TestFlight / on the App Store.
+            AboutUpdateRows(updates: model.updates)
             // Which Facebook app and API a build talks to matters only to
             // testers; App Store builds leave it out.
             if model.configuration.isTestBuild {
@@ -222,6 +249,10 @@ struct SettingsScreen: View {
                     value: model.configuration.baseURL.absoluteString
                 )
             }
+        } header: {
+            Text("About")
+        } footer: {
+            AboutUpdateFootnote(updates: model.updates)
         }
     }
 

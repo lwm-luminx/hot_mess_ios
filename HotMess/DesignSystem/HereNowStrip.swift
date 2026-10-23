@@ -179,23 +179,31 @@ struct HereNowFace: View {
     /// The surface behind the strip, for the rings around the dot and badge.
     var surface: Color = Color(.secondarySystemGroupedBackground)
 
-    private static let avatarSize: CGFloat = 32
+    /// A TinyAvatar, as everywhere in chat.
+    private static let avatarSize: CGFloat = ChatMetrics.avatarSize
     /// The gap between the photo and a friend's ring.
     private static let ringInset: CGFloat = 2
+    /// A friend's `accent` ring, outside the gap.
+    private static let ringWidth: CGFloat = 1.5
 
     var body: some View {
         VStack(spacing: 2) {
-            Avatar(url: person.avatarURL, initials: person.name?.initialsForDisplay, size: Self.avatarSize)
+            Avatar(
+                url: person.avatarURL,
+                initials: person.name?.initialsForDisplay,
+                size: Self.avatarSize,
+                tintsInitials: true
+            )
                 .opacity(person.isHere ? 1 : 0.55)
-                .padding(Self.ringInset)
+                .padding(Self.ringInset + Self.ringWidth)
                 .overlay {
                     if person.isFriend {
-                        Circle().strokeBorder(Color.hotMessAccent, lineWidth: 2)
+                        Circle().strokeBorder(Color.hotMessAccent, lineWidth: Self.ringWidth)
                     }
                 }
                 // Drawn over the ring, which would otherwise cover half of it.
                 .overlay(alignment: .bottomTrailing) {
-                    PresenceDot(state: person.presence, size: 10, ringColor: surface, showsOffline: true)
+                    PresenceDot(state: person.presence, size: Avatar.presenceSize(for: Self.avatarSize), ringColor: surface, showsOffline: true)
                         .offset(x: -1, y: -1)
                 }
                 .overlay(alignment: .topTrailing) {
@@ -209,7 +217,7 @@ struct HereNowFace: View {
                 .font(.hotMess(.caption2, semibold: person.isFriend))
                 .foregroundStyle(person.isFriend ? Color.hotMessAccentInk : Color.secondary)
                 .lineLimit(1)
-                .frame(maxWidth: Self.avatarSize + Self.ringInset * 2 + 16)
+                .frame(maxWidth: Self.avatarSize + (Self.ringInset + Self.ringWidth) * 2 + 16)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(person.accessibilityLabel)
@@ -221,8 +229,9 @@ struct HereNowFace: View {
 struct HereNowPlaceFace: View {
     let place: HereNowPlace
 
-    /// Matches `HereNowFace`'s avatar and ring, so the row lines up.
-    private static let size: CGFloat = 36
+    /// The venue keeps its 28 (`size-avatar-sm`), close to `HereNowFace`'s
+    /// avatar and ring, so the row lines up.
+    private static let size: CGFloat = ChatMetrics.listingAvatarSize
 
     var body: some View {
         VStack(spacing: 2) {

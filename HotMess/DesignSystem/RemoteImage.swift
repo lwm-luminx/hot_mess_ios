@@ -53,6 +53,9 @@ struct Avatar: View {
     /// A place, not a person (a post as the venue): a `radius-md` rounded
     /// square, so places never look like people.
     var isPlace = false
+    /// Initials on a spectrum band chosen from them, as chat draws people
+    /// without a photo, instead of on grey.
+    var tintsInitials = false
 
     var body: some View {
         Group {
@@ -78,10 +81,29 @@ struct Avatar: View {
         .overlay(alignment: .bottomTrailing) {
             if let presence {
                 // The dot's 2pt ring sits 1pt outside the avatar's edge.
-                PresenceDot(state: presence, size: size >= 40 ? 12 : 10, ringColor: presenceRing)
+                PresenceDot(state: presence, size: Self.presenceSize(for: size), ringColor: presenceRing)
                     .offset(x: 1, y: 1)
             }
         }
+    }
+
+    /// 12 on 40 and up, 9 on a 24 TinyAvatar or smaller, 10 between.
+    nonisolated static func presenceSize(for size: CGFloat) -> CGFloat {
+        if size >= 40 { return 12 }
+        return size <= 24 ? 9 : 10
+    }
+
+    /// 10 on a 24 TinyAvatar, 9 on ChatPeek's 20; else in proportion.
+    nonisolated static func initialsSize(for size: CGFloat) -> CGFloat {
+        if size <= 20 { return 9 }
+        if size <= 24 { return 10 }
+        return size * 0.38
+    }
+
+    /// Which spectrum band someone's initials sit on: the same one for the
+    /// same initials on every launch (`hashValue` changes between launches).
+    nonisolated static func spectrumIndex(for initials: String, bands: Int = 6) -> Int {
+        initials.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % bands
     }
 
     private static var placeShape: RoundedRectangle {
@@ -90,13 +112,21 @@ struct Avatar: View {
 
     private var fallback: some View {
         ZStack {
-            Rectangle().fill(.quaternary)
-
             if let initials, !initials.isEmpty {
-                Text(initials)
-                    .font(.hotMess(fixedSize: size * 0.38, semibold: true))
-                    .foregroundStyle(.secondary)
+                if tintsInitials, !isPlace {
+                    let band = Self.spectrumIndex(for: initials)
+                    Rectangle().fill(Color.hotMessSpectrum[band])
+                    Text(initials)
+                        .font(.hotMess(fixedSize: Self.initialsSize(for: size), semibold: true))
+                        .foregroundStyle(Color.hotMessOnSpectrum[band])
+                } else {
+                    Rectangle().fill(.quaternary)
+                    Text(initials)
+                        .font(.hotMess(fixedSize: Self.initialsSize(for: size), semibold: true))
+                        .foregroundStyle(.secondary)
+                }
             } else {
+                Rectangle().fill(.quaternary)
                 Image(systemName: isPlace ? "building.2.fill" : "person.fill")
                     .font(.system(size: size * 0.45))
                     .foregroundStyle(.tertiary)

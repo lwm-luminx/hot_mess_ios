@@ -34,6 +34,9 @@ final class AppModel {
     /// open while any of them runs, which is while the app is in front and
     /// signed in, and closes once they've all ended.
     let cable: AudienceCable
+    /// The update prompts (TestFlight and App Store), from the API's release
+    /// config and StoreKit's install environment. RootView presents them.
+    let updates: AudienceUpdates
 
     var selectedTab: AppTab = .now
 
@@ -99,6 +102,8 @@ final class AppModel {
 
         let api = HotMessAPI(client: APIClient(audienceKit: audienceKit))
         self.api = api
+
+        updates = AudienceUpdates.configure(session: audienceKit, appName: String(localized: "Hot Mess"))
 
         brand = BrandStore(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)

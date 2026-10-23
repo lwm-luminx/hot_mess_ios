@@ -112,7 +112,7 @@ final class PairUpModel {
         case .used: String(localized: "That code was refreshed. Ask them to show it again.")
         case .ended: String(localized: "That pairing has ended.")
         case .own: String(localized: "That's your own code. Scan theirs instead.")
-        case .unreadable: String(localized: "That isn't a Pair me up code. Try scanning again.")
+        case .unreadable: String(localized: "That isn't a Quickie code. Try scanning again.")
         }
     }
 

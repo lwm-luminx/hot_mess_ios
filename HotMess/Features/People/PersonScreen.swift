@@ -64,6 +64,10 @@ struct PersonScreen: View {
                             }
                         }
 
+                        PostsSection(title: String(localized: "Posts"), subject: .person(detail.person.id))
+
+                        PhotosSection(subject: .person(detail.person.id), title: String(localized: "On stage"))
+
                         if !detail.tracks.isEmpty {
                             DetailSection(String(localized: "Tracks")) {
                                 ForEach(detail.tracks) { track in
