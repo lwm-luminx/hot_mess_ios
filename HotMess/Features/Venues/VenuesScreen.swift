@@ -85,7 +85,7 @@ struct VenuesScreen: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                CardSection(card.title ?? model.brand.name, edgeToEdge: true) {
+                CardSection(card.title ?? model.brand.name, grouped: true) {
                     ForEach(venues) { venue in
                         VenueCardLink(venue: venue, nextEvent: viewModel?.nextEvents[venue.id])
                     }
@@ -93,7 +93,7 @@ struct VenuesScreen: View {
             }
         case CardKind.venuesTonight, CardKind.venuesNearby:
             // Only the server sends these, with their own heading.
-            CardSection(card.title, edgeToEdge: true) {
+            CardSection(card.title, grouped: true) {
                 ForEach(ordered(collection.venues, by: card.venueIDs, isFallback: false)) { venue in
                     VenueCardLink(venue: venue, nextEvent: viewModel?.nextEvents[venue.id])
                 }
