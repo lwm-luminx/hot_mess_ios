@@ -72,6 +72,12 @@ final class PairUpModel {
         await perform { try await $0.cancelPairUp(matchID: match.id) }
     }
 
+    /// Agrees to share the meeting in the venue's chat.
+    func share() async {
+        guard let id = state?.match?.id else { return }
+        await perform { try await $0.sharePairUp(matchID: id) }
+    }
+
     func leave() async {
         await perform { try await $0.leavePairUp(venueID: self.venueID) }
     }

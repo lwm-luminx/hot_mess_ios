@@ -44,6 +44,13 @@ enum VenueChatConnection {
         /// the last 30 minutes, latest to leave first, whom the room still
         /// lists, offline; they aren't in `people`.
         case roster(online: Set<UUID>, people: [RoomPerson], friends: [Friend], recent: [RecentRoomPerson])
+        /// How each person on what's on in the room now (the event's people,
+        /// the venue's appearances on now) can be reached, by their person
+        /// (listing) ID, lowercased: in chat if anyone who manages the listing
+        /// is, else by push if anyone is, else offline. The whole list each
+        /// time: with the roster, and whenever it changes. Servers without
+        /// lineup presence never send it.
+        case lineupPresence([String: PresenceState])
         /// Someone's first socket joined the room (`true`) or their last one
         /// left. A join carries their name and avatar when the server sends them.
         case presence(userID: UUID, online: Bool, name: String?, avatarURL: URL?)
@@ -51,6 +58,11 @@ enum VenueChatConnection {
         /// reaches them: the server only says so about the user's friends, and
         /// to admins. Drawn as a yellow dot.
         case reachable(userID: UUID)
+        /// The tribes the user and someone in the room (or arriving) both
+        /// picked, by user ID, for the "You're both" mark: from the roster on
+        /// joining and from each arrival. Only sent when the subscription
+        /// asked (`sharedTribes`); an empty list means none.
+        case sharedTribes([UUID: [SharedTribe]])
         /// Someone's last connection left, and the room keeps listing them
         /// until `until`, offline, or reachable by push (`.push`) for the
         /// user's friends and admins. Sent instead of `presence` or
@@ -77,13 +89,34 @@ enum VenueChatConnection {
 
     static let operationName = "ChatRoom"
 
+    /// Whether the subscription asks for lineup presence (`ChatRoster.lineup`
+    /// and `ChatLineupChanged`). The API validates every document against
+    /// its schema, so asking a server that doesn't have them yet would
+    /// refuse the whole subscription, and the room with it. Off until the
+    /// API ships them; the events decode either way, so turning it on is the
+    /// only change.
+    static let requestsLineupPresence = false
+
     /// The room's subscription, aliased to `room` whichever field it is, with
     /// its fields aliased to the keys the app's models decode. A watcher
     /// (`watch`) follows the room without being in it: the server records no
     /// presence, so nobody sees them as in chat.
-    static func subscriptionDocument(for room: ChatRoom, watch: Bool = false) -> String {
-        let line = HotMessAPI.Documents.roomMessageFields
+    ///
+    /// With `sharedTribes`, every person and line also carries the tribes the
+    /// user shares with them. Only ask an API that has tribes
+    /// (`TribeStore.supportsTribes()`): one without refuses the whole room.
+    static func subscriptionDocument(
+        for room: ChatRoom,
+        watch: Bool = false,
+        lineupPresence: Bool = VenueChatConnection.requestsLineupPresence,
+        sharedTribes: Bool = false
+    ) -> String {
+        let tribes = sharedTribes ? " shared_tribes: sharedTribes { \(SharedTribe.fields) }" : ""
+        let line = HotMessAPI.Documents.roomMessageFields + tribes
         let watching = watch ? ", watch: true" : ""
+        let lineupFields = "lineup { person_id: personId presence }"
+        let rosterLineup = lineupPresence ? "\n        \(lineupFields)" : ""
+        let lineupChanged = lineupPresence ? "\n    ... on ChatLineupChanged { \(lineupFields) }" : ""
         return """
         subscription ChatRoom($id: ID!) {
           room: \(room.channelName)(\(room.subscriptionKey): $id\(watching)) {
@@ -91,9 +124,9 @@ enum VenueChatConnection {
             ... on ChatJoined {
               out_of_range: outOfRange
               roster {
-                people { user_id: userId name avatar_url: avatarUrl friend }
+                people { user_id: userId name avatar_url: avatarUrl friend\(tribes) }
                 friends { user_id: userId name }
-                recent { user_id: userId name avatar_url: avatarUrl friend presence last_seen_at: lastSeenAt recent_until: recentUntil }
+                recent { user_id: userId name avatar_url: avatarUrl friend presence last_seen_at: lastSeenAt recent_until: recentUntil\(tribes) }\(rosterLineup)
               }
               history { ...Posted }
               pinnedMessage { ...Posted }
@@ -104,9 +137,9 @@ enum VenueChatConnection {
             ... on ChatMessageRemoved { message_id: messageId }
             ... on ChatPinChanged { message_id: messageId is_pinned: pinned announcement { ...Line } }
             ... on ChatRoomCleared { cleared_at: clearedAt expired }
-            ... on ChatPresenceChanged { user_id: userId presence name avatar_url: avatarUrl recent_until: recentUntil }
+            ... on ChatPresenceChanged { user_id: userId presence name avatar_url: avatarUrl recent_until: recentUntil\(tribes) }
             ... on ChatRangeChanged { out_of_range: outOfRange }
-            ... on ChatLeft { reason }
+            ... on ChatLeft { reason }\(lineupChanged)
           }
         }
         fragment Posted on ChatMessagePosted { sender_presence: senderPresence message { ...Line } }
@@ -120,10 +153,15 @@ enum VenueChatConnection {
     }
 
     /// The room's operation on the cable.
-    static func subscribe(to room: ChatRoom, on cable: AudienceCable, audienceID: String, watch: Bool = false) async
-        -> AsyncStream<AudienceCable.Event> {
+    static func subscribe(
+        to room: ChatRoom,
+        on cable: AudienceCable,
+        audienceID: String,
+        watch: Bool = false,
+        sharedTribes: Bool = false
+    ) async -> AsyncStream<AudienceCable.Event> {
         await cable.subscribe(
-            query: subscriptionDocument(for: room, watch: watch),
+            query: subscriptionDocument(for: room, watch: watch, sharedTribes: sharedTribes),
             variables: variables(for: room),
             operationName: operationName,
             audienceID: audienceID
@@ -191,7 +229,7 @@ enum VenueChatConnection {
         enum CodingKeys: String, CodingKey {
             case typename = "__typename"
             case outOfRange = "out_of_range"
-            case roster, history, pinnedMessage, message, announcement, presence, name, reason
+            case roster, history, pinnedMessage, message, announcement, presence, name, reason, lineup
             case isPinned = "is_pinned"
             case messageID = "message_id"
             case clearedAt = "cleared_at"
@@ -200,9 +238,10 @@ enum VenueChatConnection {
             case userID = "user_id"
             case avatarURL = "avatar_url"
             case recentUntil = "recent_until"
+            case sharedTribes = "shared_tribes"
         }
 
-        private enum RosterKeys: String, CodingKey { case people, friends, recent }
+        private enum RosterKeys: String, CodingKey { case people, friends, recent, lineup }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -225,12 +264,25 @@ enum VenueChatConnection {
                 let expiresBefore = ((try? container.decodeIfPresent(String.self, forKey: .expiresBefore)) ?? nil)
                     .flatMap(HotMessDecoding.date(from:))
 
-                events = [
+                var joined: [Event] = [
                     .connected,
                     .range(outOfRange: outOfRange),
                     .roster(online: Set(people.map(\.id)), people: people, friends: friends, recent: recent),
                     .history(messages: history, pinned: pinned, expiresBefore: expiresBefore),
                 ]
+                // Only when the subscription asked for them.
+                let tribes = (people + recent.map(\.person)).compactMap { person in
+                    person.sharedTribes.map { (person.id, $0) }
+                }
+                if !tribes.isEmpty {
+                    joined.append(.sharedTribes(Dictionary(tribes, uniquingKeysWith: { latest, _ in latest })))
+                }
+                // Only from a server that has lineup presence: without it the
+                // lineup draws no dots, rather than everyone offline.
+                if let lineup = (try? roster?.decodeIfPresent([Lenient<LineupPresenceWire>].self, forKey: .lineup)) ?? nil {
+                    joined.append(.lineupPresence(LineupPresenceWire.byPerson(lineup)))
+                }
+                events = joined
             case "ChatMessagePosted":
                 events = (try? Posted(from: decoder).message).map { [.received($0)] } ?? []
             case "ChatMessageUpdated":
@@ -259,29 +311,38 @@ enum VenueChatConnection {
                 }
                 let recentUntil = ((try? container.decodeIfPresent(String.self, forKey: .recentUntil)) ?? nil)
                     .flatMap(HotMessDecoding.date(from:))
+                let tribes = Self.sharedTribes(in: container).map { [Event.sharedTribes([userID: $0])] } ?? []
                 if presence != "ONLINE", let recentUntil {
-                    events = [.recent(userID: userID, presence: presence == "PUSH" ? .push : .offline, until: recentUntil)]
+                    events = [.recent(userID: userID, presence: presence == "PUSH" ? .push : .offline, until: recentUntil)] + tribes
                 } else if presence == "PUSH" {
-                    events = [.reachable(userID: userID)]
+                    events = [.reachable(userID: userID)] + tribes
                 } else {
                     events = [.presence(
                         userID: userID,
                         online: presence == "ONLINE",
                         name: ((try? container.decodeIfPresent(String.self, forKey: .name)) ?? nil)?.nonBlank,
                         avatarURL: ((try? container.decodeIfPresent(String.self, forKey: .avatarURL)) ?? nil)?.nonBlankURL
-                    )]
+                    )] + tribes
                 }
             case "ChatRangeChanged":
                 let outOfRange = ((try? container.decodeIfPresent(Bool.self, forKey: .outOfRange)) ?? nil) ?? false
                 let expiresBefore = ((try? container.decodeIfPresent(String.self, forKey: .expiresBefore)) ?? nil)
                     .flatMap(HotMessDecoding.date(from:))
                 events = [.range(outOfRange: outOfRange)]
+            case "ChatLineupChanged":
+                let lineup = ((try? container.decodeIfPresent([Lenient<LineupPresenceWire>].self, forKey: .lineup)) ?? nil) ?? []
+                events = [.lineupPresence(LineupPresenceWire.byPerson(lineup))]
             case "ChatLeft":
                 // AWAY, BANNED or REMOVED: out of the room either way.
                 events = [.notPresent]
             default:
                 events = []
             }
+        }
+
+        private static func sharedTribes(in container: KeyedDecodingContainer<CodingKeys>) -> [SharedTribe]? {
+            ((try? container.decodeIfPresent([Lenient<SharedTribe>].self, forKey: .sharedTribes)) ?? nil)?
+                .compactMap(\.value)
         }
 
         private static func id(in container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> UUID? {
@@ -322,6 +383,7 @@ enum VenueChatConnection {
             case name, friend
             case userID = "user_id"
             case avatarURL = "avatar_url"
+            case sharedTribes = "shared_tribes"
         }
 
         init(from decoder: any Decoder) throws {
@@ -334,7 +396,9 @@ enum VenueChatConnection {
                 id: id,
                 name: (try? container.decodeIfPresent(String.self, forKey: .name)).flatMap({ $0.nonBlank }),
                 avatarURL: (try? container.decodeIfPresent(String.self, forKey: .avatarURL)).flatMap({ $0.nonBlankURL }),
-                isFriend: (try? container.decodeIfPresent(Bool.self, forKey: .friend)) ?? false
+                isFriend: (try? container.decodeIfPresent(Bool.self, forKey: .friend)) ?? false,
+                sharedTribes: (try? container.decodeIfPresent([Lenient<SharedTribe>].self, forKey: .sharedTribes))?
+                    .map { $0.compactMap(\.value) }
             )
         }
     }
@@ -350,6 +414,7 @@ enum VenueChatConnection {
             case avatarURL = "avatar_url"
             case lastSeenAt = "last_seen_at"
             case recentUntil = "recent_until"
+            case sharedTribes = "shared_tribes"
         }
 
         init(from decoder: any Decoder) throws {
@@ -368,12 +433,46 @@ enum VenueChatConnection {
                     id: id,
                     name: (try? container.decodeIfPresent(String.self, forKey: .name)).flatMap({ $0.nonBlank }),
                     avatarURL: (try? container.decodeIfPresent(String.self, forKey: .avatarURL)).flatMap({ $0.nonBlankURL }),
-                    isFriend: (try? container.decodeIfPresent(Bool.self, forKey: .friend)) ?? false
+                    isFriend: (try? container.decodeIfPresent(Bool.self, forKey: .friend)) ?? false,
+                    sharedTribes: (try? container.decodeIfPresent([Lenient<SharedTribe>].self, forKey: .sharedTribes))?
+                        .map { $0.compactMap(\.value) }
                 ),
                 presence: presence == "PUSH" ? .push : .offline,
                 lastSeenAt: (try? container.decodeIfPresent(String.self, forKey: .lastSeenAt))
                     .flatMap(HotMessDecoding.date(from:)),
                 recentUntil: until
+            )
+        }
+    }
+
+    /// One of the lineup's presences (`ChatLineupPresence`): a person
+    /// (listing) and how the people who manage it can be reached.
+    private struct LineupPresenceWire: Decodable {
+        let personID: String?
+        let presence: PresenceState?
+
+        enum CodingKeys: String, CodingKey {
+            case presence
+            case personID = "person_id"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            personID = ((try? container.decodeIfPresent(String.self, forKey: .personID)) ?? nil)?.nonBlank
+            // Offline is said here, not left out: "Not in chat yet".
+            presence = ((try? container.decodeIfPresent(String.self, forKey: .presence)) ?? nil)
+                .flatMap { PresenceState(wire: $0) ?? ($0.uppercased() == "OFFLINE" ? .offline : nil) }
+        }
+
+        /// Each person's presence, by their ID lowercased; one bad entry drops
+        /// only itself.
+        static func byPerson(_ entries: [Lenient<LineupPresenceWire>]) -> [String: PresenceState] {
+            Dictionary(
+                entries.compactMap { entry in
+                    guard let id = entry.value?.personID, let presence = entry.value?.presence else { return nil }
+                    return (id.lowercased(), presence)
+                },
+                uniquingKeysWith: { _, latest in latest }
             )
         }
     }
@@ -409,6 +508,8 @@ struct RoomPerson: Hashable, Sendable, Identifiable {
     var avatarURL: URL?
     /// The server says they're one of the user's friends.
     var isFriend = false
+    /// The tribes the user and they both picked; `nil` when the room didn't say.
+    var sharedTribes: [SharedTribe]? = nil
 }
 
 /// Someone who left a chat room in the last 30 minutes, or hosts an event on

@@ -39,7 +39,8 @@ final class BrowseUITests: XCTestCase {
         try skipWithoutEvents()
         guard openFirstRow(as: "Event") else { return }
 
-        let choices = ["Going", "Interested", "Not going"]
+        // Going and Interested are on the hero; Not going is in the options menu.
+        let choices = ["Going", "Interested"]
         let original = choices.first { app.buttons[$0].isSelected }
         for choice in choices {
             let button = app.buttons[choice]
@@ -56,6 +57,15 @@ final class BrowseUITests: XCTestCase {
                 return
             }
             XCTAssertTrue(button.isSelected, "\(choice) didn't stay selected")
+        }
+
+        let menu = app.buttons["event.optionsMenu"]
+        if menu.waitForExistence(timeout: 5) {
+            menu.tap()
+            app.buttons["event.notGoing"].tap()
+            sleep(2)
+            XCTAssertFalse(app.alerts["Couldn't Save RSVP"].exists, "RSVP Not going failed")
+            XCTAssertFalse(choices.contains { app.buttons[$0].isSelected }, "Not going left another RSVP selected")
         }
         snapshot("RSVP")
         if let original { app.buttons[original].tap() }

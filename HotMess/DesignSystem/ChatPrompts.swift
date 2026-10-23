@@ -70,8 +70,12 @@ struct PromptBar: View {
     var answers = 0
     var isCollapsed = false
     var now: Date = .now
+    /// Outlined for a moment: an answer's label just brought the reader here.
+    var isHighlighted = false
     /// "Answer". Without it there's no button.
     var onAnswer: (() -> Void)? = nil
+    /// Tapping the folded bar opens it. Without it the folded bar is only text.
+    var onExpand: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -87,6 +91,9 @@ struct PromptBar: View {
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(.rect(cornerRadius: HotMessRadius.lg, style: .continuous))
+        .overlay {
+            PromptHighlight(isOn: isHighlighted)
+        }
         .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.prompt")
@@ -105,13 +112,10 @@ struct PromptBar: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     PromptOverline(text: prompt.overline)
-                    Text(prompt.text)
-                        .font(.hotMess(.subheadline, semibold: true))
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    ExpandablePromptText(text: prompt.text, font: .hotMess(.subheadline, semibold: true))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
 
             HStack(spacing: 8) {
@@ -136,16 +140,21 @@ struct PromptBar: View {
         .padding(.bottom, 6)
     }
 
-    /// "PROMPT", the prompt on one line, "Answer".
+    /// "PROMPT", the prompt on one line, "Answer". Tapping the line opens the bar.
     private var collapsed: some View {
         HStack(spacing: 8) {
-            PromptOverline(text: prompt.label)
-            Text(prompt.text)
-                .font(.hotMess(.footnote, semibold: true))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if let onExpand {
+                Button(action: onExpand) {
+                    collapsedLine
+                        .frame(minHeight: 36)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(String(localized: "Shows the whole prompt"))
+                .accessibilityIdentifier("chat.prompt.expand")
+            } else {
+                collapsedLine
+            }
 
             if let onAnswer {
                 QuietPromptButton(title: String(localized: "Answer"), action: onAnswer)
@@ -155,6 +164,18 @@ struct PromptBar: View {
         .padding(.trailing, 6)
         .padding(.vertical, 4)
         .frame(minHeight: 36)
+    }
+
+    private var collapsedLine: some View {
+        HStack(spacing: 8) {
+            PromptOverline(text: prompt.label)
+            Text(prompt.text)
+                .font(.hotMess(.footnote, semibold: true))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
@@ -206,11 +227,7 @@ private struct TriviaContent: View {
                 }
             }
 
-            Text(prompt.text)
-                .font(.hotMess(.headline, semibold: true))
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
+            ExpandablePromptText(text: prompt.text, font: .hotMess(.headline, semibold: true), isHeader: true)
 
             TriviaAnswer(prompt: prompt, now: now, onAnswer: onAnswer)
         }
@@ -291,6 +308,8 @@ struct PromptCard: View {
     var now: Date = .now
     var onAnswer: (() -> Void)? = nil
     var onDismiss: (() -> Void)? = nil
+    /// Outlined for a moment: an answer's label just brought the reader here.
+    var isHighlighted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -339,6 +358,9 @@ struct PromptCard: View {
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(.rect(cornerRadius: HotMessRadius.lg, style: .continuous))
+        .overlay {
+            PromptHighlight(isOn: isHighlighted)
+        }
         .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.promptCard")
@@ -411,6 +433,81 @@ private struct PromptOverline: View {
             .textCase(.uppercase)
             .foregroundStyle(Color.hotMessAccentInk)
             .lineLimit(1)
+    }
+}
+
+/// The accent outline a prompt gets for a moment when an answer's label
+/// brings the reader to it.
+private struct PromptHighlight: View {
+    let isOn: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: HotMessRadius.lg, style: .continuous)
+            .strokeBorder(Color.hotMessAccent, lineWidth: 2)
+            .opacity(isOn ? 1 : 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// A prompt's text, held to three lines with a quiet "Show more" when it
+/// runs longer, and "Show less" once open.
+private struct ExpandablePromptText: View {
+    let text: String
+    let font: Font
+    var isHeader = false
+
+    static let lineLimit = 3
+
+    @State private var isExpanded = false
+    /// The text's height at three lines, and in full: it's truncated when
+    /// the full height is taller.
+    @State private var clampedHeight: CGFloat = 0
+    @State private var fullHeight: CGFloat = 0
+
+    private var isTruncated: Bool { fullHeight > clampedHeight + 1 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(text)
+                .font(font)
+                .foregroundStyle(.primary)
+                .lineLimit(isExpanded ? nil : Self.lineLimit)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    if !isExpanded { clampedHeight = height }
+                }
+                // The full text, unseen, to tell whether three lines cut it short.
+                .background(alignment: .topLeading) {
+                    Text(text)
+                        .font(font)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                            fullHeight = height
+                        }
+                }
+                .accessibilityAddTraits(isHeader ? .isHeader : [])
+
+            if isExpanded || isTruncated {
+                Button {
+                    withAnimation(HotMessMotion.quick) { isExpanded.toggle() }
+                } label: {
+                    Text(isExpanded ? String(localized: "Show less") : String(localized: "Show more"))
+                        .font(.hotMess(.footnote, semibold: true))
+                        .foregroundStyle(Color.hotMessAccentInk)
+                        .frame(minHeight: 28)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(isExpanded
+                    ? String(localized: "Shows the prompt in three lines")
+                    : String(localized: "Shows the whole prompt"))
+            }
+        }
     }
 }
 

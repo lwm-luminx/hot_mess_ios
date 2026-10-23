@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKitUI
 import SwiftUI
 import UIKit
 
@@ -45,6 +46,35 @@ struct VenueChatScreen: View {
     /// PromptCards the user put away with "Not now", by message ID: hidden
     /// for them only.
     @State private var dismissedPrompts: Set<String> = []
+    /// Whose profile sheet is open, from their avatar or name in the thread
+    /// or their face in the Here now strip.
+    @State private var profileTarget: ChatProfile?
+    /// What the profile sheet asked for, done once it has gone: nothing
+    /// else can present over it.
+    @State private var afterProfile: ProfileFollowUp?
+    /// Someone picked in the "In this room" sheet, whose profile opens once
+    /// that sheet has gone.
+    @State private var pendingProfile: ChatProfile?
+    @State private var isPinging = false
+    /// People muted in this room, on this device only (`ChatMutes`).
+    @State private var mutedIDs: Set<UUID> = []
+    /// Friend requests sent from profile sheets while the room is open. The
+    /// room's roster doesn't say who has asked whom.
+    @State private var friendRequests: [UUID: FriendRequestStatus] = [:]
+    @State private var sendingFriendRequestTo: UUID?
+    @State private var friendRequestError: String?
+
+    private enum ProfileFollowUp {
+        case ping
+        case report(ChatProfile)
+        case block(ChatProfile)
+    }
+    /// Tonight's lineup at the room's venue, for its faces in the Here now
+    /// strip and the "In this room" sheet. `nil` in a locale's room.
+    @State private var lineupModel: VenueLineupModel?
+    @State private var isShowingRoom = false
+    /// The venue's group trivia, for the round card above the composer.
+    @State private var trivia: VenueTriviaModel?
 
     var body: some View {
         Group {
@@ -63,6 +93,7 @@ struct VenueChatScreen: View {
         .navigationTitle(room.name)
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            mutedIDs = ChatMutes(room: room).load()
             await model.safety.load()
             isCheckingTerms = false
         }
@@ -83,9 +114,47 @@ struct VenueChatScreen: View {
             guard !Task.isCancelled else { return }
             await current.run()
         }
+        // The venue's group trivia, while the room is open.
+        .task(id: room.kind == .venue && model.safety.hasAcceptedTerms && scenePhase == .active) {
+            guard room.kind == .venue, model.safety.hasAcceptedTerms, scenePhase == .active else { return }
+            let current = trivia ?? VenueTriviaModel(api: model.api, venueID: room.id)
+            trivia = current
+            await current.run()
+        }
+        .alert(
+            String(localized: "Your vote didn't count"),
+            isPresented: Binding(
+                get: { trivia?.voteError != nil },
+                set: { if !$0 { trivia?.voteError = nil } }
+            )
+        ) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(trivia?.voteError ?? "")
+        }
         .onDisappear {
             let viewModel = self.viewModel
             Task { await viewModel?.stop() }
+        }
+        .task(id: room.venueID) {
+            lineupModel = VenueLineupModel.reusing(lineupModel, for: room.venueID, api: model.api)
+        }
+        .keepsLineupFresh(lineupModel)
+        .sheet(isPresented: $isShowingRoom, onDismiss: openPendingProfile) {
+            if let viewModel {
+                InThisRoomSheet(
+                    subtitle: roomSubtitle,
+                    place: room.place,
+                    lineup: lineupFaces(viewModel),
+                    people: hereNow(viewModel),
+                    onSelectLineup: openPage,
+                    onSelectPerson: { person in
+                        // Opened once the room sheet has gone: one sheet at a time.
+                        pendingProfile = ChatProfile(id: person.id, name: person.name, avatarURL: person.avatarURL)
+                    }
+                )
+                .environment(model)
+            }
         }
         .sheet(item: $reportTarget, onDismiss: thankIfReported) { message in
             ReportSheet(
@@ -126,6 +195,15 @@ struct VenueChatScreen: View {
             Text("Our moderation team will review it within 24 hours.")
         }
         .contentReporting(report: $personReport, block: $personBlock)
+        .sheet(item: $profileTarget, onDismiss: runProfileFollowUp) { profile in
+            profileSheet(profile)
+        }
+        .sheet(isPresented: $isPinging) {
+            // There's no ping to one person: it tells the user's friends,
+            // with this room's venue picked.
+            PingSheet(place: room.kind == .venue ? .venue(room.id) : nil)
+                .environment(model)
+        }
         .alert(
             String(localized: "Message Not Sent"),
             isPresented: Binding(
@@ -185,16 +263,18 @@ struct VenueChatScreen: View {
                 if let kind = bannerKind(viewModel) {
                     RoomBanner(kind: kind, roomName: room.name, isLocale: room.kind == .locale)
                 }
-                // Who is here: the venue, which is always in its own room,
-                // then everyone else, friends first. Above the pinned
-                // announcement, which the thread draws at its top.
-                let blocked = model.safety.blockedIDs
-                let hereNow = viewModel.hereNow.filter { !blocked.contains($0.id) }
-                let place = room.kind == .venue ? HereNowPlace(name: room.name, photoURL: room.photoURL) : nil
-                if place != nil || !hereNow.isEmpty {
+                // Who is here: the venue, which is always in its own room (an
+                // event's too), tonight's lineup, then everyone else, friends
+                // first. Above the pinned announcement, which the thread
+                // draws at its top.
+                let people = hereNow(viewModel)
+                let place = room.place
+                let lineup = lineupFaces(viewModel)
+                if place != nil || !lineup.isEmpty || !people.isEmpty {
                     HereNowStrip(
                         place: place,
-                        people: hereNow,
+                        lineup: lineup,
+                        people: people,
                         onReport: { person in
                             personReport = ReportSubject(
                                 target: .person,
@@ -204,7 +284,12 @@ struct VenueChatScreen: View {
                         },
                         onBlock: { person in
                             personBlock = BlockedUser(id: person.id, name: person.name, avatarURL: person.avatarURL)
-                        }
+                        },
+                        onSelect: { person in
+                            profileTarget = ChatProfile(id: person.id, name: person.name, avatarURL: person.avatarURL)
+                        },
+                        onSeeEveryone: { isShowingRoom = true },
+                        onSelectLineup: openPage
                     )
                 }
                 // Each minute, so a special leaves the room when it ends,
@@ -233,8 +318,22 @@ struct VenueChatScreen: View {
                                 viewModel.answering = nil
                             }
                         },
-                        clearMark: viewModel.clearMark
+                        clearMark: viewModel.clearMark,
+                        onOpenProfile: { openProfile($0) }
                     )
+                }
+                // A venue post may be a trivia round going up or its reveal.
+                .onChange(of: viewModel.messages.last?.id) {
+                    Task { await trivia?.refresh() }
+                }
+                if let trivia, let round = trivia.round {
+                    TriviaRoundCard(
+                        round: round,
+                        onVote: viewModel.connectionState == .notPresent ? nil : { await trivia.vote($0) }
+                    )
+                    .audiencePreset(model.brand.preset)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
                 }
                 composer(viewModel)
             } else {
@@ -242,6 +341,136 @@ struct VenueChatScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    // MARK: - Profile sheet
+
+    private func profileSheet(_ profile: ChatProfile) -> some View {
+        ChatProfileSheet(
+            profile: profile,
+            isOnline: viewModel?.onlineUserIDs.contains(profile.id) == true,
+            friendState: friendState(of: profile.id),
+            isSendingFriendRequest: sendingFriendRequestTo == profile.id,
+            isMuted: mutedIDs.contains(profile.id),
+            onPing: { closeProfile(then: .ping) },
+            onAddFriend: { Task { await sendFriendRequest(to: profile) } },
+            onToggleMute: { toggleMute(profile) },
+            onReport: { closeProfile(then: .report(profile)) },
+            onBlock: { closeProfile(then: .block(profile)) }
+        )
+        // Over the sheet, which the screen's own alerts can't show above.
+        .alert(
+            String(localized: "Couldn't send a friend request"),
+            isPresented: isPresenting($friendRequestError),
+            presenting: friendRequestError
+        ) { _ in
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
+    }
+
+    /// Someone's avatar or name in the thread: people posting as themselves
+    /// only (`opensProfile`), never the venue, a listing or a prompt.
+    private func openProfile(_ message: ChatThreadMessage) {
+        guard message.opensProfile, let id = UUID(uuidString: message.authorID) else { return }
+        profileTarget = ChatProfile(id: id, name: message.authorName, avatarURL: message.avatarURL, message: message)
+    }
+
+    private func friendState(of id: UUID) -> ChatFriendState {
+        if model.friends.byID[id] != nil || friendRequests[id] == .accepted { return .friends }
+        return friendRequests[id] == nil ? .notFriends : .requested
+    }
+
+    private func openPendingProfile() {
+        guard let profile = pendingProfile else { return }
+        pendingProfile = nil
+        profileTarget = profile
+    }
+
+    private func closeProfile(then followUp: ProfileFollowUp) {
+        afterProfile = followUp
+        profileTarget = nil
+    }
+
+    /// Ping, Report or Block, once the profile sheet has gone. Report and
+    /// Block are the room's own: on the message the sheet opened from, or
+    /// on the person from the Here now strip.
+    private func runProfileFollowUp() {
+        guard let followUp = afterProfile else { return }
+        afterProfile = nil
+
+        switch followUp {
+        case .ping:
+            isPinging = true
+        case let .report(profile):
+            if let message = profile.message {
+                reportTarget = message
+            } else {
+                personReport = ReportSubject(
+                    target: .person,
+                    targetID: profile.id.uuidString.lowercased(),
+                    sender: BlockedUser(id: profile.id, name: profile.name, avatarURL: profile.avatarURL)
+                )
+            }
+        case let .block(profile):
+            if let message = profile.message {
+                blockTarget = message
+            } else {
+                personBlock = BlockedUser(id: profile.id, name: profile.name, avatarURL: profile.avatarURL)
+            }
+        }
+    }
+
+    /// "Mute in this chat": hides their messages in this room, on this
+    /// device. Nobody else is told.
+    private func toggleMute(_ profile: ChatProfile) {
+        let muted = !mutedIDs.contains(profile.id)
+        mutedIDs = ChatMutes(room: room).set(profile.id, muted: muted)
+    }
+
+    private func sendFriendRequest(to profile: ChatProfile) async {
+        guard sendingFriendRequestTo == nil else { return }
+        sendingFriendRequestTo = profile.id
+        defer { sendingFriendRequestTo = nil }
+
+        do {
+            friendRequests[profile.id] = try await model.api.sendFriendRequest(to: profile.id)
+        } catch APIError.notFound {
+            // The API only connects people contact matching found.
+            friendRequestError = String(localized: "You can add someone as a friend when you each have the other's number saved.")
+        } catch {
+            friendRequestError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    // MARK: - Who's here
+
+    /// Everyone in the room but people the user blocked, as the strip
+    /// orders them.
+    private func hereNow(_ viewModel: VenueChatViewModel) -> [HereNowPerson] {
+        let blocked = model.safety.blockedIDs
+        return viewModel.hereNow.filter { !blocked.contains($0.id) }
+    }
+
+    /// Tonight's lineup at the venue, without its karaoke singers, with
+    /// whether each act is in chat when the room says.
+    private func lineupFaces(_ viewModel: VenueChatViewModel) -> [HereNowLineupFace] {
+        guard let lineup = lineupModel?.lineup else { return [] }
+        return HereNowLineupFace.faces(for: lineup, presence: viewModel.lineupPresence)
+    }
+
+    /// "Drag Bingo · The Wildrose" at an event, else the room's name.
+    private var roomSubtitle: String {
+        guard let venueName = room.venueName, let eventName = room.eventName else { return room.name }
+        return "\(eventName) · \(venueName)"
+    }
+
+    /// An act's page, from the strip or the sheet.
+    private func openPage(_ face: HereNowLineupFace) {
+        guard let id = face.personID else { return }
+        isShowingRoom = false
+        model.push(.person(id))
     }
 
     // MARK: - Reporting and blocking
@@ -359,25 +588,35 @@ struct VenueChatScreen: View {
     /// The room's messages, then the reader's own lines still on their way.
     /// Friends show by their full name, everyone in the room now with a green
     /// dot, and friends a notification reaches with a yellow one. Specials that
-    /// have ended, and people the user blocked, are left out, and so are
+    /// have ended, and people the user blocked or muted here, are left out, and so are
     /// rotating prompts, which show under the title, and PromptCards the
     /// user said "Not now" to.
     private func threadMessages(_ viewModel: VenueChatViewModel, at date: Date) -> [ChatThreadMessage] {
         let friends = model.friends.byID
         let blocked = model.safety.blockedIDs
         let promptKinds = viewModel.promptKinds
+        let muted = mutedIDs
         let sent = viewModel.messages
             .filter { $0.isShowing(at: date) }
             .filter { $0.isFromListing || !blocked.contains($0.userID) }
+            // Muted in this room: their own lines, not their posts as a listing.
+            .filter { $0.isFromListing || !muted.contains($0.userID) }
             .filter { !$0.isPinnedPrompt && !dismissedPrompts.contains($0.id.uuidString) }
+            // The trivia round being shown has its card above the composer.
+            .filter { $0.id.uuidString.lowercased() != trivia?.round?.messageID?.lowercased() }
             .map { message in
-                message.threadMessage(
+                var line = message.threadMessage(
                     currentUserID: viewModel.userID,
                     friends: friends,
                     online: viewModel.onlineUserIDs,
                     reachable: viewModel.reachableUserIDs,
                     promptKinds: promptKinds
                 )
+                // A post as the venue or a listing says nothing about the person.
+                if !message.isFromListing {
+                    line.sharedTribes = viewModel.sharedTribes(with: message.userID)
+                }
+                return line
             }
 
         let pending = viewModel.pending.map { message in
@@ -447,7 +686,8 @@ struct VenueChatScreen: View {
             cable: model.cable,
             friends: model.friends,
             api: model.api,
-            reportPresence: { [location = model.location] in await location.reportCurrentPosition() }
+            reportPresence: { [location = model.location] in await location.reportCurrentPosition() },
+            supportsTribes: { [tribes = model.tribes] in await tribes.supportsTribes() }
         )
     }
 }

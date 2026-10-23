@@ -29,10 +29,12 @@ struct SettingsScreen: View {
         List {
             profileSection
             chatPhotoSection
+            tribesSection
             facebookSection
             coverSection
             locationSection
             notificationsSection
+            helpSection
             privacySection
             feedbackSection
             aboutSection
@@ -43,6 +45,7 @@ struct SettingsScreen: View {
         .navigationTitle(String(localized: "Me"))
         .task { await model.session.refreshUser() }
         .task { await model.safety.load() }
+        .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
         .confirmationDialog(
             String(localized: "Sign out of Hot Mess?"),
@@ -122,6 +125,29 @@ struct SettingsScreen: View {
         }
     }
 
+    /// "Your tribes", for someone signed in, where the API has tribes.
+    @ViewBuilder
+    private var tribesSection: some View {
+        if model.session.isSignedIn, model.tribes.isSupported != false {
+            Section {
+                NavigationLink {
+                    TribePickerScreen()
+                } label: {
+                    LabeledContent {
+                        if let choices = model.tribes.choices, !choices.picked.isEmpty {
+                            Text("\(choices.picked.count)")
+                        }
+                    } label: {
+                        Label(String(localized: "Your tribes"), systemImage: "person.2.circle")
+                    }
+                }
+                .accessibilityIdentifier("me.tribes")
+            } footer: {
+                Text("Only someone in a venue chat who picked the same one sees it.")
+            }
+        }
+    }
+
     /// For an account that signed in with Apple and hasn't connected Facebook.
     @ViewBuilder
     private var facebookSection: some View {
@@ -185,6 +211,32 @@ struct SettingsScreen: View {
         }
     }
 
+    /// "Need support?" is here whether or not the user is out; the venue's
+    /// Get help is only on the venue they're at.
+    private var helpSection: some View {
+        Section(String(localized: "Help and Safety")) {
+            NavigationLink {
+                SupportScreen()
+            } label: {
+                Label(String(localized: "Need Support?"), systemImage: "heart.text.square")
+            }
+            .accessibilityIdentifier("me.support")
+
+            NavigationLink {
+                GettingHelpScreen()
+            } label: {
+                Label(String(localized: "Getting Help at a Venue"), systemImage: "shield.lefthalf.filled")
+            }
+
+            NavigationLink {
+                YourSafetyAlertsScreen()
+            } label: {
+                Label(String(localized: "Your Safety Alerts"), systemImage: "bell.badge")
+            }
+            .accessibilityIdentifier("me.safetyAlerts")
+        }
+    }
+
     private var privacySection: some View {
         Section(String(localized: "Privacy & Safety")) {
             NavigationLink {
@@ -193,6 +245,14 @@ struct SettingsScreen: View {
                 Label(String(localized: "Blocked People"), systemImage: "hand.raised")
             }
             .accessibilityIdentifier("me.blocked")
+
+            // Promoted cards the viewer turned off: kept on their devices, never sent.
+            NavigationLink {
+                CardsYouSeeScreen()
+            } label: {
+                Label(String(localized: "Cards You See"), systemImage: "rectangle.stack")
+            }
+            .accessibilityIdentifier("me.cardsYouSee")
 
             Link(destination: LegalLinks.privacy) {
                 Label(String(localized: "Privacy Policy"), systemImage: "hand.raised.square")

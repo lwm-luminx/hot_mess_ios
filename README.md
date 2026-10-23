@@ -20,7 +20,7 @@ Dependencies resolve through Swift Package Manager on first open:
 | --- | --- |
 | [facebook-ios-sdk](https://github.com/facebook/facebook-ios-sdk) | Login |
 | [Kingfisher](https://github.com/onevcat/Kingfisher) | Remote image loading and caching |
-| [AudienceKit SDK](https://github.com/lwm-luminx/audience-kit-sdk) 0.21.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
+| [AudienceKit SDK](https://github.com/lwm-luminx/audience-kit-sdk) 0.29.0 | Sign-in, session, GraphQL and branding against the AudienceKit API |
 | [Stripe](https://github.com/stripe/stripe-ios-spm) (`StripePaymentSheet`) | Paying cover at Stripe venues |
 | [Square In-App Payments](https://github.com/square/in-app-payments-ios) (`SquareInAppPaymentsSDK`) | Paying cover at Square venues |
 
@@ -81,7 +81,14 @@ empty and failure states are handled the same way everywhere.
   venues in the user's locale (or none), reaches the user's friends (or
   friends of everyone in its circle) and clears at 5am. It's sent from the
   Now screen or "Ping here" on a venue or event, and friends answer with
-  "I'm in", also from the `PING` push's `PING_JOIN` action. The documents alias fields to the snake_case keys the
+  "I'm in", also from the `PING` push's `PING_JOIN` action. "Add contacts"
+  in the send sheet picks people from the phone (the system picker, so no
+  Contacts permission; numbers stay on the phone): once the Ping is sent the
+  app signs a link to it (`shareLink(path: "/pings/<id>", lifetime: DAY)`)
+  and opens Messages addressed to them, or the share sheet where the device
+  can't text. `/pings/<id>?e=<token>` opens that Ping; a recipient who can't
+  see it yet gets the invitation (`GET /v1/share/invitation`) and joins with
+  `joinPing`'s `invitationToken`. The token is opaque. The documents alias fields to the snake_case keys the
   models decode, and failures map to `APIError`.
 - **REST.** Only the client status (`GET /v1/status`, which says the oldest
   version of the app the API still serves) and the two sign-ins the SDK has no
@@ -262,3 +269,70 @@ Verified on October 9, 2026: signed test builds of Focus, Velvet, Backstage, and
 ## Next setup verification
 
 On October 9, 2026, an unsigned generic-iOS Staging build of **Hot Mess Next** passed. Packaged values were checked: `social.hotmess.HotMess.next`, `https://api-staging.audiencekit.com`, staging API environment, and production APNs when built for TestFlight. The upload script passed shell syntax and mocked export-only checks for both production and Next, including separate output directories. No upload or signed-device validation was performed. The new App Store Connect record and OAuth provider registration for the new ID remain pending. Portal capabilities are now enabled as recorded above; this does not verify payment processing, push delivery, associated-domain files, or end-to-end sign-in.
+
+## App Clip
+
+`HotMessClip/` leads with the action for its invocation link:
+
+| Link | Primary action | Additional action |
+| --- | --- | --- |
+| `/venues/<uuid>` | Pay cover | Show an existing admission pass |
+| `/people/<uuid>` | Tip | Provider links or in-app payment |
+| `/pings/<uuid>?e=…` | I'm in | Invitation preview before sign-in |
+| `/events/<uuid>` | RSVP | Pay the venue's cover for tonight |
+
+The selected action stays open through Sign in with Apple. Signed-in members go
+straight to the action. Payments show amounts and fees and require an explicit
+confirmation. Event cover is the venue's current-night cover, not an event ticket.
+Stripe and Square use the existing payment services; admission passes reuse the
+main app's rotating QR implementation.
+
+Public basics come from `GET /v1/share`. Ping invitation details come from
+`GET /v1/share/invitation`, which requires an opaque signed `e` capability and is
+private, no-store and noindex. Sharing a Ping authorizes its recipient to join,
+including someone outside the existing friend graph. It does not join them on
+opening the link. The authenticated join mutation checks expiry, the inviter's
+continued access, bans and blocks. Ending the Ping invalidates its invitations.
+The preview includes the note and selected places, never the circle of attendees.
+Forwarding the link also forwards its invitation authority.
+
+Native venue, event and Ping share buttons obtain an expiring, attributed link
+before presenting the iOS share sheet. There is no unsigned fallback if link
+creation fails. The main app retains and verifies the invitation when opening it.
+
+The Clip stores credentials separately. On installation, iOS makes the Clip's
+keychain available to its corresponding parent app; the parent migrates that
+credential once, ahead of an older parent credential. This is a Clip-to-app
+handoff, not bidirectional keychain sharing. Account sign-in and server-side ban
+checks are the current authenticated fallback. App Attest/DeviceCheck verification
+is not implemented, and no installation identifier is treated as ban evidence.
+
+Two targets share the source: `HotMessClip` embeds in `HotMess`, and
+`HotMessNextClip` embeds in `HotMessNext`.
+
+| Configuration | Clip bundle ID |
+| --- | --- |
+| Debug | `social.hotmess.HotMessDevelopment.Clip` |
+| Staging / Next | `social.hotmess.HotMess.next.Clip` |
+| Release | `social.hotmess.HotMess.Clip` |
+
+Open `HotMessClip` (Debug/local API) or `HotMessNextClip` (Staging/Next API).
+Replace the zero UUID in `_XCAppClipURL` with a real invocation link. The zero UUID
+is intentionally a missing-record test. Versions must stay aligned with the parent.
+Run the standalone parser checks with `Scripts/test-app-clip.sh`.
+
+Deploy the API invitation contract before distributing these clients. The website's
+AASA source now lists all three Clip application IDs and the HTTPS payment callback
+`/clip/stripe-redirect`. It must be served as JSON on both apex and www without a
+redirect; source changes alone do not update Apple's cached association.
+
+Before distribution, register each Clip under its matching parent, configure Apple
+sign-in and Apple Pay capabilities and profiles, and configure Advanced App Clip
+Experiences in App Store Connect for venue, performer, Ping and event invocation
+URLs. Verify invocation, authentication handoff, provider payments, and the final
+thinned Clip size on signed physical-device builds. Simulator compilation cannot
+validate those deployment requirements. Next remains TestFlight-only; follow
+`docs/development/IOS_DISTRIBUTION.md` and the release skill for archives/uploads.
+
+Apple references: [website association](https://developer.apple.com/documentation/appclip/associating-your-app-clip-with-your-website)
+and [Clip-to-app data sharing](https://developer.apple.com/documentation/appclip/sharing-data-between-your-app-clip-and-your-full-app).
