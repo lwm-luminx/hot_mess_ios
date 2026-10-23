@@ -188,6 +188,9 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     var promptID: String? = nil
     /// A prompt dropped into a quiet room, drawn as a PromptCard.
     var promptCard: ChatPrompt? = nil
+    /// The tribes the reader and the sender both picked: a BothMark on the
+    /// avatar and the BothLine after the name. Only the two of them see it.
+    var sharedTribes: [SharedTribe] = []
 
     /// Someone the reader can tap for their profile sheet: another person
     /// posting as themself. Not the venue, talent posting as their listing,
@@ -634,7 +637,7 @@ private struct ChatThreadRowView: View {
                 // ordinary messages as themselves need no name.
                 if row.isFirstInGroup, !message.isOwn || message.isFromPlace {
                     profileButton(horizontalSlop: 0, verticalSlop: 14) {
-                        ChatSenderLine(name: message.authorName, role: message.role)
+                        ChatSenderLine(name: message.authorName, role: message.role, tribes: message.sharedTribes)
                     }
                     .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
                     .accessibilityHidden(true)
@@ -793,7 +796,10 @@ private struct ChatThreadRowView: View {
             }
             return String(localized: "You: \(text)")
         }
-        let name = message.authorName.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Someone")
+        var name = message.authorName.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Someone")
+        if let both = message.sharedTribes.bothLine {
+            name += ", \(both)"
+        }
         if let role = message.role {
             return "\(name), \(role.title): \(text)"
         }
@@ -840,6 +846,7 @@ struct ChatAvatar: View {
                 isPlace: message.isFromPlace,
                 tintsInitials: !message.isFromListing
             )
+            .bothMark(!message.isFromListing && !message.sharedTribes.isEmpty, diameter: size, surface: presenceRing)
         }
     }
 }
@@ -849,9 +856,11 @@ struct ChatAvatar: View {
 struct ChatSenderLine: View {
     let name: String?
     let role: ChatRole?
+    /// What the reader shares with them: the BothLine after the name.
+    var tribes: [SharedTribe] = []
 
     var body: some View {
-        if (name?.isEmpty == false) || role != nil {
+        if (name?.isEmpty == false) || role != nil || !tribes.isEmpty {
             HStack(spacing: 6) {
                 if let name, !name.isEmpty {
                     Text(name)
@@ -863,6 +872,8 @@ struct ChatSenderLine: View {
                 if let role {
                     RoleTag(role: role)
                 }
+
+                BothLine(tribes: tribes)
             }
         }
     }

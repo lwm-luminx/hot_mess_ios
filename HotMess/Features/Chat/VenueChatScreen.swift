@@ -605,13 +605,18 @@ struct VenueChatScreen: View {
             // The trivia round being shown has its card above the composer.
             .filter { $0.id.uuidString.lowercased() != trivia?.round?.messageID?.lowercased() }
             .map { message in
-                message.threadMessage(
+                var line = message.threadMessage(
                     currentUserID: viewModel.userID,
                     friends: friends,
                     online: viewModel.onlineUserIDs,
                     reachable: viewModel.reachableUserIDs,
                     promptKinds: promptKinds
                 )
+                // A post as the venue or a listing says nothing about the person.
+                if !message.isFromListing {
+                    line.sharedTribes = viewModel.sharedTribes(with: message.userID)
+                }
+                return line
             }
 
         let pending = viewModel.pending.map { message in
@@ -681,7 +686,8 @@ struct VenueChatScreen: View {
             cable: model.cable,
             friends: model.friends,
             api: model.api,
-            reportPresence: { [location = model.location] in await location.reportCurrentPosition() }
+            reportPresence: { [location = model.location] in await location.reportCurrentPosition() },
+            supportsTribes: { [tribes = model.tribes] in await tribes.supportsTribes() }
         )
     }
 }

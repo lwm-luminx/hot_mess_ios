@@ -29,6 +29,7 @@ struct SettingsScreen: View {
         List {
             profileSection
             chatPhotoSection
+            tribesSection
             facebookSection
             coverSection
             locationSection
@@ -44,6 +45,7 @@ struct SettingsScreen: View {
         .navigationTitle(String(localized: "Me"))
         .task { await model.session.refreshUser() }
         .task { await model.safety.load() }
+        .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
         .confirmationDialog(
             String(localized: "Sign out of Hot Mess?"),
@@ -119,6 +121,29 @@ struct SettingsScreen: View {
                     Label(String(localized: "Chat Photo"), systemImage: "person.crop.circle")
                 }
                 .accessibilityIdentifier("me.chatPhoto")
+            }
+        }
+    }
+
+    /// "Your tribes", for someone signed in, where the API has tribes.
+    @ViewBuilder
+    private var tribesSection: some View {
+        if model.session.isSignedIn, model.tribes.isSupported != false {
+            Section {
+                NavigationLink {
+                    TribePickerScreen()
+                } label: {
+                    LabeledContent {
+                        if let choices = model.tribes.choices, !choices.picked.isEmpty {
+                            Text("\(choices.picked.count)")
+                        }
+                    } label: {
+                        Label(String(localized: "Your tribes"), systemImage: "person.2.circle")
+                    }
+                }
+                .accessibilityIdentifier("me.tribes")
+            } footer: {
+                Text("Only someone in a venue chat who picked the same one sees it.")
             }
         }
     }

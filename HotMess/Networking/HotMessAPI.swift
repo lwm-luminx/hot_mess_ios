@@ -630,6 +630,31 @@ struct HotMessAPI: CoverPaymentAPI {
         ).sendFriendRequest.friendRequest.status
     }
 
+    // MARK: - Tribes
+
+    /// The audience's tribes for the picker, how many anyone may pick, and
+    /// the user's picks. Throws on an API that doesn't have the tribe
+    /// catalog yet (`TribeStore` then hides tribes).
+    func tribes() async throws -> TribeChoices {
+        let response = try await query(Documents.tribes, variables: [:], as: TribesResponse.self)
+        return TribeChoices(
+            categories: response.tribeCatalog,
+            cap: max(1, response.tribeCap),
+            picked: Set(response.me?.profile.tribes.map(\.tag.id) ?? [])
+        )
+    }
+
+    /// Replaces the user's tribes with these. The API refuses more than the
+    /// cap and changes nothing. Returns the picks after the change.
+    func setTribes(_ ids: Set<String>) async throws -> Set<String> {
+        let response = try await query(
+            Documents.setTribes,
+            variables: ["ids": .array(ids.sorted().map { .string($0) })],
+            as: SetTribesResponse.self
+        )
+        return Set(response.setTribes.tribes.map(\.tag.id))
+    }
+
     /// Deletes the account and everything the API keeps about the user. It
     /// can't be undone; the session is gone afterwards.
     func deleteAccount() async throws {
@@ -1288,6 +1313,21 @@ extension HotMessAPI {
         }
         """
 
+        /// The picker's list, by category, the cap and the user's picks.
+        static let tribes = """
+        query Tribes {
+          tribe_cap: tribeCap
+          tribe_catalog: tribeCatalog { key name tribes { id name } }
+          me { profile: self { tribes { tag { id } } } }
+        }
+        """
+
+        static let setTribes = """
+        mutation SetTribes($ids: [ID!]!) {
+          setTribes(input: { tagIds: $ids }) { tribes { tag { id } } }
+        }
+        """
+
         static let deleteAccount = """
         mutation DeleteAccount($confirm: Boolean!) {
           deleteAccount(input: { confirm: $confirm }) { deleted }
@@ -1644,6 +1684,32 @@ struct SendFriendRequestResponse: Decodable, Sendable {
     struct Request: Decodable, Sendable { let status: FriendRequestStatus }
     struct Payload: Decodable, Sendable { let friendRequest: Request }
     let sendFriendRequest: Payload
+}
+
+/// `tribeCap`, `tribeCatalog` and `me { self { tribes } }`.
+struct TribesResponse: Decodable, Sendable {
+    struct Pick: Decodable, Sendable {
+        struct Tag: Decodable, Sendable { let id: String }
+        let tag: Tag
+    }
+
+    struct Profile: Decodable, Sendable { let tribes: [Pick] }
+    struct Me: Decodable, Sendable { let profile: Profile }
+
+    let tribeCap: Int
+    let tribeCatalog: [TribeCategory]
+    let me: Me?
+
+    private enum CodingKeys: String, CodingKey {
+        case me
+        case tribeCap = "tribe_cap"
+        case tribeCatalog = "tribe_catalog"
+    }
+}
+
+struct SetTribesResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let tribes: [TribesResponse.Pick] }
+    let setTribes: Payload
 }
 
 struct DeleteAccountResponse: Decodable, Sendable {

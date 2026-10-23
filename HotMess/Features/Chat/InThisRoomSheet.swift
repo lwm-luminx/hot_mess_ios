@@ -170,6 +170,7 @@ struct InThisRoomSheet: View {
                 presence: person.presence,
                 tintsInitials: true
             )
+            .bothMark(person.sharesTribes, diameter: 36)
             .opacity(person.isHere ? 1 : 0.55)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -181,6 +182,9 @@ struct InThisRoomSheet: View {
                     Text("Friend")
                         .font(.hotMess(.caption))
                         .foregroundStyle(.secondary)
+                }
+                if person.sharesTribes {
+                    BothLine(tribes: person.sharedTribes)
                 }
             }
 
