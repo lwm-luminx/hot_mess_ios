@@ -30,8 +30,6 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
         subtitle ?? address ?? String(localized: "Address unavailable")
     }
 
-    var shareURL: URL? { URL(string: "https://hotmess.social/venues/\(id.uuidString.lowercased())") }
-
     /// `address`, `phone`, `facebook_id` and `is_liked` come in the venue's
     /// profile mixin (see `ListingProfile`).
     enum CodingKeys: String, CodingKey {

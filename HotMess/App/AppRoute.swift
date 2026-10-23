@@ -153,3 +153,28 @@ enum DeepLink {
         return components.path.split(separator: "/").map(String.init)
     }
 }
+
+/// A share link's `e`. The API's original tokens are the expiry in Unix
+/// seconds, in base 36, a dot and a 16-character signature
+/// (`s44we8.AbCdEf_-01234567`), so the app can read the expiry itself and
+/// skip the network for a link plainly out of date. Attributed tokens
+/// (`v2.`, `v3.`, what a signed-in share mints) are opaque: only `/v1/share`
+/// can say when they end.
+enum ShareLinkToken {
+    /// When `token` stops working, or `nil` for one the app can't read.
+    static func expiry(of token: String) -> Date? {
+        let parts = token.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 2, !token.hasPrefix("v2."), !token.hasPrefix("v3."),
+              (1...10).contains(parts[0].count), parts[0].allSatisfy({ $0.isASCII && ($0.isNumber || $0.isLowercase) }),
+              parts[1].count == 16,
+              let seconds = Int(parts[0], radix: 36)
+        else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(seconds))
+    }
+
+    /// Whether the token's own expiry has passed. `false` for an opaque one.
+    static func hasExpired(_ token: String, at date: Date = .now) -> Bool {
+        guard let expiry = expiry(of: token) else { return false }
+        return expiry <= date
+    }
+}

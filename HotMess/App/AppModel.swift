@@ -283,15 +283,22 @@ final class AppModel {
         }
     }
 
-    var shareLinkError: String?
+    /// Why a share link didn't open, for the alert over every screen
+    /// (signed out too). Its title and message.
+    var shareLinkError: ShareLinkProblem?
     @ObservationIgnored private var shareLinkTask: Task<Void, Never>?
 
     func open(_ url: URL) -> Bool {
         guard let destination = DeepLink.destination(for: url) else { return false }
         shareLinkTask?.cancel()
         let tokens = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.filter { $0.name == "e" } ?? []
-        guard tokens.count <= 1 else { shareLinkError = "This share link is invalid."; return false }
-        guard let token = tokens.first?.value else { return open(destination) }
+        guard tokens.count <= 1 else { shareLinkError = .invalid; return false }
+        guard let token = tokens.first?.value, !token.isEmpty else { return open(destination) }
+        // A link whose own expiry has passed needs no network.
+        if ShareLinkToken.hasExpired(token) {
+            linkExpired(destination)
+            return true
+        }
         // Validate the opaque signed token before routing, including links received
         // before sign-in. Never discard expiry or sender attribution on handoff.
         shareLinkTask = Task {
@@ -303,9 +310,30 @@ final class AppModel {
                 ], authenticated: false))
                 try Task.checkCancellation()
                 _ = open(destination)
-            } catch { if !Task.isCancelled { shareLinkError = error.localizedDescription } }
+            } catch {
+                guard !Task.isCancelled else { return }
+                switch ShareLinkProblem.from(error) {
+                case .some(.expired): linkExpired(destination)
+                case let .some(problem): shareLinkError = problem
+                // Offline, or the API failed: open it as an older link
+                // would; the screen's own load says if something's wrong.
+                case .none: _ = open(destination)
+                }
+            }
         }
         return true
+    }
+
+    /// Says the link has expired, on the tab the person can find it from
+    /// instead: Now for a Ping, Venues for anything else.
+    private func linkExpired(_ destination: DeepLinkDestination) {
+        if case .route(.ping) = destination {
+            openNow()
+        } else {
+            selectedTab = .venues
+            venuesPath = []
+        }
+        shareLinkError = .expired
     }
 
     private func open(_ destination: DeepLinkDestination?) -> Bool {
@@ -346,5 +374,39 @@ final class AppModel {
             else { return }
             venuesPath.append(.venueChat(overview.venue))
         }
+    }
+}
+
+/// Why a share link didn't open.
+enum ShareLinkProblem: Equatable, Sendable {
+    /// Its time is up, or its signature doesn't hold (the API's 410).
+    case expired
+    /// It carries more than one `e`.
+    case invalid
+    /// The API won't open it, with its reason (nothing public at the path).
+    case unavailable(String)
+
+    var title: String {
+        switch self {
+        case .expired: String(localized: "This link has expired")
+        case .invalid, .unavailable: String(localized: "Couldn't open this share")
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .expired: String(localized: "Ask whoever sent it for a new one, or find the place yourself.")
+        case .invalid: String(localized: "This share link is invalid.")
+        case let .unavailable(reason): reason
+        }
+    }
+
+    /// What `/v1/share` failing with `error` means for the link, or `nil`
+    /// when it says nothing about the link (offline, or the API failed).
+    static func from(_ error: Error) -> ShareLinkProblem? {
+        guard let error = error as? AudienceKitError else { return nil }
+        if error.status == 410 || error.code == "EXPIRED" { return .expired }
+        guard let status = error.status, (400..<500).contains(status) else { return nil }
+        return .unavailable(error.message)
     }
 }
