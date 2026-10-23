@@ -87,7 +87,7 @@ struct VenuesScreen: View {
             } else {
                 CardSection(card.title ?? model.brand.name, edgeToEdge: true) {
                     ForEach(venues) { venue in
-                        VenueCardLink(venue: venue)
+                        VenueCardLink(venue: venue, nextEvent: viewModel?.nextEvents[venue.id])
                     }
                 }
             }
@@ -95,7 +95,7 @@ struct VenuesScreen: View {
             // Only the server sends these, with their own heading.
             CardSection(card.title, edgeToEdge: true) {
                 ForEach(ordered(collection.venues, by: card.venueIDs, isFallback: false)) { venue in
-                    VenueCardLink(venue: venue)
+                    VenueCardLink(venue: venue, nextEvent: viewModel?.nextEvents[venue.id])
                 }
             }
         case CardKind.venuesThinCity:
@@ -167,7 +167,7 @@ struct VenuesScreen: View {
 
     private func ensureViewModel() {
         if viewModel == nil {
-            viewModel = VenuesViewModel(audienceKit: model.audienceKit)
+            viewModel = VenuesViewModel(audienceKit: model.audienceKit, api: model.api)
         }
         if cardLayout == nil {
             cardLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .venues, kinds: Self.cardKinds,

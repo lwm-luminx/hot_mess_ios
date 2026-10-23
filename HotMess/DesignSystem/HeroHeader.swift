@@ -12,6 +12,9 @@ enum HeroMetrics {
     /// A venue, event or person page's taller hero, which carries its
     /// details and actions: 440pt with the navigation bar.
     static let detailHeight: CGFloat = 396
+    /// Now's hero at a venue with nothing on, which carries what's next, the
+    /// cover, the address and who's here.
+    static let venueNowHeight: CGFloat = 336
 }
 
 private let heroCoordinateSpace = "hero"

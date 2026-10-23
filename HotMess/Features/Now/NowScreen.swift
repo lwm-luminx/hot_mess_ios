@@ -18,6 +18,10 @@ struct NowScreen: View {
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var showingPingSheet = false
+    /// Whether the app places the user at tonight's venue, so "I feel
+    /// unsafe" shows. Its own request, so an API without safety alerts still
+    /// shows Now.
+    @State private var safety: VenueSafety?
     /// The Ping revision last loaded, so a change to Pings asks for a fresh
     /// report while a new position or a return to the tab can share one.
     @State private var loadedPingRevision: Int?
@@ -57,7 +61,13 @@ struct NowScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
-                        HeroHeader(url: now.imageURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
+                        HeroHeader(
+                            url: now.imageURL,
+                            topInset: proxy.safeAreaInsets.top,
+                            tone: $heroTone,
+                            // Taller at a venue with nothing on, for its details.
+                            bodyHeight: now.event == nil && isAtVenue(now) ? HeroMetrics.venueNowHeight : HeroMetrics.bodyHeight
+                        ) {
                             heroText(now)
                         }
 
@@ -87,8 +97,9 @@ struct NowScreen: View {
                         // when it can't be had); a kind this build doesn't
                         // draw was never asked for.
                         let layout = cardLayout?.layout ?? .fallback(Self.fallbackCards)
+                        let pingsWithChat = layout.card(isAtVenue(now) ? CardKind.nowChat : CardKind.nowSmallTalk) != nil
                         ForEach(layout.cards) { card in
-                            nowCard(card, now, layoutID: layout.id)
+                            nowCard(card, now, layoutID: layout.id, pingsWithChat: pingsWithChat)
                         }
                         // Passes and who's out depend on this device, so they
                         // aren't cards: they go just above pings.
@@ -119,13 +130,25 @@ struct NowScreen: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingPingSheet = true
-                } label: {
-                    Text("Ping")
-                        .font(.hotMess(.headline, semibold: true))
+                // At a venue Ping is in the page, under the chat, so the bar
+                // keeps help in reach as you scroll.
+                if let venue = helpVenue {
+                    Button {
+                        model.helpPresentation = .venue(venue)
+                    } label: {
+                        Label(String(localized: "I feel unsafe"), systemImage: "shield.fill")
+                    }
+                    .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
+                    .accessibilityIdentifier("now.toolbarGetHelp")
+                } else {
+                    Button {
+                        showingPingSheet = true
+                    } label: {
+                        Text("Ping")
+                            .font(.hotMess(.headline, semibold: true))
+                    }
+                    .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
                 }
-                .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
             }
         }
         .sheet(isPresented: $showingPingSheet) {
@@ -181,6 +204,10 @@ struct NowScreen: View {
             pairUpModel = tonightVenueID.map { PairUpModel(api: model.api, venueID: $0) }
             await pairUpModel?.load()
         }
+        .task(id: tonightVenueID) {
+            guard let tonightVenueID else { safety = nil; return }
+            safety = (try? await model.api.venueSafety(tonightVenueID)) ?? nil
+        }
         .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
             if let pairUpModel {
                 PairUpSheet(model: pairUpModel, venueName: viewModel?.state.value.flatMap { $0.venue?.name ?? $0.event?.venue?.name } ?? "")
@@ -196,6 +223,18 @@ struct NowScreen: View {
     private var tonightVenueID: UUID? {
         guard let now = viewModel?.state.value else { return nil }
         return now.venue?.id ?? now.event?.venue?.id
+    }
+
+    /// Whether Now is about the venue the user is at.
+    private func isAtVenue(_ now: Now) -> Bool {
+        now.venues == nil && now.venue != nil
+    }
+
+    /// The venue "I feel unsafe" is about, while the app places the user there.
+    private var helpVenue: HelpVenue? {
+        guard safety?.canSend == true, let now = viewModel?.state.value, isAtVenue(now),
+              let venue = now.venue else { return nil }
+        return HelpVenue(id: venue.id, name: venue.name, address: venue.address)
     }
 
     private var navigationTitle: String {
@@ -229,24 +268,77 @@ struct NowScreen: View {
             .accessibilityIdentifier("now.event")
             .accessibilityHint(String(localized: "View event details"))
         } else if let venue = now.venue {
-            VenueCardLink(venue: venue) {
-                HStack(spacing: 12) {
-                    Text(venue.name)
-                        .font(.hotMess(.largeTitle, semibold: true))
+            // Nothing on yet: the venue, with what's next, tonight's cover,
+            // where it is and who's here.
+            VStack(alignment: .leading, spacing: 10) {
+                VenueCardLink(venue: venue) {
+                    HStack(spacing: 12) {
+                        Text(venue.name)
+                            .font(.hotMess(.largeTitle, semibold: true))
+                            .lineLimit(2)
+                            .accessibilityAddTraits(.isHeader)
+                        Image(systemName: "chevron.right")
+                            .font(.hotMess(.headline, semibold: true))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityHint(String(localized: "View venue details"))
+
+                if let next = now.events.first {
+                    NavigationLink(value: AppRoute.event(next.id)) {
+                        HStack(spacing: 6) {
+                            Text(next.nextUpLine)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        .heroGlass(fillsWidth: false)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("now.nextEvent")
+                }
+
+                ForEach(venueHeroLines(now, venue: venue), id: \.self) { line in
+                    Text(line)
+                        .font(.hotMess(.subheadline, semibold: true))
                         .lineLimit(2)
-                        .accessibilityAddTraits(.isHeader)
-                    Image(systemName: "chevron.right")
-                        .font(.hotMess(.headline, semibold: true))
-                        .accessibilityHidden(true)
+                }
+
+                if !now.friends.isEmpty {
+                    HStack(spacing: 8) {
+                        HeroFaces(friends: now.friends)
+                        Text(Self.friendsHereLine(now.friends))
+                            .font(.hotMess(.subheadline, semibold: true))
+                            .lineLimit(1)
+                    }
                 }
             }
-            .accessibilityHint(String(localized: "View venue details"))
         } else {
             Text(now.title)
                 .font(.hotMess(.largeTitle, semibold: true))
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    /// Tonight's cover, then the address, for the venue hero when nothing's on.
+    private func venueHeroLines(_ now: Now, venue: Venue) -> [String] {
+        var lines: [String] = []
+        if let coverCharge = now.coverCharge {
+            lines.append(coverCharge.summary(isTonight: true))
+        }
+        if let address = venue.address, !address.isEmpty {
+            lines.append(address)
+        }
+        return lines
+    }
+
+    /// "Sam is here", or "4 friends here".
+    static func friendsHereLine(_ friends: [Friend]) -> String {
+        if friends.count == 1, let friend = friends.first {
+            return String(localized: "\(friend.firstName) is here")
+        }
+        return String(localized: "\(friends.count) friends here")
     }
 
     /// Now finds an event from an hour before it starts to an hour after it ends.
@@ -262,7 +354,7 @@ struct NowScreen: View {
     /// One of Now's cards: the section it has always been, drawn where the
     /// server ranked it.
     @ViewBuilder
-    private func nowCard(_ card: LayoutCard, _ now: Now, layoutID: String?) -> some View {
+    private func nowCard(_ card: LayoutCard, _ now: Now, layoutID: String?, pingsWithChat: Bool) -> some View {
         switch card.kind {
         case CardKind.nowStage:
             stageSection(now)
@@ -270,10 +362,23 @@ struct NowScreen: View {
         case CardKind.nowChat:
             venueChatSection(now)
             pairUpSection
+            // Pings sit with the chat: at a venue, with "I feel unsafe".
+            if isAtVenue(now) {
+                PingAndHelpRow(
+                    showsHelp: helpVenue != nil,
+                    ping: { showingPingSheet = true },
+                    help: { helpVenue.map { model.helpPresentation = .venue($0) } }
+                )
+                .padding(.horizontal, 16)
+                pingsSection(now)
+            }
         case CardKind.postsTonight:
             tonightPostsSection(now)
         case CardKind.nowSmallTalk:
             localeChatSection(now)
+            if !isAtVenue(now) {
+                pingsSection(now)
+            }
         case CardKind.eventsUpcoming:
             eventsSection(now)
         case CardKind.postsLocale:
@@ -284,7 +389,10 @@ struct NowScreen: View {
             friendVenuesSection(now)
         case CardKind.pings:
             venueExtrasSection(now)
-            pingsSection(now)
+            // A layout without the chat card still lists them.
+            if !pingsWithChat {
+                pingsSection(now)
+            }
         case CardKind.web:
             if let content = card.web { WebCardView(content: content) }
         case CardKind.promoSlot:

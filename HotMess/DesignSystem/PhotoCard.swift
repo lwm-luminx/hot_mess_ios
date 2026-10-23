@@ -11,8 +11,9 @@ enum CardMetrics {
     static let featuredHeight: CGFloat = 180
     static let personHeight: CGFloat = 84
     static let spacing: CGFloat = 12
-    /// Venues are full-width strips, so they read differently from event cards.
-    static let stripHeight: CGFloat = 104
+    /// Venues are full-width strips, so they read differently from event
+    /// cards; tall enough to read like a small hero.
+    static let venueHeight: CGFloat = 168
     static let stripSpacing: CGFloat = 2
 
     /// `radius-photo`.
@@ -297,26 +298,51 @@ struct FriendFaces: View {
 
 // MARK: - Venues
 
-/// A venue as a photo card: its name and summary over its photo, with a pill
-/// top right (a distance, a friend count) and `corner` top left (friend faces).
+/// A venue as a photo card, like a small hero: its name, what's on now or
+/// next, and its summary over its photo, with a pill top right (a distance, a
+/// friend count) and `corner` top left (friend faces).
 struct VenueCard<Corner: View>: View {
     let venue: Venue
     var description: String?
     var pill: String?
+    /// What's on there now, or next, from the locale's events.
+    var nextEvent: Event?
     @ViewBuilder var corner: Corner
 
     var body: some View {
-        RecordCard(
-            title: venue.name,
-            description: description ?? venue.summary,
-            photoURL: venue.bannerURL ?? venue.photoURL,
-            minHeight: CardMetrics.stripHeight,
+        PhotoCard(
+            url: venue.bannerURL ?? venue.photoURL,
+            minHeight: CardMetrics.venueHeight,
             topClearance: 44,
             cornerRadius: 0
         ) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(venue.name)
+                    .font(.hotMess(.title3, semibold: true))
+                    .lineLimit(2)
+
+                if let nextEvent {
+                    GlassPill(padding: EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8),
+                              shape: AnyShape(RoundedRectangle(cornerRadius: HotMessRadius.md))) {
+                        Text(nextEvent.venueRowLine())
+                            .font(.hotMess(.footnote, semibold: true))
+                            .lineLimit(1)
+                    }
+                }
+
+                let summary = description ?? venue.summary
+                if !summary.isEmpty {
+                    Text(summary)
+                        .font(.hotMess(.subheadline, semibold: true))
+                        .lineLimit(1)
+                }
+            }
+        } leading: {
             corner
         } trailing: {
-            if let pill {
+            if let nextEvent, nextEvent.isOn() {
+                GlassPill(String(localized: "On now"))
+            } else if let pill {
                 GlassPill(pill)
             }
         }
@@ -324,16 +350,33 @@ struct VenueCard<Corner: View>: View {
 }
 
 extension VenueCard where Corner == EmptyView {
-    init(venue: Venue, description: String? = nil, pill: String?) {
-        self.init(venue: venue, description: description, pill: pill) { EmptyView() }
+    init(venue: Venue, description: String? = nil, pill: String?, nextEvent: Event? = nil) {
+        self.init(venue: venue, description: description, pill: pill, nextEvent: nextEvent) { EmptyView() }
     }
 
-    /// The card for a venue list: its summary, and how far away it is.
-    init(venue: Venue) {
+    /// The card for a venue list: what's on, its summary, and how far away it is.
+    init(venue: Venue, nextEvent: Event? = nil) {
         self.init(
             venue: venue,
-            pill: venue.distance.map { DistanceFormat.string(fromMetres: $0) }
+            pill: venue.distance.map { DistanceFormat.string(fromMetres: $0) },
+            nextEvent: nextEvent
         )
+    }
+}
+
+extension Event {
+    /// Whether it's on at `date`: started, and not over. Without an end it
+    /// counts as on for four hours.
+    func isOn(at date: Date = .now) -> Bool {
+        startDate <= date && date < (endDate ?? startDate.addingTimeInterval(4 * 3600))
+    }
+
+    /// A venue row's line: "Bear Night · until 2 AM" while it's on, else the
+    /// next-up line ("Tonight · Drag Bingo at 9 PM").
+    func venueRowLine(at date: Date = .now) -> String {
+        guard isOn(at: date) else { return nextUpLine }
+        guard let endDate else { return name }
+        return String(localized: "\(name) · until \(endDate.formatted(date: .omitted, time: .shortened))")
     }
 }
 
@@ -352,8 +395,8 @@ struct VenueCardLink<Card: View>: View {
 }
 
 extension VenueCardLink where Card == VenueCard<EmptyView> {
-    init(venue: Venue) {
-        self.init(venue: venue) { VenueCard(venue: venue) }
+    init(venue: Venue, nextEvent: Event? = nil) {
+        self.init(venue: venue) { VenueCard(venue: venue, nextEvent: nextEvent) }
     }
 }
 
