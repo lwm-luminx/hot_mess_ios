@@ -105,7 +105,7 @@ struct EventScreen: View {
                         detailsSection(event)
 
                         if let venue = event.venue {
-                            CardSection(String(localized: "Venue")) {
+                            CardSection(String(localized: "Venue"), edgeToEdge: true) {
                                 VenueCardLink(venue: venue)
                             }
                         } else {

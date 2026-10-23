@@ -11,6 +11,9 @@ enum CardMetrics {
     static let featuredHeight: CGFloat = 180
     static let personHeight: CGFloat = 84
     static let spacing: CGFloat = 12
+    /// Venues are full-width strips, so they read differently from event cards.
+    static let stripHeight: CGFloat = 104
+    static let stripSpacing: CGFloat = 2
 
     /// `radius-photo`.
     static var cornerRadius: CGFloat { HotMessRadius.photo }
@@ -306,7 +309,10 @@ struct VenueCard<Corner: View>: View {
         RecordCard(
             title: venue.name,
             description: description ?? venue.summary,
-            photoURL: venue.bannerURL ?? venue.photoURL
+            photoURL: venue.bannerURL ?? venue.photoURL,
+            minHeight: CardMetrics.stripHeight,
+            topClearance: 44,
+            cornerRadius: 0
         ) {
             corner
         } trailing: {
@@ -538,13 +544,16 @@ struct PersonCardLink: View {
 
 /// A titled stack of cards for screens that scroll in a `ScrollView`. Unlike
 /// `DetailSection` the rows bring their own background. A section with no rows
-/// draws nothing, header included.
+/// draws nothing, header included. `edgeToEdge` lays the rows out as full-width
+/// strips with a hairline gap, as venues use.
 struct CardSection<Content: View>: View {
     let title: String?
+    var edgeToEdge = false
     let content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String? = nil, edgeToEdge: Bool = false, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.edgeToEdge = edgeToEdge
         self.content = content()
     }
 
@@ -557,14 +566,14 @@ struct CardSection<Content: View>: View {
                             .font(.hotMess(.subheadline, semibold: true))
                             .foregroundStyle(.secondary)
                             .accessibilityAddTraits(.isHeader)
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 36)
                     }
 
-                    LazyVStack(spacing: CardMetrics.spacing) {
+                    LazyVStack(spacing: edgeToEdge ? CardMetrics.stripSpacing : CardMetrics.spacing) {
                         ForEach(rows) { $0 }
                     }
+                    .padding(.horizontal, edgeToEdge ? 0 : 16)
                 }
-                .padding(.horizontal, 16)
             }
         }
     }
