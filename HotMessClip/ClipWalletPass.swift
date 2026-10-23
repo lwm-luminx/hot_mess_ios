@@ -14,10 +14,12 @@ struct ClipWalletPassButton: View {
 
     var body: some View {
         if PKPassLibrary.isPassLibraryAvailable(), let pass, !added {
-            AddPassToWalletButton([pass])
-                .addPassToWalletButtonStyle(.black)
-                .frame(height: 50)
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in refreshAdded(pass) }
+            AddPassToWalletButton([pass]) { didAdd in
+                if didAdd { added = true }
+            }
+            .addPassToWalletButtonStyle(.black)
+            .frame(height: 50)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in refreshAdded(pass) }
         } else {
             Color.clear.frame(height: 0).task { await load() }
         }
