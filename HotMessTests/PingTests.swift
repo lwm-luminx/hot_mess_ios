@@ -368,3 +368,63 @@ struct PingPushTests {
         #expect(!AppConfiguration(baseURL: base, apnsEnvironment: "production").isPushSandbox)
     }
 }
+
+@Suite("Ping contacts")
+struct PingContactTests {
+    private let url = URL(string: "https://hotmess.social/pings/ping-1?e=v3.abc")!
+
+    @Test("Texts the picks with the signed link, and leaves the note out")
+    func message() throws {
+        let ping = try PingFixtures.decode(Ping.self, PingFixtures.ping)
+
+        #expect(PingInvitation.message(for: ping, url: url)
+            == "I'm going out tonight: Drag Bingo or The Wildrose. Come with? https://hotmess.social/pings/ping-1?e=v3.abc")
+        #expect(PingInvitation.message(placeNames: ["Drag Bingo"], url: url)
+            == "I'm going out tonight: Drag Bingo. Come with? https://hotmess.social/pings/ping-1?e=v3.abc")
+        #expect(PingInvitation.message(placeNames: ["Drag Bingo", "", "Karaoke", "The Wildrose"], url: url)
+            == "I'm going out tonight: Drag Bingo, Karaoke or The Wildrose. Come with? https://hotmess.social/pings/ping-1?e=v3.abc")
+    }
+
+    @Test("A Ping for anywhere just says you're going out")
+    func anywhere() throws {
+        let ping = try PingFixtures.decode(Ping.self, PingFixtures.anywhere)
+
+        #expect(PingInvitation.message(for: ping, url: url)
+            == "I'm going out tonight. Come with? https://hotmess.social/pings/ping-1?e=v3.abc")
+    }
+
+    @Test("Picking the same number twice texts it once, in the order picked")
+    func merging() {
+        let sam = PingContact(name: "Sam Chatter", phone: "+1 206 555 0100")
+        let alex = PingContact(name: "Alex Friend", phone: "+1 206 555 0101")
+        let samAgain = PingContact(name: "Sam C.", phone: "+1 206 555 0100")
+
+        #expect(PingContact.merging([sam, alex], into: []) == [sam, alex])
+        #expect(PingContact.merging([samAgain, alex], into: [sam]) == [sam, alex])
+    }
+
+    @Test("Texts a contact's mobile number when they have one, else their first")
+    func preferredPhone() {
+        #expect(PingContact.preferredPhone([
+            (label: "_$!<Home>!$_", value: "555 0100"), (label: "_$!<Mobile>!$_", value: "555 0101"),
+        ]) == "555 0101")
+        #expect(PingContact.preferredPhone([(label: nil, value: " "), (label: "_$!<Work>!$_", value: "555 0102")]) == "555 0102")
+        #expect(PingContact.preferredPhone([]) == nil)
+    }
+
+    @Test("Reads a signed share link and an invitation preview")
+    func shareDecoding() throws {
+        let link = try PingFixtures.decode(ShareLinkResponse.self,
+            #"{"shareLink":{"url":"https://hotmess.social/pings/ping-1?e=v3.abc","expiresAt":"2026-10-10T05:00:00-07:00"}}"#)
+        #expect(link.shareLink?.url == url)
+        #expect(try PingFixtures.decode(ShareLinkResponse.self, #"{"shareLink":null}"#).shareLink == nil)
+
+        let invitation = try PingFixtures.decode(ShareInvitation.self, """
+        {"kind":"ping","id":"ping-1","title":"Jordan wants to go out","note":null,"sender_name":"Jordan",
+         "expires_at":"2026-10-10T05:00:00-07:00","targets":[{"id":"target-1","name":"Drag Bingo","path":"/events/\(PingFixtures.bingo)"}]}
+        """)
+        #expect(invitation.senderName == "Jordan")
+        #expect(invitation.targets.map(\.name) == ["Drag Bingo"])
+        #expect(invitation.note == nil)
+    }
+}

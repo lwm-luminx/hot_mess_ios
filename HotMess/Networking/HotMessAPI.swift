@@ -354,6 +354,18 @@ struct HotMessAPI: CoverPaymentAPI {
         _ = try await query(Documents.endPing, variables: [:], as: EndPingResponse.self)
     }
 
+    /// A signed link to `path` attributed to the user, such as
+    /// `https://hotmess.social/pings/<id>?e=<token>` for a Ping's invitation.
+    /// The API ends a Ping's link with the Ping; `nil` when the user can't
+    /// share it (it's ended, or no longer visible to them).
+    func shareLink(path: String, lifetime: String = "DAY") async throws -> URL? {
+        try await query(
+            Documents.shareLink,
+            variables: ["path": .string(path), "lifetime": .string(lifetime)],
+            as: ShareLinkResponse.self
+        ).shareLink?.url
+    }
+
     static func sendPingVariables(
         places: [PingPlace],
         note: String?,
@@ -1063,6 +1075,12 @@ extension HotMessAPI {
         }
         """
 
+        static let shareLink = """
+        query ShareInvitation($path: String!, $lifetime: ShareLinkLifetime!) {
+          shareLink(path: $path, lifetime: $lifetime) { url expiresAt }
+        }
+        """
+
         static let pairUpMatchFields = """
         id accepted partnerAccepted bonus metAt endReason topic { key text }
         partner { id name avatarUrl lookFor }
@@ -1428,6 +1446,11 @@ struct LeavePingResponse: Decodable, Sendable { let leavePing: PingPayload }
 struct EndPingResponse: Decodable, Sendable {
     struct Payload: Decodable, Sendable { let ended: Bool }
     let endPing: Payload
+}
+
+struct ShareLinkResponse: Decodable, Sendable {
+    struct Link: Decodable, Sendable { let url: URL }
+    let shareLink: Link?
 }
 
 struct MeResponse: Decodable, Sendable {
