@@ -11,7 +11,7 @@ enum CardMetrics {
     static let featuredHeight: CGFloat = 180
     static let personHeight: CGFloat = 84
     static let spacing: CGFloat = 12
-    /// Venues are full-width strips, so they read differently from event
+    /// Venues are strips joined in one rounded card, so they read differently from event
     /// cards; tall enough to read like a small hero.
     static let venueHeight: CGFloat = 168
     static let stripSpacing: CGFloat = 2
@@ -40,6 +40,8 @@ struct PhotoCard<Content: View, Leading: View, Trailing: View>: View {
     var alignment: Alignment = .bottomLeading
     /// `radius-photo`, or `radius-bubble` for an event shared in chat.
     var cornerRadius: CGFloat = CardMetrics.cornerRadius
+    /// The least scrim behind the text, for cards that carry several lines.
+    var minimumScrim: Double = 0
     @ViewBuilder var content: Content
     @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing
@@ -129,7 +131,9 @@ struct PhotoCard<Content: View, Leading: View, Trailing: View>: View {
 
     private var increasedContrast: Bool { colorSchemeContrast == .increased }
     private var target: Double { increasedContrast ? 7 : 4.5 }
-    private var scrimFloor: Double { increasedContrast || reduceTransparency ? ImageTone.accessibleScrimFloor : 0 }
+    private var scrimFloor: Double {
+        max(minimumScrim, increasedContrast || reduceTransparency ? ImageTone.accessibleScrimFloor : 0)
+    }
 
     private var cacheKey: String? {
         url.map { "card|\(minHeight)|\(blur)|\($0.absoluteString)|\(target)|\(scrimFloor)" }
@@ -314,7 +318,9 @@ struct VenueCard<Corner: View>: View {
             url: venue.bannerURL ?? venue.photoURL,
             minHeight: CardMetrics.venueHeight,
             topClearance: 44,
-            cornerRadius: 0
+            cornerRadius: 0,
+            // Three lines over the photo, so always a firm scrim behind them.
+            minimumScrim: ImageTone.accessibleScrimFloor
         ) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(venue.name)
@@ -587,16 +593,16 @@ struct PersonCardLink: View {
 
 /// A titled stack of cards for screens that scroll in a `ScrollView`. Unlike
 /// `DetailSection` the rows bring their own background. A section with no rows
-/// draws nothing, header included. `edgeToEdge` lays the rows out as full-width
-/// strips with a hairline gap, as venues use.
+/// draws nothing, header included. `grouped` joins the rows into one rounded
+/// card with a hairline gap between them, as venues use.
 struct CardSection<Content: View>: View {
     let title: String?
-    var edgeToEdge = false
+    var grouped = false
     let content: Content
 
-    init(_ title: String? = nil, edgeToEdge: Bool = false, @ViewBuilder content: () -> Content) {
+    init(_ title: String? = nil, grouped: Bool = false, @ViewBuilder content: () -> Content) {
         self.title = title
-        self.edgeToEdge = edgeToEdge
+        self.grouped = grouped
         self.content = content()
     }
 
@@ -612,10 +618,22 @@ struct CardSection<Content: View>: View {
                             .padding(.horizontal, 36)
                     }
 
-                    LazyVStack(spacing: edgeToEdge ? CardMetrics.stripSpacing : CardMetrics.spacing) {
-                        ForEach(rows) { $0 }
+                    if grouped {
+                        LazyVStack(spacing: CardMetrics.stripSpacing) {
+                            ForEach(rows) { $0 }
+                        }
+                        .clipShape(.rect(cornerRadius: HotMessRadius.lg))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: HotMessRadius.lg)
+                                .strokeBorder(Color.hotMessBorder, lineWidth: 1)
+                        }
+                        .padding(.horizontal, 16)
+                    } else {
+                        LazyVStack(spacing: CardMetrics.spacing) {
+                            ForEach(rows) { $0 }
+                        }
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, edgeToEdge ? 0 : 16)
                 }
             }
         }

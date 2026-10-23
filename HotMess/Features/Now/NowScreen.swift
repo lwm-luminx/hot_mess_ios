@@ -61,12 +61,16 @@ struct NowScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Taller at a venue with nothing on, for its details,
+                        // over the venue page's firmer scrim.
+                        let venueHero = now.event == nil && isAtVenue(now)
                         HeroHeader(
-                            url: now.imageURL,
+                            urls: [now.imageURL].compactMap { $0 },
                             topInset: proxy.safeAreaInsets.top,
                             tone: $heroTone,
-                            // Taller at a venue with nothing on, for its details.
-                            bodyHeight: now.event == nil && isAtVenue(now) ? HeroMetrics.venueNowHeight : HeroMetrics.bodyHeight
+                            minimumContrast: venueHero ? 7 : 4.5,
+                            minimumScrim: venueHero ? ImageTone.accessibleScrimFloor : 0,
+                            bodyHeight: venueHero ? HeroMetrics.venueNowHeight : HeroMetrics.bodyHeight
                         ) {
                             heroText(now)
                         }
@@ -268,8 +272,8 @@ struct NowScreen: View {
             .accessibilityIdentifier("now.event")
             .accessibilityHint(String(localized: "View event details"))
         } else if let venue = now.venue {
-            // Nothing on yet: the venue, with what's next, tonight's cover,
-            // where it is and who's here.
+            // Nothing on yet: the venue and where it is, then what's next,
+            // tonight's cover and who's here.
             VStack(alignment: .leading, spacing: 10) {
                 VenueCardLink(venue: venue) {
                     HStack(spacing: 12) {
@@ -283,6 +287,12 @@ struct NowScreen: View {
                     }
                 }
                 .accessibilityHint(String(localized: "View venue details"))
+
+                if let address = venue.address, !address.isEmpty {
+                    Text(address)
+                        .font(.hotMess(.subheadline, semibold: true))
+                        .lineLimit(2)
+                }
 
                 if let next = now.events.first {
                     NavigationLink(value: AppRoute.event(next.id)) {
@@ -298,8 +308,8 @@ struct NowScreen: View {
                     .accessibilityIdentifier("now.nextEvent")
                 }
 
-                ForEach(venueHeroLines(now, venue: venue), id: \.self) { line in
-                    Text(line)
+                if let coverCharge = now.coverCharge {
+                    Text(coverCharge.summary(isTonight: true))
                         .font(.hotMess(.subheadline, semibold: true))
                         .lineLimit(2)
                 }
@@ -319,18 +329,6 @@ struct NowScreen: View {
                 .lineLimit(2)
                 .accessibilityAddTraits(.isHeader)
         }
-    }
-
-    /// Tonight's cover, then the address, for the venue hero when nothing's on.
-    private func venueHeroLines(_ now: Now, venue: Venue) -> [String] {
-        var lines: [String] = []
-        if let coverCharge = now.coverCharge {
-            lines.append(coverCharge.summary(isTonight: true))
-        }
-        if let address = venue.address, !address.isEmpty {
-            lines.append(address)
-        }
-        return lines
     }
 
     /// "Sam is here", or "4 friends here".
@@ -360,8 +358,9 @@ struct NowScreen: View {
             stageSection(now)
             stagePhotosSection(now)
         case CardKind.nowChat:
-            venueChatSection(now)
+            // Quickie above the chat it leads to, when it's shown.
             pairUpSection
+            venueChatSection(now)
             // Pings sit with the chat: at a venue, with "I feel unsafe".
             if isAtVenue(now) {
                 PingAndHelpRow(
@@ -459,7 +458,7 @@ struct NowScreen: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                CardSection(String(localized: "Venues"), edgeToEdge: true) {
+                CardSection(String(localized: "Venues"), grouped: true) {
                     ForEach(venues.prefix(3)) { venue in
                         VenueCardLink(venue: venue)
                     }
@@ -639,7 +638,7 @@ struct NowScreen: View {
     @ViewBuilder
     private func friendVenuesSection(_ now: Now) -> some View {
         if now.venue == nil, !now.friendVenues.isEmpty {
-            CardSection(String(localized: "Where your friends are"), edgeToEdge: true) {
+            CardSection(String(localized: "Where your friends are"), grouped: true) {
                 ForEach(now.friendVenues) { entry in
                     VenueCardLink(venue: entry.venue) {
                         VenueCard(

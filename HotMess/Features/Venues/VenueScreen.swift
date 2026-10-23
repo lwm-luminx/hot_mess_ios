@@ -99,6 +99,17 @@ struct VenueScreen: View {
                             }
                         }
 
+                        // Pair me up, where the venue has it: once you're here,
+                        // or while you're in it tonight. Above the chat it leads to.
+                        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
+                            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
+                                Task {
+                                    await pairUpModel?.join(lookFor: nil)
+                                    isPairingUp = true
+                                }
+                            })
+                        }
+
                         if overview.chatOpen {
                             LiveChatPeek(
                                 title: String(localized: "Chat"),
@@ -143,17 +154,6 @@ struct VenueScreen: View {
                         // Photos of the venue, and the camera once you're
                         // here: what you take goes on the stage's pages too.
                         PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
-
-                        // Pair me up, where the venue has it: once you're here,
-                        // or while you're in it tonight.
-                        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
-                            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
-                                Task {
-                                    await pairUpModel?.join(lookFor: nil)
-                                    isPairingUp = true
-                                }
-                            })
-                        }
 
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
 

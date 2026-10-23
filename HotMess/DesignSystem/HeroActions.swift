@@ -6,7 +6,7 @@
 import SwiftUI
 
 /// A button or chip drawn on a hero photo: white on dark glass, so it reads
-/// whatever the photo, or filled with the accent when it's selected.
+/// whatever the photo, or white on the accent when it's selected.
 struct HeroGlass: ViewModifier {
     var isSelected = false
     var fillsWidth = true
@@ -16,13 +16,17 @@ struct HeroGlass: ViewModifier {
             .font(.hotMess(.subheadline, semibold: true))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
-            .foregroundStyle(isSelected ? Color.hotMessOnAccent : .white)
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .frame(maxWidth: fillsWidth ? .infinity : nil)
             .background {
                 if isSelected {
+                    // The light accent, which carries white text at 4.5:1 or
+                    // more; the dark accent needs dark text, which reads as
+                    // black on pink over a photo.
                     Capsule().fill(Color.hotMessAccent)
+                        .environment(\.colorScheme, .light)
                 } else {
                     Capsule().fill(Color.hotMessGlass)
                         .background(.ultraThinMaterial, in: Capsule())
