@@ -304,7 +304,7 @@ struct FriendFaces: View {
 
 /// A venue as a photo card, like a small hero: its name, what's on now or
 /// next, and its summary over its photo, with a pill top right (a distance, a
-/// friend count) and `corner` top left (friend faces).
+/// friend count, after On now) and `corner` top left (friend faces).
 struct VenueCard<Corner: View>: View {
     let venue: Venue
     var description: String?
@@ -346,10 +346,14 @@ struct VenueCard<Corner: View>: View {
         } leading: {
             corner
         } trailing: {
-            if let nextEvent, nextEvent.isOn() {
-                GlassPill(String(localized: "On now"))
-            } else if let pill {
-                GlassPill(pill)
+            // The distance always shows; On now joins it rather than replacing it.
+            HStack(spacing: 6) {
+                if let nextEvent, nextEvent.isOn() {
+                    GlassPill(String(localized: "On now"))
+                }
+                if let pill {
+                    GlassPill(pill)
+                }
             }
         }
     }
