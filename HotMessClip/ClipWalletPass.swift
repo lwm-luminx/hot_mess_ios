@@ -17,7 +17,6 @@ struct ClipWalletPassButton: View {
             AddPassToWalletButton([pass])
                 .addPassToWalletButtonStyle(.black)
                 .frame(height: 50)
-                .onChange(of: pass.passTypeIdentifier) { _, _ in refreshAdded(pass) }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in refreshAdded(pass) }
         } else {
             Color.clear.frame(height: 0).task { await load() }

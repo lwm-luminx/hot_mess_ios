@@ -148,8 +148,8 @@ final class ClipApplePay: NSObject, ApplePayContextDelegate {
     }
 
     func applePayContext(_ context: STPApplePayContext, didCreatePaymentMethod paymentMethod: StripeAPI.PaymentMethod,
-                         paymentInformation: PKPayment, completion: @escaping STPIntentClientSecretCompletionBlock) {
-        completion(clientSecret, nil)
+                         paymentInformation: PKPayment) async throws -> String {
+        clientSecret
     }
 
     func applePayContext(_ context: STPApplePayContext, didCompleteWith status: STPApplePayContext.PaymentStatus, error: (any Error)?) {
