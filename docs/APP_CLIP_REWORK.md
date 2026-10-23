@@ -18,7 +18,7 @@
 | `ClipAPI.swift` | GraphQL `ClipVenue`, `ClipEvent`, `ClipPerformer`, `buyCover`, `buyCoatCheck`, `payCover`, `confirmCover`, `refundAdmission` | Keep cover, tips and refund; drop coat check from the clip target |
 | `SharedAuthentication.swift` `ClipCredentialHandoff` | Clip keychain service `social.hotmess.account.clip`, migrated once into `social.hotmess.account` on first app launch | Keep |
 | `SignedShareButton`, `ShareInvitation`, `SharedPingScreen`, `AppRoute.ping(_, invitation:)` | Signed, expiring share links (`shareLink(path:, lifetime:)`, DAY/WEEK/MONTH) and the app side of a Ping invitation | Keep; the clip shows the invitation, the app joins it |
-| Entitlements and Info.plist | `appclips:hotmess.social` (+www), Apple sign-in, declared age range, in-app payments, on-demand install, parent application identifiers; `NSAppClipRequestEphemeralUserNotification` false, location confirmation false | Keep; add the app group and keychain access group the design names; notifications and location stay off in phase 1 |
+| Entitlements and Info.plist | `appclips:hotmess.social` (+www), Apple sign-in, in-app payments, on-demand install, parent application identifiers (no Wallet pass type IDs or declared age range: App Clip IDs can't carry them, and adding a pass needs neither); `NSAppClipRequestEphemeralUserNotification` false, location confirmation false | Keep; add the app group and keychain access group the design names; notifications and location stay off in phase 1 |
 | Dependencies linked into the clip | AudienceKit SDK, `StripePaymentSheet`, `SquareInAppPaymentsSDK` | Replace the two payment SDKs with `StripeApplePay` (or PassKit straight to the API) before measuring the size |
 
 ## What the mockups change, screen by screen
