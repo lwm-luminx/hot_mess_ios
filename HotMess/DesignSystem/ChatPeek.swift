@@ -36,6 +36,10 @@ struct ChatPeek: View {
     var online: Int?
     var limit: Int
     var participants: [Participant]
+    /// Who's in the room, in a line under the faces: "The Wildrose, 3 from
+    /// tonight's lineup and Jordan · 23 here". It says the count, so the
+    /// header doesn't.
+    var summary: String?
     /// The messages are live: the screen is following the room right now.
     var isLive: Bool
     let destination: Destination
@@ -50,6 +54,7 @@ struct ChatPeek: View {
         online: Int? = nil,
         limit: Int = 3,
         participants: [Participant] = [],
+        summary: String? = nil,
         isLive: Bool = false,
         route: AppRoute
     ) {
@@ -59,6 +64,7 @@ struct ChatPeek: View {
         self.online = online
         self.limit = limit
         self.participants = participants
+        self.summary = summary
         self.isLive = isLive
         self.destination = .route(route)
     }
@@ -70,6 +76,7 @@ struct ChatPeek: View {
         online: Int? = nil,
         limit: Int = 3,
         participants: [Participant] = [],
+        summary: String? = nil,
         isLive: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -79,6 +86,7 @@ struct ChatPeek: View {
         self.online = online
         self.limit = limit
         self.participants = participants
+        self.summary = summary
         self.isLive = isLive
         self.destination = .action(action)
     }
@@ -121,6 +129,13 @@ struct ChatPeek: View {
                     .padding(.vertical, 4)
                 }
                 .scrollIndicators(.hidden)
+            }
+
+            if let summary {
+                Text(verbatim: summary)
+                    .font(.hotMess(.footnote))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             if visible.isEmpty {
@@ -184,7 +199,7 @@ struct ChatPeek: View {
 
             Spacer(minLength: 0)
 
-            if let online, online > 0 {
+            if summary == nil, let online, online > 0 {
                 HStack(spacing: 6) {
                     PresenceDot(state: .online, size: 8, ringColor: .hotMessSurfaceSunken)
                     Text("\(online) here now")
@@ -208,6 +223,9 @@ struct ChatPeek: View {
     }
 
     private var accessibilityLabel: String {
+        if let summary {
+            return recentLabel + ", " + summary
+        }
         if let online, online > 0 {
             return recentLabel + ", " + String(localized: "\(online) here now")
         }

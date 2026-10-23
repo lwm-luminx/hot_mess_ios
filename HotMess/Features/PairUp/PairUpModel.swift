@@ -72,6 +72,12 @@ final class PairUpModel {
         await perform { try await $0.cancelPairUp(matchID: match.id) }
     }
 
+    /// Agrees to share the meeting in the venue's chat.
+    func share() async {
+        guard let id = state?.match?.id else { return }
+        await perform { try await $0.sharePairUp(matchID: id) }
+    }
+
     func leave() async {
         await perform { try await $0.leavePairUp(venueID: self.venueID) }
     }
@@ -112,7 +118,7 @@ final class PairUpModel {
         case .used: String(localized: "That code was refreshed. Ask them to show it again.")
         case .ended: String(localized: "That pairing has ended.")
         case .own: String(localized: "That's your own code. Scan theirs instead.")
-        case .unreadable: String(localized: "That isn't a Pair me up code. Try scanning again.")
+        case .unreadable: String(localized: "That isn't a Quickie code. Try scanning again.")
         }
     }
 

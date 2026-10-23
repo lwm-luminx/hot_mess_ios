@@ -58,14 +58,22 @@ struct InfoRow: View {
 /// link when it has a URL.
 struct SocialLinkRow: View {
     let link: SocialLink
+    /// Names the network ("Instagram") with the handle beside it, so a list of
+    /// them says where each one goes.
+    var namesService = false
 
     var body: some View {
         if let url = link.url {
             Link(destination: url) {
                 HStack(spacing: 12) {
                     icon
-                    Text(verbatim: link.label)
+                    title
                     Spacer()
+                    if namesService, !link.handle.isEmpty, link.label != link.serviceName {
+                        Text(verbatim: link.label)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                     Image(systemName: "arrow.up.right")
                         .font(.footnote)
                         .foregroundStyle(.tertiary)
@@ -74,9 +82,13 @@ struct SocialLinkRow: View {
         } else {
             HStack(spacing: 12) {
                 icon
-                Text(verbatim: link.label)
+                title
             }
         }
+    }
+
+    private var title: Text {
+        Text(verbatim: namesService ? link.serviceName : link.label)
     }
 
     @ViewBuilder

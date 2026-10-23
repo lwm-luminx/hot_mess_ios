@@ -20,6 +20,9 @@ struct HereNowPerson: Identifiable, Hashable, Sendable {
     var presence: PresenceState = .online
     /// The user themself, shown as "You", first in the strip.
     var isViewer = false
+    /// The tribes the user and they both picked: a BothMark on their face
+    /// and the BothLine in the sheet. Only the two of them see it.
+    var sharedTribes: [SharedTribe] = []
 
     /// In the room now, not only here recently.
     var isHere: Bool { presence == .online }
@@ -37,13 +40,17 @@ struct HereNowPerson: Identifiable, Hashable, Sendable {
     /// here recently" for someone who left lately.
     var accessibilityLabel: String {
         if isViewer { return String(localized: "You, here now") }
-        return switch (isFriend, isHere) {
+        let label = switch (isFriend, isHere) {
         case (true, true): String(localized: "\(displayName), friend, here now")
         case (false, true): String(localized: "\(displayName), here now")
         case (true, false): String(localized: "\(displayName), friend, here recently")
         case (false, false): String(localized: "\(displayName), here recently")
         }
+        return sharedTribes.accessibilityPhrase.map { "\(label), \($0)" } ?? label
     }
+
+    /// Shares at least one tribe with the user.
+    var sharesTribes: Bool { !isViewer && !sharedTribes.isEmpty }
 
     /// The user first, then people here now before people here recently; in
     /// each, friends first, then everyone else, each by name. People with no
@@ -79,27 +86,173 @@ struct HereNowPlace: Hashable, Sendable {
     let photoURL: URL?
 }
 
-/// Who is in a chat room now, in one short row under the room's banner: the
-/// count (when anyone else is here), the venue (always there in its own room), then everyone else,
-/// friends first with an accent ring and a heart. A locale's room has no
-/// venue, so draw it there only when someone else is here.
+/// Someone on tonight's lineup at the room's venue, as the Here now strip
+/// and the "In this room" sheet draw them: a person (listing), not a user,
+/// listed from the moment the room opens whether or not anyone who manages
+/// it has been in. One per lineup entry, so a duet is one face with its
+/// first two people. Karaoke singers aren't on it; they're guests.
+struct HereNowLineupFace: Identifiable, Hashable, Sendable {
+    /// Where the act is tonight, as the lineup strip badges it.
+    enum Status: Hashable, Sendable {
+        case onNow
+        case upNext
+        case done
+    }
+
+    /// One of the act's people, for its avatar.
+    struct Person: Hashable, Sendable {
+        let name: String?
+        let avatarURL: URL?
+    }
+
+    /// The lineup's role word and its small icon: "Host", "DJ",
+    /// "Performer", "MC".
+    struct Role: Hashable, Sendable {
+        let title: String
+        let systemImage: String
+    }
+
+    /// The lineup entry's ID.
+    let id: String
+    /// The act's billing, in full: listing names are public.
+    let name: String
+    /// Its first two people, in billing order; empty for an intermission.
+    var people: [Person] = []
+    var role: Role? = nil
+    var status: Status? = nil
+    /// An intermission on now, drawn as the strip's green chip.
+    var isIntermission = false
+    /// The set time, only for a hard start: "9:00 PM – close".
+    var setTime: String? = nil
+    /// How the people who manage the listing can be reached; `nil` when the
+    /// room hasn't said (no dot, and no words in the sheet).
+    var presence: PresenceState? = nil
+    /// The page it opens: its first person's.
+    var personID: UUID? = nil
+
+    var isDone: Bool { status == .done }
+
+    /// In the sheet, under the role: "In chat now", "Gets notifications",
+    /// "Not in chat yet". `nil` when the room hasn't said.
+    var presenceText: String? {
+        switch presence {
+        case .online: String(localized: "In chat now")
+        case .push: String(localized: "Gets notifications")
+        case .offline: String(localized: "Not in chat yet")
+        case nil: nil
+        }
+    }
+
+    /// What VoiceOver reads, as the lineup strip does, with presence:
+    /// "Aurora Borealis, Host, 9 PM to close, on now, in chat now".
+    var accessibilityLabel: String {
+        let state: String? = switch status {
+        case .onNow: String(localized: "on now")
+        case .upNext: String(localized: "up next")
+        case .done: String(localized: "done")
+        case nil: nil
+        }
+        let reach: String? = switch presence {
+        case .online: String(localized: "in chat now")
+        case .push: String(localized: "gets notifications")
+        case .offline, nil: nil
+        }
+        let kind = isIntermission ? String(localized: "intermission") : role?.title
+        return [name, kind, setTime, state, reach].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+/// Who is in a chat room now, under the room's banner: a header row
+/// ("Tonight · 23 here", See everyone), then one short row of faces: the
+/// venue (always there in its own room), tonight's lineup, a hairline, then
+/// everyone else, friends first with an accent ring and a heart. A locale's
+/// room has no venue and no lineup, so draw it there only when someone else
+/// is here. Without `onSeeEveryone` the count leads the row instead of the
+/// header, and the lineup isn't folded.
 struct HereNowStrip: View {
     var place: HereNowPlace? = nil
+    /// Tonight's lineup, in the order the strip shows it.
+    var lineup: [HereNowLineupFace] = []
     let people: [HereNowPerson]
     /// Report someone here, from their avatar's menu.
     var onReport: ((HereNowPerson) -> Void)? = nil
     /// Block someone here, which hides them at once.
     var onBlock: ((HereNowPerson) -> Void)? = nil
+    /// Tapping someone (not the user): their profile sheet.
+    var onSelect: ((HereNowPerson) -> Void)? = nil
+    /// "See everyone", and the "+N on the lineup" chip: the "In this room"
+    /// sheet.
+    var onSeeEveryone: (() -> Void)? = nil
+    /// Opens a lineup act's page.
+    var onSelectLineup: ((HereNowLineupFace) -> Void)? = nil
+
+    /// The lineup faces the row shows before folding the rest into a chip.
+    static let lineupLimit = 6
+
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        // One compact row: the count, then the faces. A horizontal scroll view
-        // takes all the height it's offered, so it's held to its content's;
-        // otherwise it splits the screen with the thread below it. The row is
-        // a plain HStack: a LazyHStack reports no height of its own, so the
-        // strip would collapse to nothing.
+        VStack(alignment: .leading, spacing: 4) {
+            if onSeeEveryone != nil {
+                header
+            }
+            faces
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.hereNow")
+    }
+
+    /// "Tonight · 23 here", and See everyone.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(String(localized: "Tonight · \(hereCount) here"))
+                .font(.hotMess(.caption, semibold: true))
+                .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: 8)
+
+            if let onSeeEveryone {
+                Button(action: onSeeEveryone) {
+                    HStack(spacing: 2) {
+                        Text("See everyone")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .font(.hotMess(.caption, semibold: true))
+                    .foregroundStyle(Color.hotMessAccentInk)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chat.hereNow.seeEveryone")
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// The lineup faces shown; the rest fold into the chip.
+    private var shownLineup: ArraySlice<HereNowLineupFace> {
+        onSeeEveryone == nil ? lineup[...] : lineup.prefix(Self.lineupLimit)
+    }
+
+    private var foldedCount: Int {
+        lineup.count - shownLineup.count
+    }
+
+    private var faces: some View {
+        // A horizontal scroll view takes all the height it's offered, so it's
+        // held to its content's; otherwise it splits the screen with the
+        // thread below it. The row is a plain HStack: a LazyHStack reports no
+        // height of its own, so the strip would collapse to nothing.
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .center, spacing: 10) {
-                if hereCount > 0 {
+            HStack(alignment: lineup.isEmpty ? .center : .top, spacing: 10) {
+                if onSeeEveryone == nil, hereCount > 0 {
                     Text(countLabel)
                         .font(.hotMess(.caption, semibold: true))
                         .foregroundStyle(.secondary)
@@ -111,9 +264,34 @@ struct HereNowStrip: View {
                     HereNowPlaceFace(place: place)
                 }
 
+                ForEach(shownLineup) { face in
+                    lineupFace(face)
+                }
+
+                if foldedCount > 0, let onSeeEveryone {
+                    Button(action: onSeeEveryone) {
+                        Text(String(localized: "+\(foldedCount) on the lineup"))
+                            .font(.hotMess(.caption, semibold: true))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 40)
+                            .background(Color.hotMessControlFill, in: .capsule)
+                            .fixedSize()
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // The lineup, then everyone else.
+                if !lineup.isEmpty, !people.isEmpty {
+                    Rectangle()
+                        .fill(Color.hotMessBorder)
+                        .frame(width: 1 / displayScale, height: HereNowLineupFaceView.avatarSize)
+                        .accessibilityHidden(true)
+                }
+
                 ForEach(people) { person in
-                    // Nobody reports or blocks themself.
-                    HereNowFace(person: person)
+                    // Nobody reports or blocks themself, or opens their own sheet.
+                    face(person)
                         .contextMenu {
                             if !person.isViewer, onReport != nil || onBlock != nil {
                                 safetyActions(for: person)
@@ -131,14 +309,16 @@ struct HereNowStrip: View {
             .padding(.top, 2)
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
-        .overlay(alignment: .bottom) {
-            Divider()
+    }
+
+    @ViewBuilder
+    private func lineupFace(_ face: HereNowLineupFace) -> some View {
+        if let onSelectLineup, face.personID != nil {
+            Button { onSelectLineup(face) } label: { HereNowLineupFaceView(face: face) }
+                .buttonStyle(.plain)
+        } else {
+            HereNowLineupFaceView(face: face)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("chat.hereNow")
     }
 
     /// Only people in the room now count, the user included, not those here
@@ -149,6 +329,24 @@ struct HereNowStrip: View {
 
     private var countLabel: String {
         String(localized: "\(hereCount) here now")
+    }
+
+    @ViewBuilder
+    private func face(_ person: HereNowPerson) -> some View {
+        if !person.isViewer, let onSelect {
+            Button {
+                onSelect(person)
+            } label: {
+                HereNowFace(person: person)
+                    // At least 44pt to tap.
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "Shows their profile"))
+        } else {
+            HereNowFace(person: person)
+        }
     }
 
     @ViewBuilder
@@ -197,7 +395,7 @@ struct HereNowFace: View {
                 .opacity(person.isHere ? 1 : 0.55)
                 .padding(Self.ringInset + Self.ringWidth)
                 .overlay {
-                    if person.isFriend {
+                    if person.isFriend || person.sharesTribes {
                         Circle().strokeBorder(Color.hotMessAccent, lineWidth: Self.ringWidth)
                     }
                 }
@@ -207,8 +405,12 @@ struct HereNowFace: View {
                         .offset(x: -1, y: -1)
                 }
                 .overlay(alignment: .topTrailing) {
+                    // A friend's heart wins the corner; the sheet says both.
                     if person.isFriend {
                         FriendBadge(surface: surface)
+                            .offset(x: 3, y: -3)
+                    } else if person.sharesTribes {
+                        BothBadge(size: 13, surface: surface)
                             .offset(x: 3, y: -3)
                     }
                 }
@@ -248,6 +450,130 @@ struct HereNowPlaceFace: View {
     }
 }
 
+/// An act on tonight's lineup in the Here now strip, as the lineup strip
+/// draws it but smaller: a 40 avatar (a duet's first two overlapping) with
+/// the presence dot, the billing, the role word and its icon, then On now,
+/// Up next or Done. Done acts are at half strength. An intermission on now
+/// is the strip's green chip.
+struct HereNowLineupFaceView: View {
+    let face: HereNowLineupFace
+    /// The surface behind the strip, for the ring around the dot.
+    var surface: Color = Color(.secondarySystemGroupedBackground)
+
+    static let avatarSize: CGFloat = 40
+    private static let width: CGFloat = 76
+
+    var body: some View {
+        Group {
+            if face.isIntermission {
+                VStack(spacing: 4) {
+                    Label(face.name, systemImage: "waveform")
+                        .font(.hotMess(.caption, semibold: true))
+                        .foregroundStyle(Color.hotMessSuccess)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: Self.avatarSize)
+                        .background(Color.hotMessSuccessSoft, in: .capsule)
+                        .fixedSize()
+                    LineupStatusBadge(status: face.status)
+                }
+            } else {
+                VStack(spacing: 2) {
+                    LineupAvatars(face: face, size: Self.avatarSize, surface: surface)
+                        .opacity(face.isDone ? 0.5 : 1)
+
+                    Text(face.name)
+                        .font(.hotMess(.caption, semibold: true))
+                        .foregroundStyle(face.isDone ? Color.secondary : Color.primary)
+                        .lineLimit(1)
+
+                    if let role = face.role {
+                        Label(role.title, systemImage: role.systemImage)
+                            .font(.hotMess(.caption2))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    LineupStatusBadge(status: face.status)
+                }
+                .frame(width: Self.width)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(face.accessibilityLabel)
+    }
+}
+
+/// An act's people: one avatar, or a duet's first two (each 32) overlapping
+/// by 12, with the act's presence dot.
+struct LineupAvatars: View {
+    let face: HereNowLineupFace
+    var size: CGFloat = 40
+    var surface: Color = Color(.secondarySystemGroupedBackground)
+
+    var body: some View {
+        Group {
+            if face.people.count > 1 {
+                HStack(spacing: -12) {
+                    ForEach(Array(face.people.prefix(2).enumerated()), id: \.offset) { _, person in
+                        Avatar(
+                            url: person.avatarURL,
+                            initials: person.name?.initialsForDisplay,
+                            size: size * 0.8,
+                            tintsInitials: true
+                        )
+                    }
+                }
+                .frame(height: size)
+            } else {
+                Avatar(
+                    url: face.people.first?.avatarURL,
+                    initials: face.name.initialsForDisplay,
+                    size: size,
+                    tintsInitials: true
+                )
+            }
+        }
+        // Offline draws nothing: the lineup is listed whether or not anyone's in.
+        .overlay(alignment: .bottomTrailing) {
+            if let presence = face.presence {
+                PresenceDot(state: presence, size: Avatar.presenceSize(for: size), ringColor: surface)
+                    .offset(x: 1, y: 1)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// On now (a `success-soft` pill), Up next (outlined in the accent) or
+/// Done, as AudienceKitUI's lineup badges them, in the app's type.
+struct LineupStatusBadge: View {
+    let status: HereNowLineupFace.Status?
+
+    var body: some View {
+        switch status {
+        case .onNow:
+            OnNowBadge()
+        case .upNext:
+            Text("Up next")
+                .font(.hotMess(.caption2, semibold: true))
+                .textCase(.uppercase)
+                .foregroundStyle(Color.hotMessAccentInk)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .overlay { Capsule().strokeBorder(Color.hotMessAccent) }
+                .lineLimit(1)
+                .fixedSize()
+        case .done:
+            Text("Done")
+                .font(.hotMess(.caption))
+                .foregroundStyle(.secondary)
+        case nil:
+            EmptyView()
+        }
+    }
+}
+
 /// The small heart on a friend's avatar.
 private struct FriendBadge: View {
     let surface: Color
@@ -277,10 +603,20 @@ private struct FriendBadge: View {
         HereNowPerson(id: UUID(), name: "Robin Lee", avatarURL: nil, isFriend: true, presence: .push),
     ])
 
+    let lineup = [
+        HereNowLineupFace(id: "1", name: "Aurora Borealis", role: .init(title: "Host", systemImage: "sparkles"),
+                          status: .onNow, presence: .online),
+        HereNowLineupFace(id: "2", name: "DJ Kiki", role: .init(title: "DJ", systemImage: "headphones"),
+                          status: .upNext, presence: .push),
+        HereNowLineupFace(id: "3", name: "Lady Bunny Hop", role: .init(title: "Performer", systemImage: "theatermasks"),
+                          status: .done),
+    ]
+
     VStack(spacing: 0) {
         RoomBanner(kind: .range, roomName: "The Eagle")
-        HereNowStrip(place: HereNowPlace(name: "The Eagle", photoURL: nil), people: people)
-        PinnedBar(author: "The Eagle", title: "Beer bust starts at 3") {}
+        HereNowStrip(place: HereNowPlace(name: "The Eagle", photoURL: nil), lineup: lineup, people: people,
+                     onSeeEveryone: {})
+        PinnedBar(author: "The Eagle", title: "Doors open at 3") {}
         Spacer()
     }
     .background(Color(.systemGroupedBackground))

@@ -45,8 +45,35 @@ final class PostsModel {
         }
     }
 
+    /// A manager's change, shown at once: an edit in place (pins re-sorted
+    /// where they float), a new post on top, a deleted one gone.
+    func apply(_ change: PostChange) {
+        var posts = posts
+        switch change {
+        case let .updated(post):
+            if let index = posts.firstIndex(where: { $0.id == post.id }) {
+                posts[index] = post
+            } else {
+                posts.insert(post, at: 0)
+            }
+        case let .deleted(id):
+            posts.removeAll { $0.id == id }
+        }
+        if subject.floatsPins {
+            // Stable: pinned first, each group keeping its order.
+            posts = posts.filter(\.pinned) + posts.filter { !$0.pinned }
+        }
+        state = .loaded(posts)
+    }
+
     /// Posts from the last `hours`, for Now's "Latest from tonight".
     func recent(within hours: Double, now: Date = .now) -> [Post] {
         posts.filter { now.timeIntervalSince($0.createdAt) <= hours * 3600 }
     }
+}
+
+/// What a manager did to a post, for the lists showing it.
+enum PostChange: Hashable, Sendable {
+    case updated(Post)
+    case deleted(UUID)
 }

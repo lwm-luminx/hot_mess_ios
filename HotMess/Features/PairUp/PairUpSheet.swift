@@ -15,7 +15,8 @@ struct PairUpSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var lookFor = ""
-    @State private var showingCode: String?
+    /// The code on screen, for the match and topic it was issued for; a new topic clears the old code.
+    @State private var shownCode: (key: String, code: String)?
     @State private var isScanning = false
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
@@ -35,10 +36,12 @@ struct PairUpSheet: View {
                 .padding(20)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle(String(localized: "Pair me up"))
+            .navigationTitle(String(localized: "Quickie"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                // On the right, out of the way: the end of a quickie is the
+                // two choices at the bottom of the "You met!" card.
+                ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Close")) { dismiss() }
                 }
             }
@@ -50,16 +53,12 @@ struct PairUpSheet: View {
         }
         .task { await model.poll() }
         .onAppear { lookFor = model.state?.lookFor ?? "" }
-        .sheet(item: Binding(get: { showingCode.map { PairUpCode(code: $0) } }, set: { showingCode = $0?.code })) { code in
-            PairUpCodeScreen(code: code.code, partnerName: model.state?.match?.partner?.name)
-                .presentationDetents([.large])
-        }
         .sheet(isPresented: $isScanning) {
             PairUpScanner { code in Task { await model.scan(code) } }
         }
         .contentReporting(report: $reportSubject, block: $blockTarget)
         .alert(
-            String(localized: "Pair me up"),
+            String(localized: "Quickie"),
             isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
         ) {
             Button(String(localized: "OK"), role: .cancel) {}
@@ -100,7 +99,7 @@ struct PairUpSheet: View {
                 .foregroundStyle(Color.accentColor)
             Text("Meet someone at \(venueName)")
                 .font(.hotMess(.title2, semibold: true))
-            Text("We'll pair you with someone else here tonight who also tapped Pair me up, and give you both something to talk about. You only see each other once you both say yes, and either of you can cancel any time.")
+            Text("We'll pair you with someone else here tonight who also tapped Quickie, and give you both something to talk about. You only see each other once you both say yes, and either of you can cancel any time.")
                 .font(.hotMess(.subheadline))
                 .foregroundStyle(.secondary)
 
@@ -109,7 +108,7 @@ struct PairUpSheet: View {
             Button {
                 Task { await model.join(lookFor: lookFor) }
             } label: {
-                Text("Pair me up to chat")
+                Text("Start a quickie")
                     .font(.hotMess(.body, semibold: true))
                     .frame(maxWidth: .infinity)
             }
@@ -118,7 +117,7 @@ struct PairUpSheet: View {
             .disabled(!model.isHere || model.isBusy)
 
             if !model.isHere {
-                Text("Pair me up opens once you're at \(venueName).")
+                Text("Quickie opens once you're at \(venueName).")
                     .font(.hotMess(.footnote))
                     .foregroundStyle(.secondary)
             }
@@ -164,7 +163,7 @@ struct PairUpSheet: View {
             .buttonStyle(.bordered)
             .disabled(model.isBusy || lookFor == (state.lookFor ?? ""))
 
-            Button(String(localized: "Stop pairing me up"), role: .destructive) {
+            Button(String(localized: "Leave Quickie"), role: .destructive) {
                 Task { await model.leave() }
             }
             .disabled(model.isBusy)
@@ -227,22 +226,21 @@ struct PairUpSheet: View {
                 }
                 TopicCard(topic: match.topic)
 
-                Text("Found each other? One of you shows a code and the other scans it.")
+                Text("Found each other? Either of you scans the other's code.")
                     .font(.hotMess(.subheadline))
-                HStack(spacing: 12) {
-                    Button {
-                        Task { showingCode = await model.code() }
-                    } label: {
-                        Label(String(localized: "Show my code"), systemImage: "qrcode").frame(maxWidth: .infinity)
+                // Both phones show their code straight away, so whoever's
+                // quicker scans: no deciding who shows and who scans.
+                let key = "\(match.id)-\(match.topic.key)"
+                PairUpCodeView(code: shownCode?.key == key ? shownCode?.code : nil)
+                    .task(id: key) {
+                        if let code = await model.code() { shownCode = (key, code) }
                     }
-                    .buttonStyle(.borderedProminent)
-                    Button {
-                        isScanning = true
-                    } label: {
-                        Label(String(localized: "Scan theirs"), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+                Button {
+                    isScanning = true
+                } label: {
+                    Label(String(localized: "Scan theirs"), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.large)
 
                 cancelButton(match)
@@ -252,26 +250,86 @@ struct PairUpSheet: View {
         .card()
     }
 
+    /// The end of a quickie: share it if you both like, then go again or
+    /// call it a night. Each person chooses for themselves.
     private func met(_ state: PairUpState) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Label(String(localized: "You met!"), systemImage: "sparkles")
                 .font(.hotMess(.title2, semibold: true))
             if let name = state.match?.partner?.name {
-                Text("Hope you and \(name) are having fun.")
+                Text("Hope you and \(name) had a good chat.")
                     .font(.hotMess(.subheadline))
             }
             badge(state)
-            Button {
-                Task { await model.join(lookFor: nil) }
-            } label: {
-                Text("Pair me up again").frame(maxWidth: .infinity)
+            if let match = state.match {
+                shareRow(match)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            Button(String(localized: "I'm done for tonight")) { Task { await model.leave() } }
+
+            VStack(spacing: 10) {
+                Button {
+                    Task { await model.join(lookFor: nil) }
+                } label: {
+                    Text("Let's go again").font(.hotMess(.body, semibold: true)).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("quickie.again")
+
+                Button {
+                    Task {
+                        await model.leave()
+                        dismiss()
+                    }
+                } label: {
+                    Text("I'm done").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityIdentifier("quickie.done")
+            }
+
+            if let partner = state.match?.partner {
+                Button(String(localized: "Something not right? Report or block")) {
+                    reportSubject = ReportSubject(
+                        target: .person,
+                        targetID: partner.id.uuidString.lowercased(),
+                        sender: BlockedUser(id: partner.id, name: partner.name)
+                    )
+                }
+                .font(.hotMess(.footnote))
+                .frame(maxWidth: .infinity)
+            }
         }
         .disabled(model.isBusy)
         .card()
+    }
+
+    /// Nothing names them in the venue's chat unless both say so.
+    @ViewBuilder
+    private func shareRow(_ match: PairUpMatch) -> some View {
+        if match.isShared {
+            Label(String(localized: "Shared in the venue chat"), systemImage: "checkmark.bubble")
+                .font(.hotMess(.subheadline, semibold: true))
+        } else if match.shared {
+            Label(String(localized: "Waiting for them to share too"), systemImage: "hourglass")
+                .font(.hotMess(.subheadline))
+                .foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    Task { await model.share() }
+                } label: {
+                    Label(String(localized: "Share in the venue chat"), systemImage: "bubble.left.and.text.bubble.right")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                Text(match.partnerShared
+                    ? String(localized: "They'd like to share. If you do too, the chat gets your first names and topic.")
+                    : String(localized: "If you both share, the chat gets your first names and what you talked about."))
+                    .font(.hotMess(.caption))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -290,11 +348,6 @@ struct PairUpSheet: View {
 }
 
 // MARK: - Pieces
-
-private struct PairUpCode: Identifiable {
-    let code: String
-    var id: String { code }
-}
 
 private struct TopicCard: View {
     let topic: PairUpTopic
@@ -377,13 +430,16 @@ private struct NoticeCard: View {
     }
 }
 
-/// The night's badge: how many people they met.
+/// The night's badge: how many conversations they had (the same person
+/// twice is two conversations).
 struct MetBadge: View {
     let count: Int
 
     var body: some View {
         Label {
-            Text(count == 1 ? String(localized: "Met someone new tonight") : String(localized: "Met \(count) people tonight"))
+            Text(count == 1
+                ? String(localized: "You've had a conversation tonight")
+                : String(localized: "You've had \(count) conversations tonight"))
                 .font(.hotMess(.subheadline, semibold: true))
         } icon: {
             Image(systemName: "rosette")
@@ -421,35 +477,29 @@ private struct MetCelebration: View {
     }
 }
 
-/// The code to show: big, bright, and only for their partner.
-private struct PairUpCodeScreen: View {
-    let code: String
-    let partnerName: String?
-
-    @Environment(\.dismiss) private var dismiss
+/// The code to show, big and bright on white so it scans in a dark room.
+/// It works once, and only for their match.
+private struct PairUpCodeView: View {
+    let code: String?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text(partnerName.map { String(localized: "Let \($0) scan this") } ?? String(localized: "Let them scan this"))
-                    .font(.hotMess(.title3, semibold: true))
-                QRCodeImage(text: code)
-                    .padding(16)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .frame(maxWidth: 320)
-                Text("It works once, and only for your match.")
-                    .font(.hotMess(.footnote))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "Done")) { dismiss() }
+        VStack(spacing: 8) {
+            Group {
+                if let code {
+                    QRCodeImage(text: code)
+                } else {
+                    ProgressView()
                 }
             }
+            .frame(maxWidth: 240, minHeight: 200)
+            .aspectRatio(1, contentMode: .fit)
+            .padding(16)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            Text("Your code. It works once, and only for your match.")
+                .font(.hotMess(.footnote))
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -58,6 +58,10 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// Posted as the room's audience, like a prompt: the audience's name and
     /// mark, never a person, with no presence.
     var postedAsAudience = false
+    /// The tribes the user and the sender both picked, for the "You're both"
+    /// mark. `nil` when the room didn't say (it's only asked for where the
+    /// API has tribes); never anyone's other tribes.
+    var sharedTribes: [SharedTribe]? = nil
 
     init(
         id: UUID = UUID(),
@@ -301,11 +305,13 @@ extension VenueMessage {
         let prompt: ChatPrompt?
         let promptID: String?
         let postedAsAudience: Bool
+        let sharedTribes: [SharedTribe]?
 
         enum CodingKeys: String, CodingKey {
             case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt
             case promptID = "prompt_id"
             case postedAsAudience = "posted_as_audience"
+            case sharedTribes = "shared_tribes"
             case userID = "user_id"
             case avatarURL = "avatar_url"
             case sentAt = "sent_at"
@@ -396,6 +402,8 @@ extension VenueMessage {
             // The room sends `prompt_id`, GraphQL `promptId` aliased to it.
             promptID = Self.identifier(in: container, forKey: .promptID)
             postedAsAudience = (try? container.decodeIfPresent(Bool.self, forKey: .postedAsAudience)) ?? false
+            sharedTribes = (try? container.decodeIfPresent([GraphQLCable.Lenient<SharedTribe>].self, forKey: .sharedTribes))?
+                .map { $0.compactMap(\.value) }
 
             // GraphQL's uppercase enums or the room's lowercase; one without an
             // ID or a question is dropped, and the line shows as its text.
@@ -463,6 +471,7 @@ extension VenueMessage {
         prompt = payload.prompt
         promptID = payload.promptID
         postedAsAudience = payload.postedAsAudience
+        sharedTribes = payload.sharedTribes
     }
 }
 

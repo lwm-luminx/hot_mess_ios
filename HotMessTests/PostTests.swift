@@ -99,4 +99,47 @@ struct PostTests {
         let url = URL(string: "https://hotmess.social/posts/\(id.uuidString.lowercased())")!
         #expect(DeepLink.route(for: url) == .post(id))
     }
+
+    @Test("Reads Public or Community, Community when the API doesn't say")
+    func visibility() throws {
+        #expect(try decode(PostFixtures.venuePost).visibility == .community)
+        let publicPost = PostFixtures.venuePost.replacingOccurrences(
+            of: #""edited":true"#,
+            with: #""edited":true,"visibility":"PUBLIC""#
+        )
+        #expect(try decode(publicPost).visibility == .public)
+    }
+
+    @Test("Shares the post's own page")
+    func shareURL() throws {
+        let post = try decode(PostFixtures.venuePost)
+        #expect(post.shareURL == URL(string: "https://hotmess.social/posts/11111111-2222-4333-8444-555555555555"))
+    }
+
+    @Test("Lets a manager manage their own posts and hide talent posts from their venue's events")
+    func managedListings() throws {
+        let wildrose = UUID(uuidString: PostFixtures.wildrose)!
+        let kiki = UUID(uuidString: PostFixtures.kiki)!
+        let venuePost = try decode(PostFixtures.venuePost)
+        let talentOnEvent = try decode(PostFixtures.talentPost.replacingOccurrences(
+            of: #""event":null"#,
+            with: #""event":{"id":"\#(PostFixtures.bingo)","name":"Drag Bingo"}"#
+        ).replacingOccurrences(of: #""venue":null"#, with: #""venue":{"id":"\#(PostFixtures.wildrose)"}"#))
+
+        let venueManager = ManagedListings(venues: [.venue(wildrose, name: "The Wildrose")])
+        #expect(venueManager.canManage(venuePost))
+        #expect(!venueManager.canManage(talentOnEvent))
+        #expect(venueManager.canHideFromEvent(talentOnEvent))
+        #expect(!venueManager.canHideFromEvent(venuePost))
+
+        let talent = ManagedListings(people: [.person(kiki, name: "House of Lux")])
+        #expect(talent.canManage(talentOnEvent))
+        #expect(!talent.canHideFromEvent(talentOnEvent))
+        #expect(ManagedListings.none.authors(for: .venue(wildrose)).isEmpty)
+
+        let bingo = UUID(uuidString: PostFixtures.bingo)!
+        let both = ManagedListings(venues: venueManager.venues, people: talent.people)
+        #expect(both.authors(for: .event(bingo), eventVenueID: wildrose, eventPeople: [kiki]).map(\.id) == [wildrose, kiki])
+        #expect(both.authors(for: .person(kiki)).map(\.id) == [kiki])
+    }
 }

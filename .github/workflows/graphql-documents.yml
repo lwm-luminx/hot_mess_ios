@@ -38,3 +38,6 @@ jobs:
           curl -fsSLO https://developer.audiencekit.com/graphql/schema.graphql
           npm install --silent --no-save --no-package-lock graphql@16
           node check.mjs --schema schema.graphql --endpoint consumer ../HotMess ../HotMessTests
+          # Writing and managing posts go to the staff view (`# endpoint: staff`).
+          curl -fsSLO https://developer.audiencekit.com/graphql/staff_schema.graphql
+          node check.mjs --schema staff_schema.graphql --only-endpoint staff ../HotMess

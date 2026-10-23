@@ -9,6 +9,10 @@ import Foundation
 /// Venue and talent posts: read on venue, event and talent pages, Now and the
 /// updates feed, with comments. Each list is its own request, so a page still
 /// shows on an API without posts.
+///
+/// Writing and managing them goes to the staff view (staffql) with the same
+/// sign-in, as Velvet and Backstage do: the consumer view only ever lets a
+/// member change their own records, so it has no post mutations.
 extension HotMessAPI {
     /// A page of posts: a venue's, an event's, a person's or a locale's.
     func posts(_ subject: PostsSubject, from filter: PostsFilter = .all, first: Int = 20) async throws -> [Post] {
@@ -67,12 +71,120 @@ extension HotMessAPI {
         }
         _ = try await query(PostDocuments.mute, variables: ["input": .object(input)], as: MutePostAuthorResponse.self)
     }
+
+    // MARK: - Managing
+
+    /// The venues and talent the user manages here. The staff view turns away
+    /// anyone who manages none, which is most people, so any failure reads as
+    /// none and isn't reported.
+    func managedListings() async -> ManagedListings {
+        guard let response = try? await audienceKit.graphQL(
+            PostDocuments.listings, endpoint: .staff, as: ListingsResponse.self, decoder: .hotMess
+        ) else { return .none }
+        let listings = response.me.listings
+        let people = (listings.people + listings.troupes).reduce(into: [PostAuthor]()) { authors, person in
+            if !authors.contains(where: { $0.id == person.id }) { authors.append(.person(person.id, name: person.name)) }
+        }
+        return ManagedListings(venues: listings.venues.map { .venue($0.id, name: $0.name) }, people: people)
+    }
+
+    /// Posts as a venue or a talent listing, on its page or an event.
+    func createPost(
+        as author: PostAuthor,
+        on target: PostTarget,
+        body: String,
+        photos: [(jpeg: Data, altText: String)] = [],
+        pinned: Bool = false,
+        commentsOpen: Bool = true,
+        visibility: PostVisibility = .community
+    ) async throws -> Post {
+        var input: [String: GraphQLValue] = [
+            "body": .string(body), "pinned": .bool(pinned), "commentsOpen": .bool(commentsOpen),
+            "visibility": .string(visibility.rawValue)
+        ]
+        switch (author, target) {
+        case let (.venue(id, _), .page): input["venueId"] = .string(id.uuidString.lowercased())
+        case let (.person(id, _), .page):
+            input["asPersonId"] = .string(id.uuidString.lowercased())
+            input["personId"] = .string(id.uuidString.lowercased())
+        case let (.venue, .event(eventID, _)): input["eventId"] = .string(eventID.uuidString.lowercased())
+        case let (.person(id, _), .event(eventID, _)):
+            input["asPersonId"] = .string(id.uuidString.lowercased())
+            input["eventId"] = .string(eventID.uuidString.lowercased())
+        }
+        if !photos.isEmpty {
+            input["photos"] = .array(photos.prefix(Self.maxPostPhotos).map { photo in
+                let uri = "data:image/jpeg;base64,\(photo.jpeg.base64EncodedString())"
+                var fields: [String: GraphQLValue] = ["photo": .string(uri)]
+                let alt = photo.altText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !alt.isEmpty { fields["altText"] = .string(alt) }
+                return .object(fields)
+            })
+        }
+        guard let post = try await staffQuery(
+            PostDocuments.create, variables: ["input": .object(input)], as: CreatePostResponse.self
+        ).createPost.post else { throw APIError.decoding("The post was missing") }
+        return post
+    }
+
+    /// Changes a post; nil leaves a field as it is.
+    func updatePost(
+        _ id: UUID,
+        body: String? = nil,
+        pinned: Bool? = nil,
+        commentsOpen: Bool? = nil,
+        visibility: PostVisibility? = nil
+    ) async throws -> Post {
+        var input: [String: GraphQLValue] = ["id": .string(id.uuidString.lowercased())]
+        if let visibility { input["visibility"] = .string(visibility.rawValue) }
+        if let body { input["body"] = .string(body) }
+        if let pinned { input["pinned"] = .bool(pinned) }
+        if let commentsOpen { input["commentsOpen"] = .bool(commentsOpen) }
+        guard let post = try await staffQuery(
+            PostDocuments.update, variables: ["input": .object(input)], as: UpdatePostResponse.self
+        ).updatePost.post else { throw APIError.decoding("The post was missing") }
+        return post
+    }
+
+    /// Takes a post and its comments out of the apps.
+    func deletePost(_ id: UUID) async throws {
+        _ = try await staffQuery(
+            PostDocuments.delete,
+            variables: ["input": .object(["id": .string(id.uuidString.lowercased())])],
+            as: DeletePostResponse.self
+        )
+    }
+
+    /// The event venue's "Hide from This Event" on a talent post, or showing
+    /// it there again. It stays on the person's page either way.
+    func hidePostFromEvent(_ id: UUID, hidden: Bool = true) async throws -> Post {
+        try await staffQuery(
+            PostDocuments.hideFromEvent,
+            variables: ["input": .object(["id": .string(id.uuidString.lowercased()), "hidden": .bool(hidden)])],
+            as: HidePostFromEventResponse.self
+        ).hidePostFromEvent.post
+    }
+
+    /// The most photos one post holds.
+    static let maxPostPhotos = 4
+
+    private func staffQuery<Response: Decodable & Sendable>(
+        _ document: String,
+        variables: [String: GraphQLValue],
+        as type: Response.Type
+    ) async throws -> Response {
+        do {
+            return try await audienceKit.graphQL(document, variables: variables, endpoint: .staff, as: type, decoder: .hotMess)
+        } catch let error as AudienceKitError {
+            throw await APIClient.recorded(APIError(error), operation: Self.operationName(document))
+        }
+    }
 }
 
 enum PostDocuments {
     static let postFields = """
     id body posterName posterAvatarUrl roleLabel actingPersonName createdAt edited pinned commentsOpen commentCount
-    photos { url altText } event { id name startAt } person { id } venue { id }
+    hiddenFromEvent visibility photos { url altText } event { id name startAt } person { id } venue { id }
     """
 
     static let commentFields = "id authorId authorName authorAvatarUrl body createdAt viewerCanRemove"
@@ -122,6 +234,43 @@ enum PostDocuments {
     static let mute = """
     mutation MutePostAuthor($input: PostAuthorMuteInput!) {
       mutePostAuthor(input: $input) { muted }
+    }
+    """
+
+    // Staff view (staffql).
+
+    static let listings = """
+    # endpoint: staff
+    query ManagedListings {
+      me { listings { venues { id name } people { id name } troupes { id name } } }
+    }
+    """
+
+    static let create = """
+    # endpoint: staff
+    mutation CreatePost($input: PostCreateInput!) {
+      createPost(input: $input) { post { \(postFields) } }
+    }
+    """
+
+    static let update = """
+    # endpoint: staff
+    mutation UpdatePost($input: PostUpdateInput!) {
+      updatePost(input: $input) { post { \(postFields) } }
+    }
+    """
+
+    static let delete = """
+    # endpoint: staff
+    mutation DeletePost($input: PostDeleteInput!) {
+      deletePost(input: $input) { deletedId }
+    }
+    """
+
+    static let hideFromEvent = """
+    # endpoint: staff
+    mutation HidePostFromEvent($input: PostHideFromEventInput!) {
+      hidePostFromEvent(input: $input) { post { \(postFields) } }
     }
     """
 }
@@ -190,4 +339,54 @@ struct MutePostAuthorResponse: Decodable, Sendable {
     struct Payload: Decodable, Sendable { let muted: Bool }
 
     let mutePostAuthor: Payload
+}
+
+
+struct ListingsResponse: Decodable, Sendable {
+    struct Listing: Decodable, Sendable {
+        let id: UUID
+        let name: String
+
+        private enum CodingKeys: String, CodingKey { case id, name }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        }
+    }
+
+    struct Listings: Decodable, Sendable {
+        let venues: [Listing]
+        let people: [Listing]
+        let troupes: [Listing]
+    }
+
+    struct Me: Decodable, Sendable { let listings: Listings }
+
+    let me: Me
+}
+
+struct CreatePostResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let post: Post? }
+
+    let createPost: Payload
+}
+
+struct UpdatePostResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let post: Post? }
+
+    let updatePost: Payload
+}
+
+struct DeletePostResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let deletedId: String }
+
+    let deletePost: Payload
+}
+
+struct HidePostFromEventResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable { let post: Post }
+
+    let hidePostFromEvent: Payload
 }

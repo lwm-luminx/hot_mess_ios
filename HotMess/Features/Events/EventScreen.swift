@@ -30,16 +30,14 @@ struct EventScreen: View {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 24) {
-                        HeroHeader(url: event.bannerURL, topInset: proxy.safeAreaInsets.top, tone: $heroTone) {
-                            heroText(event)
-                        }
-
-                        if !detail.hosts.isEmpty {
-                            CardSection(detail.hosts.count == 1 ? String(localized: "Host") : String(localized: "Hosts")) {
-                                ForEach(detail.hosts) { person in
-                                    PersonCardLink(person: person)
-                                }
-                            }
+                        // When, where, who and your RSVP all ride on the photo.
+                        HeroHeader(
+                            url: event.bannerURL,
+                            topInset: proxy.safeAreaInsets.top,
+                            tone: $heroTone,
+                            bodyHeight: HeroMetrics.detailHeight
+                        ) {
+                            heroText(detail)
                         }
 
                         if viewModel?.isTonight == true || viewModel?.activePings.isEmpty == false {
@@ -51,12 +49,6 @@ struct EventScreen: View {
                                 join: { Task { await viewModel?.joinHere(userID: model.session.userID) } },
                                 leave: { Task { await viewModel?.leaveHere(userID: model.session.userID) } }
                             )
-                        }
-
-                        DetailSection(String(localized: "Your RSVP")) {
-                            RSVPPicker(selection: event.rsvp) { rsvp in
-                                Task { await viewModel?.setRSVP(rsvp) }
-                            }
                         }
 
                         if let coverCharge = detail.coverCharge {
@@ -98,18 +90,25 @@ struct EventScreen: View {
                             .audiencePreset(model.brand.preset)
                         }
 
-                        PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
+                        PostsSection(
+                            title: String(localized: "From the venue and hosts"),
+                            subject: .event(event.id),
+                            eventName: event.name,
+                            eventVenueID: event.venue?.id,
+                            eventPeople: (detail.hosts + detail.people).map(\.id) + [event.person?.id].compactMap { $0 }
+                        )
 
-                        detailsSection(event)
+                        PhotosSection(subject: .event(event.id))
 
-                        if let venue = event.venue {
-                            CardSection(String(localized: "Venue")) {
-                                VenueCardLink(venue: venue)
-                            }
-                        } else {
-                            DetailSection(String(localized: "Venue")) {
-                                Text(Event.toBeAnnounced)
-                                    .foregroundStyle(.secondary)
+                        if let facebookURL = event.facebookURL {
+                            DetailSection {
+                                Link(destination: facebookURL) {
+                                    InfoRow(
+                                        title: String(localized: "Open in Facebook"),
+                                        value: nil,
+                                        systemImage: "arrow.up.right.square"
+                                    )
+                                }
                             }
                         }
 
@@ -124,7 +123,7 @@ struct EventScreen: View {
                     .padding(.bottom, 24)
                 }
                 .ignoresSafeArea(edges: .top)
-                .trackingHeroCollapse($heroCollapsed)
+                .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
@@ -132,14 +131,18 @@ struct EventScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
-                        if let shareURL = event.shareURL {
-                            ShareLink(item: shareURL) {
-                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                            }
-                        }
+                        SignedShareButton(path: "/events/\(event.id.uuidString.lowercased())")
 
                         if model.session.isSignedIn {
                             Menu {
+                                // Going and Interested are on the hero.
+                                Button {
+                                    Task { await viewModel?.setRSVP(.declined) }
+                                } label: {
+                                    Label(RSVP.declined.title, systemImage: event.rsvp == .declined ? "checkmark" : RSVP.declined.systemImage)
+                                }
+                                .accessibilityIdentifier("event.notGoing")
+
                                 Button {
                                     fixTarget = .event(event)
                                 } label: {
@@ -219,49 +222,91 @@ struct EventScreen: View {
         return { pingSeed = .event(event) }
     }
 
-    private func heroText(_ event: Event) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()).uppercased())
-                .font(.hotMess(.footnote, semibold: true))
-                .tracking(0.8)
+    private func heroText(_ detail: EventDetail) -> some View {
+        let event = detail.event
 
-            Text(event.name)
-                .font(.hotMess(.title, semibold: true))
-                .lineLimit(3)
-                .accessibilityAddTraits(.isHeader)
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(whenLine(event).uppercased())
+                    .font(.hotMess(.footnote, semibold: true))
+                    .tracking(0.8)
 
-            if let place = event.venue?.name ?? event.person?.name {
-                Text(place)
+                Text(event.name)
+                    .font(.hotMess(.title, semibold: true))
+                    .lineLimit(3)
+                    .accessibilityAddTraits(.isHeader)
+            }
+
+            if let venue = event.venue {
+                NavigationLink(value: AppRoute.venue(venue.id)) {
+                    HStack(spacing: 8) {
+                        Avatar(url: venue.photoURL ?? venue.bannerURL, initials: venue.name.initialsForDisplay, size: 22, isPlace: true)
+                        Text(venue.name)
+                        if let distance = venue.distance {
+                            Text(DistanceFormat.string(fromMetres: distance))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .padding(.leading, -8)
+                    .heroGlass(fillsWidth: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(String(localized: "Opens the venue"))
+            } else {
+                Text(Event.toBeAnnounced)
                     .font(.hotMess(.subheadline, semibold: true))
-                    .lineLimit(1)
+            }
+
+            if !detail.hosts.isEmpty {
+                hostsLine(detail.hosts)
+            }
+
+            HeroActionRow {
+                rsvpButton(.attending, event: event, systemImage: "checkmark")
+                rsvpButton(.maybe, event: event, systemImage: "star")
             }
         }
     }
 
-    private func detailsSection(_ event: Event) -> some View {
-        DetailSection {
-            InfoRow(
-                title: String(localized: "Starts"),
-                value: event.startDate.formatted(date: .abbreviated, time: .shortened)
-            )
+    /// "Fri Oct 24 · 9:00 PM to 2:00 AM".
+    private func whenLine(_ event: Event) -> String {
+        let day = event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        let start = event.startDate.formatted(date: .omitted, time: .shortened)
+        guard let endDate = event.endDate, endDate > event.startDate else { return "\(day) · \(start)" }
+        let end = endDate.formatted(date: .omitted, time: .shortened)
+        return String(localized: "\(day) · \(start) to \(end)")
+    }
 
-            if let endDate = event.endDate {
-                InfoRow(
-                    title: String(localized: "Ends"),
-                    value: endDate.formatted(date: .abbreviated, time: .shortened)
-                )
-            }
-
-            if let facebookURL = event.facebookURL {
-                Link(destination: facebookURL) {
-                    InfoRow(
-                        title: String(localized: "Open in Facebook"),
-                        value: nil,
-                        systemImage: "arrow.up.right.square"
-                    )
-                }
-            }
+    /// "Hosted by Sasha and Bea" with their faces; one host opens their page.
+    @ViewBuilder
+    private func hostsLine(_ hosts: [Person]) -> some View {
+        let line = HStack(spacing: 8) {
+            HeroFaces(people: hosts)
+            Text("Hosted by \(hosts.map(\.name).formatted(.list(type: .and)))")
+                .font(.hotMess(.subheadline, semibold: true))
+                .lineLimit(2)
         }
+
+        if hosts.count == 1, let host = hosts.first {
+            NavigationLink(value: AppRoute.person(host.id)) { line }
+                .buttonStyle(.plain)
+        } else {
+            line
+        }
+    }
+
+    private func rsvpButton(_ rsvp: RSVP, event: Event, systemImage: String) -> some View {
+        let isSelected = event.rsvp == rsvp
+        return Button {
+            Task { await viewModel?.setRSVP(rsvp) }
+        } label: {
+            Label(rsvp.title, systemImage: isSelected ? "checkmark.circle.fill" : systemImage)
+                .heroGlass(selected: isSelected)
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func ensureViewModel() {

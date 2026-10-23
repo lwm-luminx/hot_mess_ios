@@ -68,10 +68,24 @@ final class VenueChatViewModel {
     /// keeps listing, offline, until each one's `recentUntil`. Nobody here
     /// now is in it.
     private(set) var recentPeople: [UUID: RecentRoomPerson] = [:]
+    /// How each person on tonight's lineup can be reached, by their person
+    /// (listing) ID lowercased, from the room's roster and lineup frames:
+    /// in chat if anyone who manages the listing is, else by push, else
+    /// offline. `nil` while offline, and from servers without lineup
+    /// presence: the lineup then draws no dots.
+    private(set) var lineupPresence: [String: PresenceState]?
+    /// The tribes the user and each person here share, by user ID, for the
+    /// "You're both" mark: from the roster, arrivals and their lines. Empty
+    /// on an API without tribes, and for anyone the user shares none with.
+    private(set) var sharedTribes: [UUID: [SharedTribe]] = [:]
     /// The announcement pinned under the room's title, from the history sent
     /// on joining and the room's pin frames; it can be older than the
     /// messages the room shows.
     private(set) var pinned: VenueMessage?
+    /// Where the transcript marks what has cleared from what is current: an
+    /// admin clearing the room, or (for its admins, who still see them) the
+    /// messages older than the room shows everyone else.
+    private(set) var clearMark: ChatClearMark?
     var draft: String = ""
     /// The prompt the next line answers, after "Answer" on the PromptBar or
     /// a PromptCard; the composer shows it as an answer chip.
@@ -97,6 +111,8 @@ final class VenueChatViewModel {
     /// there's no directory.
     private var rosterFriendNames: [UUID: String] = [:]
     private let reportPresence: @MainActor () async -> Void
+    /// Whether to ask the room for shared tribes (`TribeStore.supportsTribes()`).
+    private let supportsTribes: @MainActor () async -> Bool
     /// Sends lines (`sendMyChatMessage`) and names the audience the room's
     /// subscription runs in. Without it nothing can be sent.
     private let api: HotMessAPI?
@@ -119,7 +135,8 @@ final class VenueChatViewModel {
         cable: AudienceCable? = nil,
         friends: FriendDirectory? = nil,
         api: HotMessAPI? = nil,
-        reportPresence: @escaping @MainActor () async -> Void = {}
+        reportPresence: @escaping @MainActor () async -> Void = {},
+        supportsTribes: @escaping @MainActor () async -> Bool = { false }
     ) {
         self.room = room
         self.isWatching = watch
@@ -129,6 +146,7 @@ final class VenueChatViewModel {
         self.cable = cable
         self.friends = friends
         self.reportPresence = reportPresence
+        self.supportsTribes = supportsTribes
     }
 
     /// Lines typed while the room is still joining wait in `pending` and go out
@@ -215,7 +233,8 @@ final class VenueChatViewModel {
                 name: friendName ?? person?.name ?? posted?.name,
                 avatarURL: person?.avatarURL ?? posted?.avatarURL ?? directory[id]?.avatarURL,
                 isFriend: person?.isFriend == true || friendName != nil,
-                presence: presence
+                presence: presence,
+                sharedTribes: sharedTribes(with: id)
             )
         }
 
@@ -315,9 +334,10 @@ final class VenueChatViewModel {
     /// socket once nothing else is on it.
     private func follow(cable: AudienceCable, audienceID: String) async -> Outcome {
         following?.cancel()
+        let sharedTribes = await supportsTribes()
         let task = Task { [room, isWatching] in
             let subscription = await VenueChatConnection.subscribe(
-                to: room, on: cable, audienceID: audienceID, watch: isWatching
+                to: room, on: cable, audienceID: audienceID, watch: isWatching, sharedTribes: sharedTribes
             )
             return await self.apply(subscription)
         }
@@ -345,19 +365,23 @@ final class VenueChatViewModel {
                     applyRoster(online: online, people: people, friends: friends, recent: recent)
                 case let .presence(userID, online, name, avatarURL):
                     applyPresence(userID: userID, online: online, name: name, avatarURL: avatarURL)
+                case let .lineupPresence(presence):
+                    applyLineupPresence(presence)
+                case let .sharedTribes(tribes):
+                    sharedTribes.merge(tribes) { _, latest in latest }
                 case let .reachable(userID):
                     applyPresence(userID: userID, online: false, name: nil, avatarURL: nil)
                     reachableUserIDs.insert(userID)
                 case let .recent(userID, presence, until):
                     applyRecent(userID: userID, presence: presence, until: until)
-                case let .history(messages, pinned):
-                    applyHistory(messages, pinned: pinned)
+                case let .history(messages, pinned, expiresBefore):
+                    applyHistory(messages, pinned: pinned, expiresBefore: expiresBefore)
                 case let .pin(id, announcement):
                     applyPin(id: id, announcement: announcement)
                 case let .removed(id):
                     applyRemoval(id: id)
-                case .cleared:
-                    applyClear()
+                case let .cleared(at, expired):
+                    applyClear(at: at, expired: expired)
                 case .notPresent:
                     connectionState = .notPresent
                     clearRoom()
@@ -459,6 +483,11 @@ final class VenueChatViewModel {
         friends?.rememberNames(roster)
     }
 
+    /// The lineup's presence, the whole list each time.
+    func applyLineupPresence(_ presence: [String: PresenceState]) {
+        lineupPresence = presence
+    }
+
     /// Someone joined or left. A join keeps what's already known about them
     /// unless the frame says otherwise.
     func applyPresence(userID: UUID, online: Bool, name: String?, avatarURL: URL?) {
@@ -523,10 +552,28 @@ final class VenueChatViewModel {
     /// What the room sent on joining: it replaces what was shown before, so a
     /// reconnect doesn't repeat lines. The user's own lines still on their
     /// way stay pending.
-    func applyHistory(_ history: [VenueMessage], pinned: VenueMessage?) {
+    func applyHistory(_ history: [VenueMessage], pinned: VenueMessage?, expiresBefore: Date? = nil) {
         messages = history
         self.pinned = pinned
+        // Only admins are sent lines older than the room shows: they get the
+        // divider between those and tonight's.
+        clearMark = expiresBefore.flatMap { cutoff in
+            history.contains { $0.sentAt < cutoff } ? ChatClearMark(at: cutoff, kind: .expired) : nil
+        }
         reachableUserIDs = Set(history.filter { $0.presence == .push && !$0.isFromListing }.map(\.userID))
+        history.forEach(noteSharedTribes)
+    }
+
+    /// The tribes the user shares with the sender of a line, when the room
+    /// said. A post as the venue or a listing says nothing about the person.
+    private func noteSharedTribes(_ message: VenueMessage) {
+        guard let tribes = message.sharedTribes, !message.isFromListing, !isOutgoing(message) else { return }
+        sharedTribes[message.userID] = tribes
+    }
+
+    /// What the user shares with someone here, for the mark and the line.
+    func sharedTribes(with userID: UUID) -> [SharedTribe] {
+        userID == self.userID ? [] : sharedTribes[userID] ?? []
     }
 
     /// An announcement was pinned, replacing whichever was, or unpinned.
@@ -551,11 +598,24 @@ final class VenueChatViewModel {
         }
     }
 
-    /// An admin cleared the room: every line so far goes, the pinned
-    /// announcement too. The user's own unsent lines stay.
-    func applyClear() {
-        messages = []
-        pinned = nil
+    /// An admin cleared the room: every line sent up to `at` goes, the pinned
+    /// announcement too, and the transcript marks where it was cleared. Lines
+    /// that expired go quietly, leaving the pin. The user's own unsent lines
+    /// stay either way.
+    func applyClear(at: Date? = nil, expired: Bool = false) {
+        if let at {
+            messages.removeAll { $0.sentAt <= at }
+        } else {
+            messages = []
+        }
+        if expired {
+            if let mark = clearMark, !messages.contains(where: { $0.sentAt < mark.at }) {
+                clearMark = nil
+            }
+        } else {
+            pinned = nil
+            clearMark = ChatClearMark(at: at ?? .now, kind: .cleared)
+        }
     }
 
     private func clearRoom() {
@@ -563,6 +623,8 @@ final class VenueChatViewModel {
         roomPeople = [:]
         reachableUserIDs = []
         recentPeople = [:]
+        lineupPresence = nil
+        sharedTribes = [:]
         pruneTask?.cancel()
         pruneTask = nil
     }
@@ -655,6 +717,7 @@ final class VenueChatViewModel {
         if message.isPinned, message.kind == .announcement {
             pinned = message
         }
+        noteSharedTribes(message)
 
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index] = message
