@@ -19,6 +19,10 @@
 	</array>
 	<key>com.apple.developer.on-demand-install-capable</key>
 	<true/>
+	<key>com.apple.developer.pass-type-identifiers</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)*</string>
+	</array>
 	<key>com.apple.developer.parent-application-identifiers</key>
 	<array>
 		<string>$(AppIdentifierPrefix)social.hotmess.HotMess$(BUNDLE_SUFFIX)</string>

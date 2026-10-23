@@ -1,5 +1,5 @@
 import AudienceKit
-@preconcurrency import StripePaymentSheet
+import StoreKit
 import SwiftUI
 
 @main
@@ -10,106 +10,116 @@ struct HotMessClipApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ClipView(link: link, receivedLink: receivedLink, session: session)
+            ClipRootView(link: link, receivedLink: receivedLink, session: session)
                 .task { await session.observe() }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { receive($0.webpageURL) }
                 .onOpenURL { receive($0) }
+                .preferredColorScheme(.light)
+                .tint(ClipTheme.accentInk)
         }
     }
+
     private func receive(_ url: URL?) {
-        if let url, StripeAPI.handleURLCallback(with: url) { return }
         link = url.flatMap(ClipLink.init(url:))
         receivedLink = true
     }
 }
 
-enum ClipAction: String, Identifiable {
-    case cover = "Pay cover", tip = "Tip", join = "Join Ping", rsvp = "RSVP"
-    var id: String { rawValue }
-    static func primary(for kind: String) -> Self {
-        switch kind { case "people": .tip; case "pings": .join; case "events": .rsvp; default: .cover }
-    }
+/// What the clip can take a payment for. Chosen by the screen's one button.
+enum ClipFlow: Identifiable, Hashable {
+    case cover
+    case tip(preselectedCents: Int?)
+    var id: Self { self }
 }
 
-private struct ClipView: View {
+/// Loads the public share card for the link and shows the matching screen:
+/// loading, the record, expired, unsupported, or an error.
+struct ClipRootView: View {
     let link: ClipLink?
     let receivedLink: Bool
     @Bindable var session: ClipSession
-    @State private var card: ClipCard?
-    @State private var invitation: ShareInvitation?
-    @State private var message: String?
+    @State private var phase = Phase.loading
     @State private var attempt = 0
-    @State private var action: ClipAction?
+    @State private var flow: ClipFlow?
+    @State private var showStore = false
+
+    enum Phase {
+        case loading
+        case ready(ClipCard, ShareInvitation?)
+        case expired
+        case failed(String)
+    }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let link, let card {
-                        Text(card.title).font(.largeTitle.bold())
-                        Button(ClipAction.primary(for: link.kind).rawValue) {
-                            action = ClipAction.primary(for: link.kind)
-                        }.buttonStyle(.borderedProminent).controlSize(.large)
-                        if link.kind == "events" {
-                            Button("Pay cover") { action = .cover }.buttonStyle(.bordered)
-                        }
-                        Text(card.description)
-                        if let invitation {
-                            ForEach(invitation.targets) { Text($0.name).font(.headline) }
-                            Text("Ends \(invitation.expiresAt.formatted(date: .omitted, time: .shortened))")
-                                .foregroundStyle(.secondary)
-                        }
-                        if let image = card.image, image.url.scheme == "https" {
-                            AsyncImage(url: image.url) { phase in
-                                if let photo = phase.image { photo.resizable().scaledToFit() }
-                            }.clipShape(RoundedRectangle(cornerRadius: 20)).accessibilityLabel(image.alt)
-                        }
-                        if session.signedIn {
-                            Button("Sign out") { Task { await session.signOut() } }.disabled(session.paymentBusy)
-                        }
-                    } else if let message {
-                        ContentUnavailableView("Couldn't open this link", systemImage: "link", description: Text(message))
-                        Button("Try again") { attempt += 1 }
-                    } else if link != nil { ProgressView("Opening Hot Mess…") }
-                    else {
-                        ContentUnavailableView(receivedLink ? "This link isn't supported" : "Welcome to Hot Mess",
-                            systemImage: "sparkles", description: Text("Open a venue, performer, Ping or event link to get started."))
-                    }
-                }.padding(24).frame(maxWidth: 600).frame(maxWidth: .infinity)
+        Group {
+            if let link {
+                switch phase {
+                case .loading:
+                    ClipLoadingView(kind: link.kind)
+                case let .ready(card, invitation):
+                    ClipLandingView(link: link, card: card, invitation: invitation, session: session,
+                                    pay: { flow = $0 }, getApp: getApp)
+                case .expired:
+                    ClipExpiredView(link: link, getApp: getApp)
+                case let .failed(message):
+                    ClipFailedView(message: message, retry: { attempt += 1 }, getApp: getApp)
+                }
+            } else {
+                ClipUnsupportedView(receivedLink: receivedLink, getApp: getApp)
             }
-            .navigationTitle("Hot Mess")
-            .task(id: TaskID(link: link, attempt: attempt)) { await load() }
-            .sheet(item: $action) { action in
-                if let link { ClipActionSheet(action: action, link: link, session: session) }
-            }
-            .onChange(of: link) { _, _ in action = nil }
         }
+        .background(ClipTheme.surface.ignoresSafeArea())
+        .task(id: LoadID(link: link, attempt: attempt)) { await load() }
+        .task(id: DetailsID(link: link, signedIn: session.signedIn)) {
+            session.clearDetails()
+            if let link { await session.loadDetails(for: link) }
+        }
+        .sheet(item: $flow) { flow in
+            if let link { ClipCheckoutSheet(flow: flow, link: link, session: session, getApp: getApp) }
+        }
+        .appStoreOverlay(isPresented: $showStore) { SKOverlay.AppClipConfiguration(position: .bottom) }
+        .onChange(of: link) { _, _ in flow = nil }
     }
-    private struct TaskID: Equatable { let link: ClipLink?; let attempt: Int }
+
+    private struct LoadID: Equatable { let link: ClipLink?; let attempt: Int }
+    private struct DetailsID: Equatable { let link: ClipLink?; let signedIn: Bool }
+
+    /// The full app, through StoreKit's overlay. On install, iOS hands the
+    /// clip's invocation URL to the app, which opens the same record (and
+    /// joins a Ping with its invitation token).
+    private func getApp() {
+        showStore = true
+    }
 
     @MainActor private func load() async {
-        card = nil
-        invitation = nil
-        message = nil
+        phase = .loading
         guard let link else { return }
         do {
             if link.kind == "pings" {
-                guard let token = link.expiry else { throw ClipError.unavailable }
-                let preview = try await ShareInvitation.load(path: link.path, token: token, client: session.client)
+                guard let token = link.expiry, !token.isEmpty else { throw ClipError.unavailable }
+                let invitation = try await ShareInvitation.load(path: link.path, token: token, client: session.client)
                 try Task.checkCancellation()
-                invitation = preview
-                card = ClipCard(title: preview.title, description: preview.note ?? "Who's up for going out?", image: nil)
+                guard invitation.expiresAt > .now else { phase = .expired; return }
+                let card = ClipCard(title: invitation.title,
+                                    description: invitation.note ?? "\(invitation.senderName) wants you out tonight.",
+                                    image: nil)
+                phase = .ready(card, invitation)
             } else {
                 let data = try await session.client.data(for: APIRequest(path: "/v1/share", queryItems: [
                     URLQueryItem(name: "host", value: session.client.configuration.host),
                     URLQueryItem(name: "path", value: link.path)
                 ] + (link.expiry.map { [URLQueryItem(name: "e", value: $0)] } ?? []), authenticated: false))
                 try Task.checkCancellation()
-                card = try JSONDecoder().decode(ClipCard.self, from: data)
+                phase = .ready(try JSONDecoder().decode(ClipCard.self, from: data), nil)
             }
         } catch {
             guard !Task.isCancelled else { return }
-            message = error.localizedDescription
+            // A signed link the API refuses has run out (or was never valid).
+            if link.expiry != nil, let status = (error as? AudienceKitError)?.status, [403, 404, 410].contains(status) {
+                phase = .expired
+            } else {
+                phase = .failed(error.localizedDescription)
+            }
         }
     }
 }

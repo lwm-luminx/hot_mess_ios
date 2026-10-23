@@ -32,8 +32,6 @@
 		ACCA00000000000000000027 = { isa = PBXBuildFile; fileRef = ACCA0000000000000000001F; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,);}; };
 		ACCB0000000000000000006E = { isa = PBXBuildFile; fileRef = ACCB00000000000000000001; };
 		ACCB00000000000000000082 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000001; };
-		ACCB0000000000000000006F = { isa = PBXBuildFile; fileRef = ACCB00000000000000000002; };
-		ACCB00000000000000000083 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000002; };
 		ACCB00000000000000000070 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000003; };
 		ACCB00000000000000000084 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000003; };
 		ACCB00000000000000000071 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000004; };
@@ -47,11 +45,9 @@
 		ACCB00000000000000000075 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000008; };
 		ACCB00000000000000000089 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000008; };
 		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = AC0000000000000000000093; };
-		ACCB000000000000000000D3 = { isa = PBXBuildFile; productRef = AC0000000000000000000094; };
-		ACCB000000000000000000D4 = { isa = PBXBuildFile; productRef = AC0000000000000000000095; };
+		ACCB000000000000000000D3 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F0; };
 		ACCB000000000000000000E6 = { isa = PBXBuildFile; productRef = AC0000000000000000000093; };
-		ACCB000000000000000000E7 = { isa = PBXBuildFile; productRef = AC0000000000000000000094; };
-		ACCB000000000000000000E8 = { isa = PBXBuildFile; productRef = AC0000000000000000000095; };
+		ACCB000000000000000000E7 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F0; };
 		ACCC0000000000000000000A = {isa = PBXBuildFile; fileRef = ACCC00000000000000000001; };
 		ACCC0000000000000000001E = {isa = PBXBuildFile; fileRef = ACCC00000000000000000001; };
 /* End PBXBuildFile section */
@@ -94,7 +90,6 @@
 		ACCA0000000000000000000B = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotMessClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACCA0000000000000000001F = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotMessNextClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACCB00000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/SharedAuthentication.swift"; sourceTree = SOURCE_ROOT; };
-		ACCB00000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/CoverCheckout.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/CoverPass.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000004 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/AgeGate.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/Cover.swift"; sourceTree = SOURCE_ROOT; };
@@ -203,8 +198,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACCA0000000000000000000D = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (ACCB000000000000000000D4,ACCB000000000000000000D3,ACCB000000000000000000D2,); runOnlyForDeploymentPostprocessing = 0; };
-		ACCA00000000000000000021 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (ACCB000000000000000000E8,ACCB000000000000000000E7,ACCB000000000000000000E6,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA0000000000000000000D = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (ACCB000000000000000000D3,ACCB000000000000000000D2,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA00000000000000000021 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (ACCB000000000000000000E7,ACCB000000000000000000E6,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -212,7 +207,6 @@
 			isa = PBXGroup;
 			children = (
 				ACCB00000000000000000001,
-				ACCB00000000000000000002,
 				ACCB00000000000000000003,
 				ACCB00000000000000000004,
 				ACCB00000000000000000005,
@@ -386,8 +380,8 @@
 			productReference = AC0000000000000000000024 /* HotMessScreenshots.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E, ACCB00000000000000000136,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
-		ACCA0000000000000000001E = { isa = PBXNativeTarget; buildConfigurationList = ACCA00000000000000000023; buildPhases = (ACCA00000000000000000020, ACCA00000000000000000021, ACCA00000000000000000022, ACCB0000000000000000014A,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessNextClip; productName = HotMessNextClip; productReference = ACCA0000000000000000001F; productType = "com.apple.product-type.application.on-demand-install-capable"; };
+		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; packageProductDependencies = (AC0000000000000000000093, ACCB000000000000000000F0,); productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
+		ACCA0000000000000000001E = { isa = PBXNativeTarget; buildConfigurationList = ACCA00000000000000000023; buildPhases = (ACCA00000000000000000020, ACCA00000000000000000021, ACCA00000000000000000022,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessNextClip; packageProductDependencies = (AC0000000000000000000093, ACCB000000000000000000F0,); productName = HotMessNextClip; productReference = ACCA0000000000000000001F; productType = "com.apple.product-type.application.on-demand-install-capable"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -541,8 +535,6 @@
 			shellPath = /bin/sh;
 			shellScript = "\"$SRCROOT/Scripts/square-frameworks.sh\"\n";
 		};
-		ACCB00000000000000000136 = { isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; name = "Prepare Square frameworks"; shellPath = /bin/sh; shellScript = "\"$SRCROOT/Scripts/square-frameworks.sh\"\n"; };
-		ACCB0000000000000000014A = { isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; name = "Prepare Square frameworks"; shellPath = /bin/sh; shellScript = "\"$SRCROOT/Scripts/square-frameworks.sh\"\n"; };
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -581,8 +573,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006F,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
-		ACCA00000000000000000020 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000001E,ACCB00000000000000000089,ACCB00000000000000000088,ACCB00000000000000000087,ACCB00000000000000000086,ACCB00000000000000000085,ACCB00000000000000000084,ACCB00000000000000000083,ACCB00000000000000000082,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA00000000000000000020 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000001E,ACCB00000000000000000089,ACCB00000000000000000088,ACCB00000000000000000087,ACCB00000000000000000086,ACCB00000000000000000085,ACCB00000000000000000084,ACCB00000000000000000082,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1385,6 +1377,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AC0000000000000000000084 /* XCRemoteSwiftPackageReference "in-app-payments-ios" */;
 			productName = SquareInAppPaymentsSDK;
+		};
+		ACCB000000000000000000F0 /* StripeApplePay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */;
+			productName = StripeApplePay;
 		};
 		ACAD00000000000000000001 /* AudienceKitUI */ = {
 			isa = XCSwiftPackageProductDependency;

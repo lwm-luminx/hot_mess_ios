@@ -3,17 +3,23 @@ import AuthenticationServices
 import Observation
 import SwiftUI
 
+/// The clip's session: the SDK client on the clip keychain, Sign in with
+/// Apple, and the record the link points at once a session can read it.
 @MainActor
 @Observable
 final class ClipSession {
     let client: AudienceKitClient
     let api: ClipAPI
-    let checkout: CoverCheckout
+    let checkout: ClipCheckout
+    let applePayMerchantID: String?
     private(set) var signedIn = false
     private(set) var busy = false
-    var tipBusy = false
-    var paymentBusy: Bool { checkout.isBusy || tipBusy }
     var error: String?
+
+    /// `details(for:)` for the current link, loaded after sign-in. The share
+    /// card is public; prices, tiers and tip presets need a session.
+    private(set) var details: ClipDetails?
+    private(set) var detailsError: String?
 
     init() {
         let info = Bundle.main
@@ -27,10 +33,10 @@ final class ClipSession {
         )
         self.client = client
         api = ClipAPI(client: client)
-        checkout = CoverCheckout(api: api,
-                                 applePayMerchantID: info.object(forInfoDictionaryKey: "ApplePayMerchantID") as? String,
-                                 tintColor: .systemBlue,
-                                 returnURL: "https://hotmess.social/clip/stripe-redirect")
+        let merchant = (info.object(forInfoDictionaryKey: "ApplePayMerchantID") as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+        applePayMerchantID = merchant
+        checkout = ClipCheckout(api: api, merchantID: merchant)
     }
 
     func observe() async {
@@ -39,8 +45,30 @@ final class ClipSession {
         for await event in events {
             guard !Task.isCancelled else { return }
             if !busy { signedIn = await client.isSignedIn }
-            if event == .sessionEnded { error = "Please sign in again." }
+            if event == .sessionEnded {
+                details = nil
+                error = "Please sign in again."
+            }
         }
+    }
+
+    /// The venue, event or performer behind `link`, for a signed-in session.
+    func loadDetails(for link: ClipLink) async {
+        guard signedIn, link.kind != "pings" else { return }
+        detailsError = nil
+        do {
+            let loaded = try await api.details(for: link)
+            try Task.checkCancellation()
+            details = loaded
+        } catch {
+            guard !Task.isCancelled else { return }
+            detailsError = error.localizedDescription
+        }
+    }
+
+    func clearDetails() {
+        details = nil
+        detailsError = nil
     }
 
     func signIn(_ result: Result<ASAuthorization, any Error>) async {
@@ -90,9 +118,9 @@ final class ClipSession {
     """
 
     func signOut() async {
-        guard !paymentBusy else { return }
+        guard !checkout.busy else { return }
         try? await client.signOut()
         signedIn = false
-        checkout.presentedPass = nil
+        details = nil
     }
 }
