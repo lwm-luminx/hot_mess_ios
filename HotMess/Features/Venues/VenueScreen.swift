@@ -99,6 +99,17 @@ struct VenueScreen: View {
                             }
                         }
 
+                        // Pair me up, where the venue has it: once you're here,
+                        // or while you're in it tonight. Above the chat it leads to.
+                        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
+                            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
+                                Task {
+                                    await pairUpModel?.join(lookFor: nil)
+                                    isPairingUp = true
+                                }
+                            })
+                        }
+
                         if overview.chatOpen {
                             LiveChatPeek(
                                 title: String(localized: "Chat"),
@@ -120,14 +131,6 @@ struct VenueScreen: View {
                             leave: { Task { await viewModel?.leaveHere(userID: model.session.userID) } }
                         )
 
-                        // Only while the app places the user here: staff can
-                        // only help people who are there.
-                        if safety?.canSend == true {
-                            GetHelpButton {
-                                model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
-                            }
-                            .padding(.horizontal, 16)
-                        }
 
                         // Tonight from AudienceKit: the host, the lineup and
                         // karaoke. Until it loads, or if it can't, the venue
@@ -143,17 +146,6 @@ struct VenueScreen: View {
                         // Photos of the venue, and the camera once you're
                         // here: what you take goes on the stage's pages too.
                         PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
-
-                        // Pair me up, where the venue has it: once you're here,
-                        // or while you're in it tonight.
-                        if let pairUp = pairUpModel?.pairUp, pairUp.here || pairUp.mine != nil {
-                            PairUpVenueRow(pairUp: pairUp, open: { isPairingUp = true }, goAgain: {
-                                Task {
-                                    await pairUpModel?.join(lookFor: nil)
-                                    isPairingUp = true
-                                }
-                            })
-                        }
 
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
 
@@ -284,10 +276,12 @@ struct VenueScreen: View {
                 .buttonStyle(.plain)
             }
 
+            // Once you're here the address doesn't matter; the actions do.
+            let isHere = safety?.canSend == true
             let details = [venue.address, venue.distance.map(DistanceFormat.string(fromMetres:))]
                 .compactMap { $0 }
                 .filter { !$0.isEmpty }
-            if !details.isEmpty {
+            if !isHere, !details.isEmpty {
                 Text(details.joined(separator: " · "))
                     .font(.hotMess(.subheadline, semibold: true))
                     .lineLimit(2)
@@ -303,7 +297,24 @@ struct VenueScreen: View {
             }
 
             HeroActionRow {
-                if venue.coordinate != nil {
+                if isHere {
+                    Button {
+                        pingSeed = .venue(venue)
+                    } label: {
+                        Label(String(localized: "Ping"), systemImage: "paperplane.fill")
+                            .heroGlass()
+                    }
+                    .accessibilityIdentifier("venue.heroPing")
+
+                    Button {
+                        model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                    } label: {
+                        Label(String(localized: "Safety"), systemImage: "shield.fill")
+                            .heroGlass(selected: true)
+                    }
+                    .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
+                    .accessibilityIdentifier("venue.getHelp")
+                } else if venue.coordinate != nil {
                     Button {
                         openInMaps(venue)
                     } label: {
@@ -319,7 +330,7 @@ struct VenueScreen: View {
                     }
                 }
 
-                if let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
+                if !isHere, let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
                     Link(destination: url) {
                         Label(String(localized: "Call"), systemImage: "phone.fill")
                             .heroGlass()
