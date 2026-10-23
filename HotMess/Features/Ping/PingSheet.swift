@@ -146,6 +146,10 @@ private struct PingComposerForm: View {
         LoadStateView(state: composer.state) { choices in
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // Who gets a text first, so it isn't under the long lists of places.
+                    contactsSection
+                        .padding(.top, 8)
+
                     Text("Where do you want to go?")
                         .font(.hotMess(.headline, semibold: true))
                         .padding(.horizontal, 36)
@@ -203,8 +207,6 @@ private struct PingComposerForm: View {
                             .font(.hotMess(.footnote))
                             .foregroundStyle(.secondary)
                     }
-
-                    contactsSection
                 }
                 .padding(.bottom, 24)
             }

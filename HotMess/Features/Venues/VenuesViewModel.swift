@@ -74,24 +74,48 @@ extension Venue {
 @Observable
 final class VenuesViewModel {
     private(set) var state: LoadState<VenueCollection> = .idle
+    /// What's on at each venue now, or next, from the locale's events.
+    private(set) var nextEvents: [UUID: Event] = [:]
 
     private let audienceKit: AudienceKitClient
+    private let api: HotMessAPI
 
-    init(audienceKit: AudienceKitClient) {
+    init(audienceKit: AudienceKitClient, api: HotMessAPI) {
         self.audienceKit = audienceKit
+        self.api = api
     }
 
     func load(localeID: UUID?) async {
         if state.value == nil { state = .loading }
 
+        // The rows show without them, so a failure here only leaves them out.
+        async let events = Self.upcomingEvents(api: api, localeID: localeID)
         do {
             let venues = try await audienceKit.venues()
             state = .loaded(VenueCollection(audienceVenues: venues, localeID: localeID, resolve: audienceKit.url(for:)))
+            nextEvents = Self.nextEvents(await events)
         } catch is CancellationError {
         } catch let error as AudienceKitError {
             state = LoadState(catching: APIError(error))
         } catch {
             state = LoadState(catching: error)
         }
+    }
+
+    private nonisolated static func upcomingEvents(api: HotMessAPI, localeID: UUID?) async -> [Event] {
+        guard let localeID else { return [] }
+        return (try? await api.eventList(in: localeID)) ?? []
+    }
+
+    /// Each venue's soonest event that isn't over yet.
+    nonisolated static func nextEvents(_ events: [Event], at date: Date = .now) -> [UUID: Event] {
+        var next: [UUID: Event] = [:]
+        for event in events {
+            guard let venueID = event.venue?.id,
+                  (event.endDate ?? event.startDate.addingTimeInterval(4 * 3600)) > date else { continue }
+            if let current = next[venueID], current.startDate <= event.startDate { continue }
+            next[venueID] = event
+        }
+        return next
     }
 }

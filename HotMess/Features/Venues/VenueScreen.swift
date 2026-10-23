@@ -110,6 +110,16 @@ struct VenueScreen: View {
                             .padding(.horizontal, 16)
                         }
 
+                        // Pings with the chat, so they aren't below the fold.
+                        PingPlaceStrip(
+                            pings: (viewModel?.activePings ?? []).filter { !model.safety.isBlocked($0.user.id) },
+                            isJoined: viewModel?.isJoinedHere(userID: model.session.userID) == true,
+                            isBusy: viewModel?.isUpdatingPings == true,
+                            pingForHere: { pingSeed = .venue(venue) },
+                            join: { Task { await viewModel?.joinHere(userID: model.session.userID) } },
+                            leave: { Task { await viewModel?.leaveHere(userID: model.session.userID) } }
+                        )
+
                         // Only while the app places the user here: staff can
                         // only help people who are there.
                         if safety?.canSend == true {
@@ -133,15 +143,6 @@ struct VenueScreen: View {
                         // Photos of the venue, and the camera once you're
                         // here: what you take goes on the stage's pages too.
                         PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
-
-                        PingPlaceStrip(
-                            pings: (viewModel?.activePings ?? []).filter { !model.safety.isBlocked($0.user.id) },
-                            isJoined: viewModel?.isJoinedHere(userID: model.session.userID) == true,
-                            isBusy: viewModel?.isUpdatingPings == true,
-                            pingForHere: { pingSeed = .venue(venue) },
-                            join: { Task { await viewModel?.joinHere(userID: model.session.userID) } },
-                            leave: { Task { await viewModel?.leaveHere(userID: model.session.userID) } }
-                        )
 
                         // Pair me up, where the venue has it: once you're here,
                         // or while you're in it tonight.
