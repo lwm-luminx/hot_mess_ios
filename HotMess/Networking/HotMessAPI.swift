@@ -22,7 +22,7 @@ struct HotMessAPI: Sendable {
 
     var baseURL: URL { client.baseURL }
 
-    private var audienceKit: AudienceKitClient { client.audienceKit }
+    var audienceKit: AudienceKitClient { client.audienceKit }
 
     // MARK: - Home
 
