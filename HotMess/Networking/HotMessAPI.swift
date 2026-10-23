@@ -13,7 +13,7 @@ import Foundation
 /// of any audience, and the two REST sign-ins the SDK has no call for. The
 /// GraphQL documents alias fields to the snake_case keys the models already
 /// decode, so one set of models serves both.
-struct HotMessAPI: Sendable {
+struct HotMessAPI: CoverPaymentAPI {
     let client: APIClient
 
     init(client: APIClient) {
@@ -111,6 +111,27 @@ struct HotMessAPI: Sendable {
     func lineup(venueID: UUID) async throws -> VenueLineup? {
         do {
             return try await audienceKit.lineup(venueID: venueID.uuidString)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// A venue's show tonight (segments, scenes, projected times, the next
+    /// curtain call's counts and its latest trivia round), from the SDK. Throws
+    /// on an API without show control, which callers treat as "no show".
+    func show(venueID: UUID) async throws -> VenueShow? {
+        do {
+            return try await audienceKit.show(venueID: venueID.uuidString)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// Votes in a venue's trivia round, or changes the vote. The server's
+    /// refusal (not at the venue, voting closed) comes back worded for the room.
+    func voteTrivia(roundID: String, choice: String) async throws -> TriviaRound {
+        do {
+            return try await audienceKit.voteTrivia(roundID: roundID, choice: choice)
         } catch let error as AudienceKitError {
             throw APIError(error)
         }
@@ -335,10 +356,11 @@ struct HotMessAPI: Sendable {
     }
 
     /// "I'm in", on one pick or, with no `targetID`, the whole Ping.
-    func joinPing(_ pingID: String, targetID: String? = nil) async throws -> Ping {
+    func joinPing(_ pingID: String, targetID: String? = nil, invitationToken: String? = nil) async throws -> Ping {
         try await query(
             Documents.joinPing,
-            variables: ["pingId": .string(pingID), "targetId": targetID.map(GraphQLValue.string) ?? .null],
+            variables: ["pingId": .string(pingID), "targetId": targetID.map(GraphQLValue.string) ?? .null,
+                        "invitationToken": invitationToken.map(GraphQLValue.string) ?? .null],
             as: JoinPingResponse.self
         ).joinPing.ping
     }
@@ -351,6 +373,18 @@ struct HotMessAPI: Sendable {
     /// Ends the user's own Ping early.
     func endPing() async throws {
         _ = try await query(Documents.endPing, variables: [:], as: EndPingResponse.self)
+    }
+
+    /// A signed link to `path` attributed to the user, such as
+    /// `https://hotmess.social/pings/<id>?e=<token>` for a Ping's invitation.
+    /// The API ends a Ping's link with the Ping; `nil` when the user can't
+    /// share it (it's ended, or no longer visible to them).
+    func shareLink(path: String, lifetime: String = "DAY") async throws -> URL? {
+        try await query(
+            Documents.shareLink,
+            variables: ["path": .string(path), "lifetime": .string(lifetime)],
+            as: ShareLinkResponse.self
+        ).shareLink?.url
     }
 
     static func sendPingVariables(
@@ -679,28 +713,6 @@ extension HotMessAPI {
         static func connectFacebook(_ request: ConnectFacebookRequest) -> Endpoint<Credential> {
             Endpoint("/v1/token", method: .post, body: JSONBody(request))
         }
-    }
-}
-
-/// `POST /v1/token/apple`. Apple gives the name only the first time someone
-/// signs in to the app, so it's sent along then. The authorization code lets
-/// the API get a refresh token from Apple, which it revokes when the account
-/// is deleted.
-struct AppleSignInRequest: Encodable, Sendable {
-    let identityToken: String
-    var authorizationCode: String? = nil
-    let firstName: String?
-    let lastName: String?
-    let host: String?
-    let device: DeviceDescription
-
-    enum CodingKeys: String, CodingKey {
-        case identityToken = "identity_token"
-        case authorizationCode = "authorization_code"
-        case firstName = "first_name"
-        case lastName = "last_name"
-        case host
-        case device
     }
 }
 
@@ -1079,8 +1091,8 @@ extension HotMessAPI {
         """
 
         static let joinPing = """
-        mutation JoinPing($pingId: ID!, $targetId: ID) {
-          joinPing(input: { pingId: $pingId, targetId: $targetId }) { ping { \(pingFields) } }
+        mutation JoinPing($pingId: ID!, $targetId: ID, $invitationToken: String) {
+          joinPing(input: { pingId: $pingId, targetId: $targetId, invitationToken: $invitationToken }) { ping { \(pingFields) } }
         }
         """
 
@@ -1093,6 +1105,12 @@ extension HotMessAPI {
         static let endPing = """
         mutation EndPing {
           endPing(input: {}) { ended }
+        }
+        """
+
+        static let shareLink = """
+        query ShareInvitation($path: String!, $lifetime: ShareLinkLifetime!) {
+          shareLink(path: $path, lifetime: $lifetime) { url expiresAt }
         }
         """
 
@@ -1467,6 +1485,11 @@ struct LeavePingResponse: Decodable, Sendable { let leavePing: PingPayload }
 struct EndPingResponse: Decodable, Sendable {
     struct Payload: Decodable, Sendable { let ended: Bool }
     let endPing: Payload
+}
+
+struct ShareLinkResponse: Decodable, Sendable {
+    struct Link: Decodable, Sendable { let url: URL }
+    let shareLink: Link?
 }
 
 struct MeResponse: Decodable, Sendable {

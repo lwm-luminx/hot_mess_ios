@@ -26,6 +26,9 @@ struct VenueScreen: View {
     /// Whether it's reported closed, and its details as a fix starts from.
     @State private var suggestionState: VenueSuggestionState?
     @State private var fixTarget: SuggestionTarget?
+    /// Whether the app places the user here, so "Get help" shows. Its own
+    /// request, so an API without safety alerts still shows the venue.
+    @State private var safety: VenueSafety?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { overview in
@@ -41,9 +44,10 @@ struct VenueScreen: View {
                             topInset: proxy.safeAreaInsets.top,
                             tone: $heroTone,
                             minimumContrast: 7,
-                            minimumScrim: ImageTone.accessibleScrimFloor
+                            minimumScrim: ImageTone.accessibleScrimFloor,
+                            bodyHeight: HeroMetrics.detailHeight
                         ) {
-                            heroText(venue)
+                            heroText(overview)
                         }
 
                         if suggestionState?.reportedClosed == true {
@@ -85,8 +89,8 @@ struct VenueScreen: View {
                                 venueName: venue.name
                             )
                         }
-                        // The next two events sit up top, above the fold; the
-                        // rest wait at the bottom.
+                        // The next event is on the hero and the two after it
+                        // sit up top, above the fold; the rest wait at the bottom.
                         if !overview.comingUp.isEmpty {
                             CardSection(String(localized: "Coming Up")) {
                                 ForEach(overview.comingUp) { event in
@@ -103,6 +107,15 @@ struct VenueScreen: View {
                                 route: .venueChat(venue),
                                 onMessage: lineupChanged
                             )
+                            .padding(.horizontal, 16)
+                        }
+
+                        // Only while the app places the user here: staff can
+                        // only help people who are there.
+                        if safety?.canSend == true {
+                            GetHelpButton {
+                                model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                            }
                             .padding(.horizontal, 16)
                         }
 
@@ -136,13 +149,6 @@ struct VenueScreen: View {
                             PairUpVenueRow(pairUp: pairUp) { isPairingUp = true }
                         }
 
-                        if !overview.friends.isEmpty {
-                            DetailSection(String(localized: "Friends Here")) {
-                                FriendStrip(friends: overview.friends)
-                                    .padding(.horizontal, -20)
-                            }
-                        }
-
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
 
                         aboutSection(venue, links: SocialLink.aboutLinks(overview.socialLinks, facebookURL: venue.facebookURL))
@@ -165,7 +171,7 @@ struct VenueScreen: View {
                     .padding(.bottom, 24)
                 }
                 .ignoresSafeArea(edges: .top)
-                .trackingHeroCollapse($heroCollapsed)
+                .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
@@ -173,11 +179,7 @@ struct VenueScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 12) {
-                        if let shareURL = venue.shareURL {
-                            ShareLink(item: shareURL) {
-                                Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
-                            }
-                        }
+                        SignedShareButton(path: "/venues/\(venue.id.uuidString.lowercased())")
 
                         Menu {
                             Button {
@@ -217,6 +219,7 @@ struct VenueScreen: View {
         }
         // Its own request, so an API without suggestions still shows the venue.
         .task { suggestionState = try? await model.api.venueSuggestionState(venueID) }
+        .task { await loadSafety() }
         .sheet(item: $fixTarget) { target in
             SuggestFixSheet(target: target)
                 .environment(model)
@@ -253,12 +256,27 @@ struct VenueScreen: View {
         }
     }
 
-    private func heroText(_ venue: Venue) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func heroText(_ overview: VenueOverview) -> some View {
+        let venue = overview.venue
+
+        return VStack(alignment: .leading, spacing: 10) {
             Text(venue.name)
                 .font(.hotMess(.title, semibold: true))
                 .lineLimit(3)
                 .accessibilityAddTraits(.isHeader)
+
+            if let next = overview.nextEvent {
+                NavigationLink(value: AppRoute.event(next.id)) {
+                    HStack(spacing: 6) {
+                        Text(next.nextUpLine)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .heroGlass(fillsWidth: false)
+                }
+                .buttonStyle(.plain)
+            }
 
             let details = [venue.address, venue.distance.map(DistanceFormat.string(fromMetres:))]
                 .compactMap { $0 }
@@ -268,7 +286,50 @@ struct VenueScreen: View {
                     .font(.hotMess(.subheadline, semibold: true))
                     .lineLimit(2)
             }
+
+            if !overview.friends.isEmpty {
+                HStack(spacing: 8) {
+                    HeroFaces(friends: overview.friends)
+                    Text(friendsHereLine(overview.friends))
+                        .font(.hotMess(.subheadline, semibold: true))
+                        .lineLimit(1)
+                }
+            }
+
+            HeroActionRow {
+                if venue.coordinate != nil {
+                    Button {
+                        openInMaps(venue)
+                    } label: {
+                        Label(String(localized: "Directions"), systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                            .heroGlass()
+                    }
+                }
+
+                if overview.chatOpen {
+                    NavigationLink(value: AppRoute.venueChat(venue)) {
+                        Label(String(localized: "Chat"), systemImage: "bubble.left.and.bubble.right.fill")
+                            .heroGlass()
+                    }
+                }
+
+                if let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
+                    Link(destination: url) {
+                        Label(String(localized: "Call"), systemImage: "phone.fill")
+                            .heroGlass()
+                    }
+                    .accessibilityLabel(String(localized: "Call \(phone)"))
+                }
+            }
         }
+    }
+
+    /// "Sam is here", or "4 friends here".
+    private func friendsHereLine(_ friends: [Friend]) -> String {
+        if friends.count == 1, let friend = friends.first {
+            return String(localized: "\(friend.firstName) is here")
+        }
+        return String(localized: "\(friends.count) friends here")
     }
 
     /// What it is, where, how to reach it, and its links elsewhere in one
@@ -281,29 +342,8 @@ struct VenueScreen: View {
                     .font(.hotMess(.subheadline))
             }
 
-            if let address = venue.address, !address.isEmpty {
-                Button {
-                    openInMaps(venue)
-                } label: {
-                    InfoRow(title: String(localized: "Address"), value: address, systemImage: "mappin")
-                }
-                .buttonStyle(.plain)
-            }
-
-            if let phone = venue.phone, let url = URL(string: "tel://\(phone.filter(\.isNumber))") {
-                Link(destination: url) {
-                    InfoRow(title: String(localized: "Phone"), value: phone, systemImage: "phone")
-                }
-            }
-
-            if let distance = venue.distance {
-                InfoRow(
-                    title: String(localized: "Distance"),
-                    value: DistanceFormat.string(fromMetres: distance),
-                    systemImage: "figure.walk"
-                )
-            }
-
+            // Its address, distance and phone are on the hero, which has
+            // Directions and Call.
             ForEach(links) { link in
                 SocialLinkRow(link: link, namesService: true)
             }
@@ -334,6 +374,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.stopSimulating()
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -343,6 +384,7 @@ struct VenueScreen: View {
                         Task {
                             await model.location.simulate(at: coordinate, venueName: venue.name, allowed: isReview)
                             await viewModel?.load()
+                            await loadSafety()
                             await pairUpModel?.load()
                         }
                     }
@@ -391,6 +433,11 @@ struct VenueScreen: View {
             await viewModel?.load()
             await lineupModel?.refresh()
             await pairUpModel?.load()
+            await loadSafety()
         }
+    }
+
+    private func loadSafety() async {
+        if let fresh = try? await model.api.venueSafety(venueID) { safety = fresh }
     }
 }

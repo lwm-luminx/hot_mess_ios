@@ -16,8 +16,8 @@ struct VenuePageTests {
     private let second = URL(string: "https://cdn.example.com/2.jpg")!
     private let photo = URL(string: "https://cdn.example.com/photo.jpg")!
 
-    private func venue(banner: URL? = nil, photo: URL? = nil, facebookLink: URL? = nil) -> Venue {
-        Venue(id: UUID(), name: "Club Triangles", facebookLink: facebookLink, photoURL: photo, bannerURL: banner)
+    private func venue(banner: URL? = nil, photo: URL? = nil, facebookLink: URL? = nil) -> HotMess.Venue {
+        HotMess.Venue(id: UUID(), name: "Club Triangles", facebookLink: facebookLink, photoURL: photo, bannerURL: banner)
     }
 
     @Test("The hero rotates through the banner and then the banner images, once each")
@@ -32,14 +32,15 @@ struct VenuePageTests {
         #expect(VenueOverview(venue: venue()).heroPhotos.isEmpty)
     }
 
-    @Test("The next two events go up top and the rest below")
+    @Test("The next event is on the hero, the two after it up top, and the rest below")
     func comingUp() {
-        let events = (0..<4).map { day in
+        let events = (0..<5).map { day in
             Event(id: UUID(), name: "Night \(day)", startDate: .now.addingTimeInterval(Double(day) * 86_400))
         }
         let overview = VenueOverview(venue: venue(), events: events)
-        #expect(overview.comingUp.map(\.id) == events.prefix(2).map(\.id))
-        #expect(overview.laterEvents.map(\.id) == events.dropFirst(2).map(\.id))
+        #expect(overview.nextEvent?.id == events[0].id)
+        #expect(overview.comingUp.map(\.id) == events[1...2].map(\.id))
+        #expect(overview.laterEvents.map(\.id) == events.dropFirst(3).map(\.id))
     }
 
     @Test("About lists every link once, Facebook first, then Instagram")

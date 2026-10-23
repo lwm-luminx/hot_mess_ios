@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import SwiftUI
 
 /// A ChatPeek that follows its room while it's on screen. It watches the
@@ -10,6 +11,10 @@ import SwiftUI
 /// user as in chat), so new lines and who's here arrive as they happen, and
 /// the panel turns its live ring while the room is joined. Before that, and
 /// whenever the room drops, it shows `messages`, the screen's last snapshot.
+///
+/// At a venue, with tonight's `lineup`, the acts in chat now join the faces
+/// after the venue's, and a line says who's in: "The Wildrose, 3 from
+/// tonight's lineup and Jordan · 23 here".
 struct LiveChatPeek: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -19,6 +24,11 @@ struct LiveChatPeek: View {
     /// The screen's snapshot of the room's recent messages, oldest first.
     let messages: [VenueMessage]
     var participants: [ChatPeek.Participant] = []
+    /// The venue's name, for the line under the faces; `nil` for a locale's
+    /// room, which has none.
+    var venueName: String? = nil
+    /// Tonight's lineup at the venue, for the acts in chat now.
+    var lineup: VenueLineup? = nil
     let route: AppRoute
     /// Called with each line the room says while live, such as the "On now"
     /// announcement advancing the lineup posts.
@@ -44,7 +54,13 @@ struct LiveChatPeek: View {
             roomName: room.name,
             messages: shownMessages.peekMessages(currentUserID: model.session.userID, friends: model.friends.byID),
             online: online,
-            participants: participants,
+            participants: shownParticipants,
+            summary: RoomSummary.line(
+                venue: venueName,
+                lineupInChat: lineupInChat.count,
+                friend: friendHere,
+                count: online.flatMap { $0 > 0 ? $0 : nil }
+            ),
             isLive: isLive,
             route: route
         )
@@ -71,6 +87,34 @@ struct LiveChatPeek: View {
         var ids = viewModel.onlineUserIDs
         if let userID = model.session.userID { ids.remove(userID) }
         return ids.count
+    }
+
+    /// The acts on tonight's lineup in chat now, while live and the room
+    /// says (servers without lineup presence don't).
+    private var lineupInChat: [HereNowLineupFace] {
+        guard isLive, let viewModel, let lineup, let presence = viewModel.lineupPresence else { return [] }
+        return HereNowLineupFace.faces(for: lineup, presence: presence).filter { $0.presence == .online }
+    }
+
+    /// The screen's faces with the lineup in chat after the venue's: the
+    /// venue, the lineup, then the user and friends.
+    private var shownParticipants: [ChatPeek.Participant] {
+        let acts = lineupInChat.map { face in
+            ChatPeek.Participant(
+                id: "lineup-\(face.id)", name: face.name,
+                avatarURL: face.people.first?.avatarURL,
+                presence: .online
+            )
+        }
+        guard !acts.isEmpty else { return participants }
+        let places = participants.prefix { $0.isPlace }
+        return Array(places) + acts + participants.dropFirst(places.count)
+    }
+
+    /// A friend in the room now, by first name, for the line.
+    private var friendHere: String? {
+        guard isLive, let viewModel else { return nil }
+        return viewModel.hereNow.first { $0.isFriend && $0.isHere && !$0.isViewer }?.firstName
     }
 
     private func follow() async {

@@ -33,6 +33,7 @@ struct SettingsScreen: View {
             coverSection
             locationSection
             notificationsSection
+            helpSection
             privacySection
             feedbackSection
             aboutSection
@@ -182,6 +183,32 @@ struct SettingsScreen: View {
             } footer: {
                 Text("Get a push when people keep talking in a chat room you left in the last 30 minutes.")
             }
+        }
+    }
+
+    /// "Need support?" is here whether or not the user is out; the venue's
+    /// Get help is only on the venue they're at.
+    private var helpSection: some View {
+        Section(String(localized: "Help and Safety")) {
+            NavigationLink {
+                SupportScreen()
+            } label: {
+                Label(String(localized: "Need Support?"), systemImage: "heart.text.square")
+            }
+            .accessibilityIdentifier("me.support")
+
+            NavigationLink {
+                GettingHelpScreen()
+            } label: {
+                Label(String(localized: "Getting Help at a Venue"), systemImage: "shield.lefthalf.filled")
+            }
+
+            NavigationLink {
+                YourSafetyAlertsScreen()
+            } label: {
+                Label(String(localized: "Your Safety Alerts"), systemImage: "bell.badge")
+            }
+            .accessibilityIdentifier("me.safetyAlerts")
         }
     }
 

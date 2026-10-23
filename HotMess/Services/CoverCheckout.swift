@@ -11,6 +11,15 @@ import Observation
 import SwiftUI
 import UIKit
 
+/// Shared by the full app and its App Clip; both run the same provider checkout.
+protocol CoverPaymentAPI: Sendable {
+    func buyCover(venueID: UUID, quantity: Int, tier: String?) async throws -> CoverPurchase
+    func buyCoatCheck(venueID: UUID, quantity: Int) async throws -> CoverPurchase
+    func payCover(admissionID: String, sourceID: String, verificationToken: String?) async throws -> Admission
+    func confirmCover(admissionID: String) async throws -> Admission
+    func refundAdmission(_ admissionID: String) async throws -> Admission
+}
+
 /// Pays a venue's cover in the app and shows the pass.
 ///
 /// `buyCover` starts the payment with the venue's provider. For Stripe it's on
@@ -35,12 +44,16 @@ final class CoverCheckout {
     /// Where Stripe sends people back after a bank redirect.
     static let returnURL = "hotmess://stripe-redirect"
 
-    private let api: HotMessAPI
-    private let configuration: AppConfiguration
+    private let api: any CoverPaymentAPI
+    private let applePayMerchantID: String?
+    private let tintColor: UIColor
+    private let paymentReturnURL: String
 
-    init(api: HotMessAPI, configuration: AppConfiguration) {
+    init(api: any CoverPaymentAPI, applePayMerchantID: String?, tintColor: UIColor, returnURL: String = CoverCheckout.returnURL) {
         self.api = api
-        self.configuration = configuration
+        self.paymentReturnURL = returnURL
+        self.applePayMerchantID = applePayMerchantID
+        self.tintColor = tintColor
     }
 
     /// Whether any payment is in flight.
@@ -253,13 +266,13 @@ final class CoverCheckout {
 
     // MARK: - Stripe
 
-    private enum SheetOutcome: Sendable {
+    enum SheetOutcome: Sendable {
         case completed
         case canceled
         case failed(String)
     }
 
-    private func presentPaymentSheet(
+    func presentPaymentSheet(
         clientSecret: String,
         publishableKey: String,
         accountID: String,
@@ -272,9 +285,9 @@ final class CoverCheckout {
 
         var sheetConfiguration = PaymentSheet.Configuration()
         sheetConfiguration.merchantDisplayName = Self.merchantName(venueName)
-        sheetConfiguration.returnURL = Self.returnURL
+        sheetConfiguration.returnURL = paymentReturnURL
         sheetConfiguration.allowsDelayedPaymentMethods = false
-        if let merchantID = configuration.applePayMerchantID {
+        if let merchantID = applePayMerchantID {
             sheetConfiguration.applePay = PaymentSheet.ApplePayConfiguration(
                 merchantId: merchantID,
                 merchantCountryCode: "US"
@@ -303,7 +316,7 @@ final class CoverCheckout {
 
     // MARK: - Square
 
-    private func payWithSquare(_ admission: Admission, applicationID: String, venueName: String) async -> SquareOutcome {
+    private func payWithSquare(_ admission: Admission, applicationID: String, venueName: String) async -> CoverSquareOutcome {
         // Square needs the application ID before anything else it does,
         // Apple Pay checks included.
         SQIPInAppPaymentsSDK.squareApplicationID = applicationID
@@ -312,13 +325,22 @@ final class CoverCheckout {
             return .failed(String(localized: "Couldn't open the payment sheet."))
         }
 
-        let merchantID = configuration.applePayMerchantID
+        let merchantID = applePayMerchantID
         let methods = SquarePaymentMethod.available(
             canUseApplePay: SQIPInAppPaymentsSDK.canUseApplePay,
             merchantID: merchantID
         )
-        let pay: @MainActor (String) async throws -> Admission = { [api] nonce in
-            try await api.payCover(admissionID: admission.id, sourceID: nonce)
+        var paidAdmission: Admission?
+        let pay: @MainActor (String) async throws -> Void = { [api] nonce in
+            paidAdmission = try await api.payCover(admissionID: admission.id, sourceID: nonce, verificationToken: nil)
+        }
+        func result(_ outcome: SquareOutcome) -> CoverSquareOutcome {
+            switch outcome {
+            case .completed:
+                return paidAdmission.map(CoverSquareOutcome.paid) ?? .failed("Payment is still processing.")
+            case .canceled: return .canceled
+            case let .failed(message): return .failed(message)
+            }
         }
 
         switch await Self.chooseSquareMethod(from: methods, price: admission.price, presenter: presenter) {
@@ -335,16 +357,16 @@ final class CoverCheckout {
                     amount: NSDecimalNumber(decimal: admission.total.amount)
                 ),
             ]
-            return await SquareApplePay(pay: pay).run(request)
+            return result(await SquareApplePay(pay: pay).run(request))
         case .card:
-            return await SquareCardEntry(pay: pay, price: admission.price).run(from: presenter)
+            return result(await SquareCardEntry(pay: pay, price: admission.price, tintColor: tintColor).run(from: presenter))
         case nil:
             return .canceled
         }
     }
 
     /// Asks Apple Pay or card when both work; otherwise there's nothing to ask.
-    private static func chooseSquareMethod(
+    static func chooseSquareMethod(
         from methods: [SquarePaymentMethod],
         price: String,
         presenter: UIViewController
@@ -386,14 +408,20 @@ final class CoverCheckout {
 }
 
 /// How paying through Square ended.
-private enum SquareOutcome: Sendable {
+private enum CoverSquareOutcome: Sendable {
     case paid(Admission)
     case canceled
     case failed(String)
 }
 
+enum SquareOutcome: Sendable {
+    case completed
+    case canceled
+    case failed(String)
+}
+
 private func paymentErrorMessage(_ error: any Error) -> String {
-    (error as? APIError)?.errorDescription ?? error.localizedDescription
+    error.localizedDescription
 }
 
 // MARK: - Square Apple Pay
@@ -404,13 +432,13 @@ private func paymentErrorMessage(_ error: any Error) -> String {
 /// `@preconcurrency` with the class on the main actor, as `LocationProvider`
 /// does for Core Location.
 @MainActor
-private final class SquareApplePay: NSObject, PKPaymentAuthorizationControllerDelegate {
-    private let pay: @MainActor (String) async throws -> Admission
+final class SquareApplePay: NSObject, PKPaymentAuthorizationControllerDelegate {
+    private let pay: @MainActor (String) async throws -> Void
     private var controller: PKPaymentAuthorizationController?
     private var continuation: CheckedContinuation<SquareOutcome, Never>?
     private var outcome = SquareOutcome.canceled
 
-    init(pay: @escaping @MainActor (String) async throws -> Admission) {
+    init(pay: @escaping @MainActor (String) async throws -> Void) {
         self.pay = pay
     }
 
@@ -438,7 +466,8 @@ private final class SquareApplePay: NSObject, PKPaymentAuthorizationControllerDe
         Task {
             do {
                 let nonce = try await Self.nonce(for: payment)
-                outcome = .paid(try await pay(nonce))
+                try await pay(nonce)
+                outcome = .completed
                 completion(PKPaymentAuthorizationResult(status: .success, errors: nil))
             } catch {
                 outcome = .failed(paymentErrorMessage(error))
@@ -484,20 +513,22 @@ private struct SquareNonceError: LocalizedError {
 /// and the form shows success or the error (so the buyer can fix the card and
 /// try again) before it closes.
 @MainActor
-private final class SquareCardEntry: NSObject, @preconcurrency SQIPCardEntryViewControllerDelegate {
-    private let pay: @MainActor (String) async throws -> Admission
+final class SquareCardEntry: NSObject, @preconcurrency SQIPCardEntryViewControllerDelegate {
+    private let pay: @MainActor (String) async throws -> Void
     private let price: String
+    private let tintColor: UIColor
     private var continuation: CheckedContinuation<SquareOutcome, Never>?
-    private var paid: Admission?
+    private var paid = false
 
-    init(pay: @escaping @MainActor (String) async throws -> Admission, price: String) {
+    init(pay: @escaping @MainActor (String) async throws -> Void, price: String, tintColor: UIColor) {
         self.pay = pay
         self.price = price
+        self.tintColor = tintColor
     }
 
     func run(from presenter: UIViewController) async -> SquareOutcome {
         let theme = SQIPTheme()
-        theme.tintColor = UIColor(Color.hotMessAccent)
+        theme.tintColor = tintColor
         theme.saveButtonTitle = String(localized: "Pay \(price)")
 
         let form = SQIPCardEntryViewController(theme: theme)
@@ -520,7 +551,8 @@ private final class SquareCardEntry: NSObject, @preconcurrency SQIPCardEntryView
         let nonce = cardDetails.nonce
         Task {
             do {
-                paid = try await pay(nonce)
+                try await pay(nonce)
+                paid = true
                 completionHandler(nil)
             } catch {
                 completionHandler(error)
@@ -533,7 +565,7 @@ private final class SquareCardEntry: NSObject, @preconcurrency SQIPCardEntryView
         didCompleteWith status: SQIPCardEntryCompletionStatus
     ) {
         let outcome: SquareOutcome = switch (status, paid) {
-        case let (.success, admission?): .paid(admission)
+        case (.success, true): .completed
         default: .canceled
         }
 

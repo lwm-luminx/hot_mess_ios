@@ -57,6 +57,7 @@ struct MyPingCard: View {
             }
 
             HStack(spacing: 12) {
+                SignedShareButton(path: "/pings/\(ping.id)")
                 Button(action: edit) {
                     Text("Edit")
                         .font(.hotMess(.subheadline, semibold: true))
@@ -161,6 +162,8 @@ struct FriendPingCard: View {
             .accessibilityElement(children: .combine)
 
             Spacer(minLength: 0)
+
+            SignedShareButton(path: "/pings/\(ping.id)")
 
             if report != nil || block != nil {
                 safetyMenu

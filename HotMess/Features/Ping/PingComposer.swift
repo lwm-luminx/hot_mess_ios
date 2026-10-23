@@ -101,6 +101,9 @@ final class PingComposer {
     private(set) var editing: Ping?
     private(set) var isSending = false
     var errorMessage: String?
+    /// Who gets a text with the Ping's link once it's sent. Per send, so
+    /// editing a running Ping can text more people.
+    private(set) var contacts: [PingContact] = []
 
     private let api: HotMessAPI
     private let audienceKit: AudienceKitClient
@@ -128,6 +131,14 @@ final class PingComposer {
         } else {
             selection.append(place)
         }
+    }
+
+    func add(_ picked: [PingContact]) {
+        contacts = PingContact.merging(picked, into: contacts)
+    }
+
+    func remove(_ contact: PingContact) {
+        contacts.removeAll { $0.id == contact.id }
     }
 
     func load() async {
@@ -173,6 +184,19 @@ final class PingComposer {
         }
     }
 
+    /// The text for the picked contacts, with a signed link to `ping` that
+    /// says who sent it and lasts as long as the Ping. Throws when there's
+    /// no link to send (the API won't sign one for a Ping that's ended).
+    func invitation(for ping: Ping) async throws -> PingInvitation {
+        isSending = true
+        defer { isSending = false }
+
+        guard let url = try await api.shareLink(path: "/pings/\(ping.id)") else {
+            throw PingInvitationError.unavailable
+        }
+        return PingInvitation(recipients: contacts.map(\.phone), body: PingInvitation.message(for: ping, url: url))
+    }
+
     // MARK: - Loading
 
     private func loadMyPing() async -> Ping? {
@@ -188,5 +212,13 @@ final class PingComposer {
     private func loadVenues() async -> [Venue] {
         guard let venues = try? await audienceKit.venues() else { return [] }
         return VenueCollection(audienceVenues: venues, localeID: localeID, resolve: audienceKit.url(for:)).venues
+    }
+}
+
+enum PingInvitationError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        String(localized: "Your ping was sent, but there's no link to text for it right now.")
     }
 }

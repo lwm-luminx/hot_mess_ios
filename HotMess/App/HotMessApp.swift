@@ -34,7 +34,7 @@ struct HotMessApp: App {
                 .onOpenURL(perform: handle)
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }
-                    _ = model.open(url)
+                    handle(url)
                 }
         }
         .environment(model)

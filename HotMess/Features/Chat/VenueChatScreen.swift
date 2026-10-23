@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKitUI
 import SwiftUI
 import UIKit
 
@@ -51,6 +52,9 @@ struct VenueChatScreen: View {
     /// What the profile sheet asked for, done once it has gone: nothing
     /// else can present over it.
     @State private var afterProfile: ProfileFollowUp?
+    /// Someone picked in the "In this room" sheet, whose profile opens once
+    /// that sheet has gone.
+    @State private var pendingProfile: ChatProfile?
     @State private var isPinging = false
     /// People muted in this room, on this device only (`ChatMutes`).
     @State private var mutedIDs: Set<UUID> = []
@@ -65,6 +69,12 @@ struct VenueChatScreen: View {
         case report(ChatProfile)
         case block(ChatProfile)
     }
+    /// Tonight's lineup at the room's venue, for its faces in the Here now
+    /// strip and the "In this room" sheet. `nil` in a locale's room.
+    @State private var lineupModel: VenueLineupModel?
+    @State private var isShowingRoom = false
+    /// The venue's group trivia, for the round card above the composer.
+    @State private var trivia: VenueTriviaModel?
 
     var body: some View {
         Group {
@@ -104,9 +114,47 @@ struct VenueChatScreen: View {
             guard !Task.isCancelled else { return }
             await current.run()
         }
+        // The venue's group trivia, while the room is open.
+        .task(id: room.kind == .venue && model.safety.hasAcceptedTerms && scenePhase == .active) {
+            guard room.kind == .venue, model.safety.hasAcceptedTerms, scenePhase == .active else { return }
+            let current = trivia ?? VenueTriviaModel(api: model.api, venueID: room.id)
+            trivia = current
+            await current.run()
+        }
+        .alert(
+            String(localized: "Your vote didn't count"),
+            isPresented: Binding(
+                get: { trivia?.voteError != nil },
+                set: { if !$0 { trivia?.voteError = nil } }
+            )
+        ) {
+            Button(String(localized: "OK"), role: .cancel) {}
+        } message: {
+            Text(trivia?.voteError ?? "")
+        }
         .onDisappear {
             let viewModel = self.viewModel
             Task { await viewModel?.stop() }
+        }
+        .task(id: room.venueID) {
+            lineupModel = VenueLineupModel.reusing(lineupModel, for: room.venueID, api: model.api)
+        }
+        .keepsLineupFresh(lineupModel)
+        .sheet(isPresented: $isShowingRoom, onDismiss: openPendingProfile) {
+            if let viewModel {
+                InThisRoomSheet(
+                    subtitle: roomSubtitle,
+                    place: room.place,
+                    lineup: lineupFaces(viewModel),
+                    people: hereNow(viewModel),
+                    onSelectLineup: openPage,
+                    onSelectPerson: { person in
+                        // Opened once the room sheet has gone: one sheet at a time.
+                        pendingProfile = ChatProfile(id: person.id, name: person.name, avatarURL: person.avatarURL)
+                    }
+                )
+                .environment(model)
+            }
         }
         .sheet(item: $reportTarget, onDismiss: thankIfReported) { message in
             ReportSheet(
@@ -215,16 +263,18 @@ struct VenueChatScreen: View {
                 if let kind = bannerKind(viewModel) {
                     RoomBanner(kind: kind, roomName: room.name, isLocale: room.kind == .locale)
                 }
-                // Who is here: the venue, which is always in its own room,
-                // then everyone else, friends first. Above the pinned
-                // announcement, which the thread draws at its top.
-                let blocked = model.safety.blockedIDs
-                let hereNow = viewModel.hereNow.filter { !blocked.contains($0.id) }
-                let place = room.kind == .venue ? HereNowPlace(name: room.name, photoURL: room.photoURL) : nil
-                if place != nil || !hereNow.isEmpty {
+                // Who is here: the venue, which is always in its own room (an
+                // event's too), tonight's lineup, then everyone else, friends
+                // first. Above the pinned announcement, which the thread
+                // draws at its top.
+                let people = hereNow(viewModel)
+                let place = room.place
+                let lineup = lineupFaces(viewModel)
+                if place != nil || !lineup.isEmpty || !people.isEmpty {
                     HereNowStrip(
                         place: place,
-                        people: hereNow,
+                        lineup: lineup,
+                        people: people,
                         onReport: { person in
                             personReport = ReportSubject(
                                 target: .person,
@@ -237,7 +287,9 @@ struct VenueChatScreen: View {
                         },
                         onSelect: { person in
                             profileTarget = ChatProfile(id: person.id, name: person.name, avatarURL: person.avatarURL)
-                        }
+                        },
+                        onSeeEveryone: { isShowingRoom = true },
+                        onSelectLineup: openPage
                     )
                 }
                 // Each minute, so a special leaves the room when it ends,
@@ -269,6 +321,19 @@ struct VenueChatScreen: View {
                         clearMark: viewModel.clearMark,
                         onOpenProfile: { openProfile($0) }
                     )
+                }
+                // A venue post may be a trivia round going up or its reveal.
+                .onChange(of: viewModel.messages.last?.id) {
+                    Task { await trivia?.refresh() }
+                }
+                if let trivia, let round = trivia.round {
+                    TriviaRoundCard(
+                        round: round,
+                        onVote: viewModel.connectionState == .notPresent ? nil : { await trivia.vote($0) }
+                    )
+                    .audiencePreset(model.brand.preset)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
                 }
                 composer(viewModel)
             } else {
@@ -315,6 +380,12 @@ struct VenueChatScreen: View {
     private func friendState(of id: UUID) -> ChatFriendState {
         if model.friends.byID[id] != nil || friendRequests[id] == .accepted { return .friends }
         return friendRequests[id] == nil ? .notFriends : .requested
+    }
+
+    private func openPendingProfile() {
+        guard let profile = pendingProfile else { return }
+        pendingProfile = nil
+        profileTarget = profile
     }
 
     private func closeProfile(then followUp: ProfileFollowUp) {
@@ -371,6 +442,35 @@ struct VenueChatScreen: View {
         } catch {
             friendRequestError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    // MARK: - Who's here
+
+    /// Everyone in the room but people the user blocked, as the strip
+    /// orders them.
+    private func hereNow(_ viewModel: VenueChatViewModel) -> [HereNowPerson] {
+        let blocked = model.safety.blockedIDs
+        return viewModel.hereNow.filter { !blocked.contains($0.id) }
+    }
+
+    /// Tonight's lineup at the venue, without its karaoke singers, with
+    /// whether each act is in chat when the room says.
+    private func lineupFaces(_ viewModel: VenueChatViewModel) -> [HereNowLineupFace] {
+        guard let lineup = lineupModel?.lineup else { return [] }
+        return HereNowLineupFace.faces(for: lineup, presence: viewModel.lineupPresence)
+    }
+
+    /// "Drag Bingo · The Wildrose" at an event, else the room's name.
+    private var roomSubtitle: String {
+        guard let venueName = room.venueName, let eventName = room.eventName else { return room.name }
+        return "\(eventName) · \(venueName)"
+    }
+
+    /// An act's page, from the strip or the sheet.
+    private func openPage(_ face: HereNowLineupFace) {
+        guard let id = face.personID else { return }
+        isShowingRoom = false
+        model.push(.person(id))
     }
 
     // MARK: - Reporting and blocking
@@ -502,6 +602,8 @@ struct VenueChatScreen: View {
             // Muted in this room: their own lines, not their posts as a listing.
             .filter { $0.isFromListing || !muted.contains($0.userID) }
             .filter { !$0.isPinnedPrompt && !dismissedPrompts.contains($0.id.uuidString) }
+            // The trivia round being shown has its card above the composer.
+            .filter { $0.id.uuidString.lowercased() != trivia?.round?.messageID?.lowercased() }
             .map { message in
                 message.threadMessage(
                     currentUserID: viewModel.userID,
