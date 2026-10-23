@@ -174,7 +174,8 @@ extension SocialLink {
     /// glyphs `SocialLinkRow` uses.
     var hostSystemImage: String {
         switch provider.lowercased() {
-        case "instagram": "camera"
+        // Not "camera": the stage's camera button takes a photo in the app.
+        case "instagram": "link"
         case "facebook": "person.2"
         case "twitter", "x": "at"
         case "soundcloud": "waveform"

@@ -117,6 +117,10 @@ struct VenueScreen: View {
                             OnNowSection(onNow: overview.onNow)
                         }
 
+                        // Photos of the venue, and the camera once you're
+                        // here: what you take goes on the stage's pages too.
+                        PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
+
                         PingPlaceStrip(
                             pings: (viewModel?.activePings ?? []).filter { !model.safety.isBlocked($0.user.id) },
                             isJoined: viewModel?.isJoinedHere(userID: model.session.userID) == true,
