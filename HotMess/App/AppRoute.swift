@@ -92,6 +92,11 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// One of the user's safety alerts (`/safety-alerts/<id>`, which the
     /// guest's pushes about it carry): its Get help sheet over any tab.
     case safetyAlert(UUID)
+    /// A venue's short link (`/v/<code>`, what a venue's TV QR code
+    /// carries): hotmess.social redirects it to the venue's chat, and the app
+    /// follows that redirect (``ShortLink``), since one within the site never
+    /// opens the app. `url` is the link on hotmess.social.
+    case shortLink(URL)
 }
 
 /// Parses the app's deep links.
@@ -114,6 +119,10 @@ enum DeepLink {
         }
         if segments.count >= 2, segments[0] == "safety-alerts", let id = UUID(uuidString: segments[1]) {
             return .safetyAlert(id)
+        }
+        if segments.count == 2, segments[0] == "v", ShortLink.isCode(segments[1]),
+           let link = URL(string: "https://hotmess.social/v/\(segments[1])") {
+            return .shortLink(link)
         }
         if let route = route(for: url) { return .route(route) }
         return segments.first == "pings" ? .now : nil
@@ -176,5 +185,34 @@ enum ShareLinkToken {
     static func hasExpired(_ token: String, at date: Date = .now) -> Bool {
         guard let expiry = expiry(of: token) else { return false }
         return expiry <= date
+    }
+}
+
+/// A short link on hotmess.social (`/v/<code>`): the site answers with a
+/// redirect to where it goes, which the app reads without following it.
+enum ShortLink {
+    /// The eight base62 characters of a venue's short code.
+    static func isCode(_ code: String) -> Bool {
+        code.count == 8 && code.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
+    }
+
+    /// Where the site redirects `url`, or `nil` when it doesn't (an unknown
+    /// code, or offline).
+    static func target(of url: URL, session: URLSession = .shared) async -> URL? {
+        var request = URLRequest(url: url, timeoutInterval: 10)
+        request.httpMethod = "GET"
+        guard let (_, response) = try? await session.data(for: request, delegate: StopAtRedirect()),
+              let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode),
+              let location = http.value(forHTTPHeaderField: "Location")
+        else { return nil }
+        return URL(string: location, relativeTo: url)?.absoluteURL
+    }
+
+    /// Hands back the redirect itself instead of following it.
+    private final class StopAtRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? {
+            nil
+        }
     }
 }
