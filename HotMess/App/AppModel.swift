@@ -382,6 +382,20 @@ final class AppModel {
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
             return true
+        case let .shortLink(url):
+            // Where the site redirects it, opened as that link would be; a
+            // code it doesn't know (or no network) leaves the user on Venues.
+            shareLinkTask = Task {
+                let target = await ShortLink.target(of: url)
+                guard !Task.isCancelled else { return }
+                if let target, let next = DeepLink.destination(for: target), next != .shortLink(url) {
+                    _ = open(next)
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
+            return true
         case nil:
             return false
         }
