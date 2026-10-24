@@ -199,6 +199,18 @@ final class AppModel {
         session.signOut()
     }
 
+    /// Points a test build at the other API. A session belongs to the API
+    /// that issued it, so this signs out first, then quits: every service
+    /// holds the configuration it launched with, and the next launch reads
+    /// the new choice.
+    func switchAPIServer(to server: AppConfiguration.APIServer) async {
+        guard configuration.isTestBuild, server != configuration.apiServer else { return }
+        forgetUser()
+        await session.signOutAndWait()
+        UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
+        exit(0)
+    }
+
     /// Forgets what was loaded for the signed-in user.
     private func forgetUser() {
         friends.forget()

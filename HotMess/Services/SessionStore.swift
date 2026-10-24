@@ -314,6 +314,16 @@ final class SessionStore {
         Task { try? await audienceKit.signOut() }
     }
 
+    /// Signs out like `signOut()`, but waits for the credential to be
+    /// forgotten and revoked, for when the app quits straight after.
+    func signOutAndWait() async {
+        loginManager.logOut()
+        AccessToken.current = nil
+        user = nil
+        state = .signedOut
+        try? await audienceKit.signOut()
+    }
+
     /// Wipes cached defaults and images, leaving credentials alone.
     func resetLocalData() {
         if let bundleIdentifier = Bundle.main.bundleIdentifier {
