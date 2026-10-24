@@ -24,6 +24,8 @@ struct SettingsScreen: View {
     /// the API can't say, which hides the toggle.
     @State private var recentChatPush: Bool?
     @State private var isSavingRecentChatPush = false
+    /// The API a tester picked, waiting on the confirmation.
+    @State private var pendingServer: AppConfiguration.APIServer?
 
     var body: some View {
         List {
@@ -349,8 +351,17 @@ struct SettingsScreen: View {
                     title: String(localized: "Facebook"),
                     value: model.configuration.facebookEnvironment
                 )
+                Picker(String(localized: "Server"), selection: Binding(
+                    get: { model.configuration.apiServer },
+                    set: { pendingServer = $0 == model.configuration.apiServer ? nil : $0 }
+                )) {
+                    ForEach(AppConfiguration.APIServer.allCases, id: \.self) { server in
+                        Text(server.title).tag(server)
+                    }
+                }
+                .accessibilityIdentifier("me.apiServer")
                 InfoRow(
-                    title: String(localized: "Server"),
+                    title: String(localized: "API"),
                     value: model.configuration.baseURL.absoluteString
                 )
             }
@@ -358,6 +369,18 @@ struct SettingsScreen: View {
             Text("About")
         } footer: {
             AboutUpdateFootnote(updates: model.updates)
+        }
+        .confirmationDialog(
+            String(localized: "Switch to the \(pendingServer?.title ?? "") API?"),
+            isPresented: Binding(get: { pendingServer != nil }, set: { if !$0 { pendingServer = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingServer
+        ) { server in
+            Button(String(localized: "Sign Out and Close")) {
+                Task { await model.switchAPIServer(to: server) }
+            }
+        } message: { _ in
+            Text("You'll be signed out and Hot Mess will close. Open it again and sign in to use the other server. Both share the same accounts and data.")
         }
     }
 
