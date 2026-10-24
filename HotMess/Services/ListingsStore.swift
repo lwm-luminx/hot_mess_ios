@@ -6,9 +6,8 @@
 import Foundation
 import Observation
 
-/// The venues and talent the signed-in user manages, so their pages offer
-/// "New Post" and their posts' menus offer editing. Most people manage none;
-/// the API still checks every change.
+/// The venues and talent the signed-in user manages, so Me offers Velvet or
+/// Backstage. Most people manage none.
 @MainActor
 @Observable
 final class ListingsStore {
@@ -32,8 +31,4 @@ final class ListingsStore {
         listings = .none
         isLoaded = false
     }
-
-    func canManage(_ post: Post) -> Bool { listings.canManage(post) }
-
-    func canHideFromEvent(_ post: Post) -> Bool { listings.canHideFromEvent(post) }
 }

@@ -27,7 +27,7 @@ final class AppModel {
     let friends = FriendDirectory()
     /// Who the user blocked, and whether they've agreed to the terms.
     let safety: SafetyStore
-    /// The venues and talent the user manages, for writing and managing posts.
+    /// The venues and talent the user manages, so Me offers Velvet or Backstage.
     let listings: ListingsStore
 
     /// The user's tribes, and whether the API has tribes.

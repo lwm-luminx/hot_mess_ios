@@ -39,14 +39,6 @@ final class PostDetailModel {
         }
     }
 
-    /// A manager's edit, or the post deleted from its own screen.
-    func apply(_ change: PostChange) {
-        switch change {
-        case let .updated(post): state = .loaded(post)
-        case .deleted: state = .failed(message: String(localized: "This post was removed."), isRetryable: false)
-        }
-    }
-
     var canSend: Bool { !isSending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     func send() async {
@@ -85,7 +77,6 @@ struct PostScreen: View {
     private static let newestShown = 3
 
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
     @State private var detail: PostDetailModel?
     @State private var showsEarlier = false
     @State private var reportSubject: ReportSubject?
@@ -96,10 +87,7 @@ struct PostScreen: View {
         LoadStateView(state: detail?.state ?? .loading, retry: reload) { post in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    PostList(posts: [post], postsModel: nil, isExpanded: true) { change in
-                        detail?.apply(change)
-                        if case .deleted = change { dismiss() }
-                    }
+                    PostList(posts: [post], postsModel: nil, isExpanded: true)
 
                     commentsSection(post)
                 }
@@ -272,9 +260,6 @@ struct PostScreen: View {
 
     private func reload() {
         if detail == nil { detail = PostDetailModel(api: model.api, postID: postID) }
-        Task {
-            if model.session.isSignedIn { await model.listings.load() }
-            await detail?.load()
-        }
+        Task { await detail?.load() }
     }
 }
