@@ -31,6 +31,7 @@ struct SettingsScreen: View {
             chatPhotoSection
             tribesSection
             facebookSection
+            staffAppsSection
             coverSection
             locationSection
             notificationsSection
@@ -46,6 +47,7 @@ struct SettingsScreen: View {
         .task { await model.session.refreshUser() }
         .task { await model.safety.load() }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
+        .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.listings.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
         .confirmationDialog(
             String(localized: "Sign out of Hot Mess?"),
@@ -158,6 +160,49 @@ struct SettingsScreen: View {
                 ConnectFacebookFooter()
             }
         }
+    }
+
+    /// "Your pages", for someone who manages a venue or talent: posts and the
+    /// rest are written and managed in Velvet (venues) and Backstage (talent),
+    /// not here.
+    @ViewBuilder
+    private var staffAppsSection: some View {
+        let listings = model.listings.listings
+        if model.session.isSignedIn, !listings.isEmpty {
+            Section {
+                if !listings.venues.isEmpty {
+                    staffAppRow(.velvet, listings: listings.venues)
+                }
+                if !listings.people.isEmpty {
+                    staffAppRow(.backstage, listings: listings.people)
+                }
+            } header: {
+                Text("Your pages")
+            } footer: {
+                Text("Post and manage your pages in the AudienceKit staff apps.")
+            }
+        }
+    }
+
+    private func staffAppRow(_ app: StaffApp, listings: [ManagedListings.Listing]) -> some View {
+        Button {
+            openURL(app.appURL) { opened in
+                if !opened { openURL(app.webURL) }
+            }
+        } label: {
+            LabeledContent {
+                Text(Self.listingNames(listings))
+            } label: {
+                Label(String(localized: "Open \(app.title)"), systemImage: app.systemImage)
+            }
+        }
+        .accessibilityIdentifier("me.staffApp.\(app.rawValue)")
+    }
+
+    /// "The Wildrose", or "The Wildrose +2" for someone managing more than one.
+    static func listingNames(_ listings: [ManagedListings.Listing]) -> String {
+        let first = listings.first?.name ?? ""
+        return listings.count > 1 ? "\(first) +\(listings.count - 1)" : first
     }
 
     private var coverSection: some View {
@@ -414,4 +459,28 @@ struct SettingsScreen: View {
         ImageCache.default.clearDiskCache()
         didReset = true
     }
+}
+
+/// The staff apps Me sends managers to: Velvet for a venue's, Backstage for
+/// talent's. Each opens by its URL scheme when installed, its page on
+/// audiencekit.com (with the store links) otherwise.
+enum StaffApp: String {
+    case velvet, backstage
+
+    var title: String {
+        switch self {
+        case .velvet: "Velvet"
+        case .backstage: "Backstage"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .velvet: "building.2"
+        case .backstage: "music.mic"
+        }
+    }
+
+    var appURL: URL { URL(string: "audiencekit-\(rawValue)://")! }
+    var webURL: URL { URL(string: "https://audiencekit.com/apps/\(rawValue)")! }
 }

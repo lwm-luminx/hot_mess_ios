@@ -7,25 +7,19 @@ import SwiftUI
 
 /// A page's posts: the venue's "Posts", an event's "From the venue and hosts",
 /// a talent's "Posts". Two cards, then "See all". Loads on its own, and draws
-/// nothing while loading, when there are none, or on an API without posts,
-/// except for whoever manages the page, who gets "New Post" there.
+/// nothing while loading, when there are none, or on an API without posts.
 struct PostsSection: View {
     let title: String
     let subject: PostsSubject
     var limit = 2
-    /// On an event page: its venue and the people on it, who may post there.
-    var eventName: String?
-    var eventVenueID: UUID?
-    var eventPeople: [UUID] = []
 
     @Environment(AppModel.self) private var model
     @State private var postsModel: PostsModel?
-    @State private var composing = false
 
     var body: some View {
         let posts = postsModel?.posts ?? []
         Group {
-            if !posts.isEmpty || !authors.isEmpty {
+            if !posts.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text(title)
@@ -33,15 +27,6 @@ struct PostsSection: View {
                             .foregroundStyle(.secondary)
                             .accessibilityAddTraits(.isHeader)
                         Spacer()
-                        if !authors.isEmpty {
-                            Button {
-                                composing = true
-                            } label: {
-                                Label(String(localized: "New Post"), systemImage: "square.and.pencil")
-                                    .font(.hotMess(.subheadline, semibold: true))
-                            }
-                            .accessibilityIdentifier("posts.new")
-                        }
                         if posts.count > limit {
                             NavigationLink(value: AppRoute.posts(subject, title: title)) {
                                 Text("See all")
@@ -52,38 +37,15 @@ struct PostsSection: View {
                     }
                     .padding(.horizontal, 20)
 
-                    if posts.isEmpty {
-                        Text("No posts yet. Post a special, a flyer or a set time; it shows here and in the locale's updates.")
-                            .font(.hotMess(.footnote))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
-                    } else {
-                        PostList(posts: Array(posts.prefix(limit)), postsModel: postsModel, showsEvent: !isEventPage)
-                    }
+                    PostList(posts: Array(posts.prefix(limit)), postsModel: postsModel, showsEvent: !isEventPage)
                 }
                 .padding(.horizontal, 16)
             }
         }
-        .sheet(isPresented: $composing) {
-            PostComposer(mode: .new(authors: authors, target: target)) { post in
-                postsModel?.apply(.updated(post))
-            }
-        }
         .task {
             if postsModel == nil { postsModel = PostsModel(api: model.api, subject: subject) }
-            if model.session.isSignedIn { await model.listings.load() }
             await postsModel?.load()
         }
-    }
-
-    /// Who the user can post as here: none for most people.
-    private var authors: [PostAuthor] {
-        model.listings.listings.authors(for: subject, eventVenueID: eventVenueID, eventPeople: eventPeople)
-    }
-
-    private var target: PostTarget {
-        if case let .event(id) = subject { return .event(id, name: eventName ?? title) }
-        return .page
     }
 
     private var isEventPage: Bool {
@@ -102,17 +64,10 @@ struct PostList: View {
     var isExpanded = false
     var spacing: CGFloat = 16
 
-    /// Where a manager's change goes: the list's model by default; the post
-    /// screen passes its own.
-    var onChange: ((PostChange) -> Void)?
-
     @Environment(AppModel.self) private var model
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
     @State private var hiding: PostPoster?
-    @State private var editing: Post?
-    @State private var deleting: Post?
-    @State private var manageError: String?
 
     var body: some View {
         LazyVStack(spacing: spacing) {
@@ -124,35 +79,10 @@ struct PostList: View {
                     isExpanded: isExpanded,
                     actions: PostActions(
                         report: { reportSubject = ReportSubject(target: .post, targetID: $0.id.uuidString.lowercased()) },
-                        hidePoster: { hiding = $0 },
-                        manage: { post, action in manage(post, action) }
+                        hidePoster: { hiding = $0 }
                     )
                 )
             }
-        }
-        .sheet(item: $editing) { post in
-            PostComposer(mode: .edit(post)) { apply(.updated($0)) }
-        }
-        .confirmationDialog(
-            String(localized: "Delete this post?"),
-            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-            titleVisibility: .visible,
-            presenting: deleting
-        ) { post in
-            Button(String(localized: "Delete Post"), role: .destructive) {
-                Task { await run { try await model.api.deletePost(post.id); return .deleted(post.id) } }
-            }
-            Button(String(localized: "Cancel"), role: .cancel) {}
-        } message: { _ in
-            Text("It and its comments come off Hot Mess and hotmess.social.")
-        }
-        .alert(
-            String(localized: "Something went wrong"),
-            isPresented: Binding(get: { manageError != nil }, set: { if !$0 { manageError = nil } })
-        ) {
-            Button(String(localized: "OK"), role: .cancel) {}
-        } message: {
-            Text(manageError ?? "")
         }
         .contentReporting(report: $reportSubject, block: $blockTarget)
         .confirmationDialog(
@@ -189,41 +119,6 @@ struct PostList: View {
     }
 }
 
-extension PostList {
-    private func manage(_ post: Post, _ action: PostManageAction) {
-        let api = model.api
-        switch action {
-        case .edit: editing = post
-        case .delete: deleting = post
-        case .togglePin:
-            Task { await run { .updated(try await api.updatePost(post.id, pinned: !post.pinned)) } }
-        case .toggleComments:
-            Task { await run { .updated(try await api.updatePost(post.id, commentsOpen: !post.commentsOpen)) } }
-        case .toggleVisibility:
-            let visibility: PostVisibility = post.visibility == .public ? .community : .public
-            Task { await run { .updated(try await api.updatePost(post.id, visibility: visibility)) } }
-        case .toggleHiddenFromEvent:
-            Task { await run { .updated(try await api.hidePostFromEvent(post.id, hidden: !post.hiddenFromEvent)) } }
-        }
-    }
-
-    private func run(_ change: () async throws -> PostChange) async {
-        do {
-            apply(try await change())
-        } catch {
-            manageError = NowViewModel.message(for: error)
-        }
-    }
-
-    private func apply(_ change: PostChange) {
-        if let onChange {
-            onChange(change)
-        } else {
-            postsModel?.apply(change)
-        }
-    }
-}
-
 /// Every post on a page, from its section's "See all".
 struct PostsScreen: View {
     let subject: PostsSubject
@@ -235,13 +130,7 @@ struct PostsScreen: View {
     var body: some View {
         LoadStateView(state: postsModel?.state ?? .loading, retry: reload) { posts in
             ScrollView {
-                PostList(
-                    posts: posts,
-                    postsModel: postsModel,
-                    showsPin: subject.floatsPins,
-                    showsEvent: !isEventPage,
-                    spacing: 20
-                )
+                PostList(posts: posts, postsModel: postsModel, showsPin: subject.floatsPins, showsEvent: !isEventPage, spacing: 20)
                     .padding(16)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())

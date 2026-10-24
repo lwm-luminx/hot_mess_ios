@@ -22,7 +22,7 @@ struct HotMessAPI: CoverPaymentAPI {
 
     var baseURL: URL { client.baseURL }
 
-    var audienceKit: AudienceKitClient { client.audienceKit }
+    private var audienceKit: AudienceKitClient { client.audienceKit }
 
     // MARK: - Home
 
