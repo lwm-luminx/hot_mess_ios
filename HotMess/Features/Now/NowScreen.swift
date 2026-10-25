@@ -246,7 +246,7 @@ struct NowScreen: View {
     private var helpVenue: HelpVenue? {
         guard safety?.canSend == true, let now = viewModel?.state.value, isAtVenue(now),
               let venue = now.venue else { return nil }
-        return HelpVenue(id: venue.id, name: venue.name, address: venue.address)
+        return HelpVenue(venue)
     }
 
     private var navigationTitle: String {

@@ -307,7 +307,7 @@ struct VenueScreen: View {
                     .accessibilityIdentifier("venue.heroPing")
 
                     Button {
-                        model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                        model.helpPresentation = .venue(HelpVenue(venue))
                     } label: {
                         Label(String(localized: "Safety"), systemImage: "shield.fill")
                             .heroGlass(selected: true)

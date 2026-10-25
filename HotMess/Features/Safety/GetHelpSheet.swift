@@ -53,6 +53,7 @@ struct GetHelpSheet: View {
             }
         }
         .task { await model.load() }
+        .task { await model.loadRides(near: app.location.coordinates) }
         .task { await model.keepFresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.load() } }
@@ -80,7 +81,7 @@ struct GetHelpSheet: View {
                     }
                     .accessibilityIdentifier("help.tellStaff")
                 }
-                HelpEscapeRows(venue: model.venue, showSupport: { isShowingSupport = true })
+                HelpEscapeRows(model: model, showSupport: { isShowingSupport = true })
             } footer: {
                 Text("Nothing here shows in chat or on your profile.")
             }
@@ -123,8 +124,10 @@ struct HelpRow: View {
 /// "Message a friend", "Get a ride" and "Need support?": what's left when
 /// nobody on shift can help, and what the no-answer screen offers.
 struct HelpEscapeRows: View {
-    let venue: HelpVenue?
+    let model: SafetyAlertModel
     let showSupport: () -> Void
+
+    private var venue: HelpVenue? { model.venue }
 
     var body: some View {
         ShareLink(item: friendMessage) {
@@ -136,14 +139,7 @@ struct HelpEscapeRows: View {
         }
         .accessibilityIdentifier("help.friend")
 
-        ShareLink(item: rideMessage) {
-            HelpRow(
-                title: String(localized: "Get a ride"),
-                subtitle: String(localized: "Share where to pick you up with a ride app."),
-                systemImage: "car"
-            )
-        }
-        .accessibilityIdentifier("help.ride")
+        RideRows(rides: model.rides, pickup: model.pickup, shareMessage: rideMessage)
 
         Button(action: showSupport) {
             HelpRow(
@@ -164,6 +160,48 @@ struct HelpEscapeRows: View {
         guard let venue else { return String(localized: "Pick me up here.") }
         if let address = venue.address, !address.isEmpty { return "\(venue.name), \(address)" }
         return venue.name
+    }
+}
+
+/// "Get a ride": a row for each ride app the API lists for the region, with
+/// the pickup set at the venue or where the phone is, then sharing the
+/// pickup for any other app or a friend who can drive over. Plain links: the
+/// app opens if it's installed, its site if not.
+struct RideRows: View {
+    let rides: [SupportResources.Ride]
+    let pickup: RidePickup?
+    let shareMessage: String
+
+    var body: some View {
+        ForEach(rides) { ride in
+            if let url = ride.link(pickup: pickup) {
+                Link(destination: url) {
+                    HelpRow(
+                        title: String(localized: "Get a ride with \(ride.name)"),
+                        subtitle: pickupLine,
+                        systemImage: "car"
+                    )
+                }
+                .accessibilityIdentifier("help.ride.\(ride.id)")
+            }
+        }
+
+        ShareLink(item: shareMessage) {
+            HelpRow(
+                title: rides.isEmpty ? String(localized: "Get a ride") : String(localized: "Share where to pick me up"),
+                subtitle: rides.isEmpty
+                    ? String(localized: "Share where to pick you up with a ride app.")
+                    : String(localized: "For another ride app, or a friend who can drive."),
+                systemImage: rides.isEmpty ? "car" : "square.and.arrow.up"
+            )
+        }
+        .accessibilityIdentifier("help.ride")
+    }
+
+    private var pickupLine: String {
+        guard let pickup else { return String(localized: "Opens the app to set your pickup.") }
+        if let name = pickup.name { return String(localized: "Pickup at \(name).") }
+        return String(localized: "Pickup where you are now.")
     }
 }
 

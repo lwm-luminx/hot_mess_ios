@@ -57,4 +57,18 @@ struct SafetyAlertTests {
         #expect(line.textURL?.absoluteString == "sms:678678?body=START")
         #expect(SupportResources.format("988") == "988")
     }
+
+    @Test("Sets a ride's pickup at the venue, or opens the app plain without one")
+    func rideLink() throws {
+        let json = """
+        {"id":"uber","name":"Uber","url":"https://m.uber.com/ul/",
+         "pickupUrl":"https://m.uber.com/ul/?action=setPickup&pickup%5Blatitude%5D={latitude}&pickup%5Blongitude%5D={longitude}&pickup%5Bnickname%5D={name}"}
+        """
+        let ride = try JSONDecoder.hotMess.decode(SupportResources.Ride.self, from: Data(json.utf8))
+        let pickup = RidePickup(coordinates: Coordinates(latitude: 47.6137, longitude: -122.3197), name: "The Wildrose & Co")
+
+        #expect(ride.link(pickup: pickup)?.absoluteString ==
+            "https://m.uber.com/ul/?action=setPickup&pickup%5Blatitude%5D=47.613700&pickup%5Blongitude%5D=-122.319700&pickup%5Bnickname%5D=The%20Wildrose%20%26%20Co")
+        #expect(ride.link(pickup: nil)?.absoluteString == "https://m.uber.com/ul/")
+    }
 }

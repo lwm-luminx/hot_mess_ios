@@ -80,6 +80,15 @@ extension HotMessAPI {
         ).supportResources
     }
 
+    /// "Get a ride": the ride apps for a region, as plain links.
+    func supportRides(region: String?) async throws -> [SupportResources.Ride] {
+        try await query(
+            SafetyAlertDocuments.rides,
+            variables: ["region": region.map(GraphQLValue.string) ?? .null],
+            as: RidesResponse.self
+        ).supportResources.rides
+    }
+
     private func alert(from alert: SafetyAlert?) throws -> SafetyAlert {
         guard let alert else { throw APIError.decoding("safetyAlert") }
         return alert
@@ -162,6 +171,13 @@ enum SafetyAlertDocuments {
       }
     }
     """
+
+    /// Its own request, so an API older than ride links still shows the lines.
+    static let rides = """
+    query SupportRides($region: String) {
+      supportResources(region: $region) { rides { id name url pickupUrl } }
+    }
+    """
 }
 
 private struct VenueSafetyResponse: Decodable, Sendable {
@@ -193,3 +209,8 @@ private struct MineResponse: Decodable, Sendable {
 }
 
 private struct SupportResponse: Decodable, Sendable { let supportResources: SupportResources }
+
+private struct RidesResponse: Decodable, Sendable {
+    struct Resources: Decodable, Sendable { let rides: [SupportResources.Ride] }
+    let supportResources: Resources
+}
