@@ -18,6 +18,7 @@ struct SupportScreen: View {
     @Environment(AppModel.self) private var model
     @State private var resources: SupportResources?
     @State private var failed = false
+    @State private var rides: [SupportResources.Ride] = []
 
     var body: some View {
         List {
@@ -49,7 +50,7 @@ struct SupportScreen: View {
                         Text("Numbers for \(resources.name).")
                     }
                 }
-                if let rides = resources.rides, !rides.isEmpty {
+                if !rides.isEmpty {
                     Section {
                         RideRows(rides: rides, pickup: pickup, shareMessage: pickupMessage)
                     } header: {
@@ -88,6 +89,7 @@ struct SupportScreen: View {
         let region = await Self.region(near: model.location.coordinates)
         do {
             resources = try await model.api.supportResources(region: region)
+            rides = (try? await model.api.supportRides(region: region)) ?? []
         } catch {
             failed = true
         }

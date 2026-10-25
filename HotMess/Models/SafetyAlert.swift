@@ -209,8 +209,6 @@ struct SupportResources: Decodable, Hashable, Sendable {
     let region: String
     let name: String
     let emergency: String
-    /// Absent from an API older than ride links.
-    let rides: [Ride]?
     /// When someone last checked every line ("2026-10-23"); nil until they
     /// have, and the screen then shows no date.
     let checkedAt: String?
