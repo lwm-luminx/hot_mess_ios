@@ -159,6 +159,7 @@ enum SafetyAlertDocuments {
       supportResources(region: $region) {
         region name emergency checkedAt
         lines { id name description phone textNumber textBody url }
+        rides { id name url pickupUrl }
       }
     }
     """

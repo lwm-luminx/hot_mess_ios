@@ -82,7 +82,7 @@ struct SafetyAlertStatusView: View {
             }
             .disabled(model.isBusy)
             .accessibilityIdentifier("help.remind")
-            HelpEscapeRows(venue: model.venue, showSupport: showSupport)
+            HelpEscapeRows(model: model, showSupport: showSupport)
             Button(String(localized: "Keep waiting for staff")) { model.keepsWaiting = true }
         } header: {
             Text("Nobody's picked it up yet")

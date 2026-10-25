@@ -178,9 +178,39 @@ struct SupportResources: Decodable, Hashable, Sendable {
         }
     }
 
+    /// "Get a ride": a ride app as a plain link (Uber, Lyft). `url` opens
+    /// the app, or its site when it isn't installed; `pickupUrl` does the
+    /// same with the pickup set once `{latitude}`, `{longitude}` and `{name}`
+    /// are filled in.
+    struct Ride: Decodable, Hashable, Sendable, Identifiable {
+        let id: String
+        let name: String
+        let url: String
+        let pickupUrl: String?
+
+        /// The link for a pickup at `pickup`, or the plain one when there's
+        /// no pickup or the app takes none.
+        func link(pickup: RidePickup?) -> URL? {
+            guard let pickup, let pickupUrl else { return URL(string: url) }
+            let filled = pickupUrl
+                .replacingOccurrences(of: "{latitude}", with: String(format: "%.6f", pickup.coordinates.latitude))
+                .replacingOccurrences(of: "{longitude}", with: String(format: "%.6f", pickup.coordinates.longitude))
+                .replacingOccurrences(of: "{name}", with: Self.encode(pickup.name ?? ""))
+            return URL(string: filled) ?? URL(string: url)
+        }
+
+        private static func encode(_ value: String) -> String {
+            var allowed = CharacterSet.alphanumerics
+            allowed.insert(charactersIn: "-._~")
+            return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        }
+    }
+
     let region: String
     let name: String
     let emergency: String
+    /// Absent from an API older than ride links.
+    let rides: [Ride]?
     /// When someone last checked every line ("2026-10-23"); nil until they
     /// have, and the screen then shows no date.
     let checkedAt: String?
@@ -204,4 +234,11 @@ struct SupportResources: Decodable, Hashable, Sendable {
             return digits
         }
     }
+}
+
+/// Where "Get a ride" sets the pickup: the venue, or where the phone is.
+struct RidePickup: Hashable, Sendable {
+    let coordinates: Coordinates
+    /// The venue's name, shown as the pickup in the ride app.
+    let name: String?
 }

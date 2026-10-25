@@ -27,6 +27,8 @@ struct HelpVenue: Hashable, Sendable {
     let id: UUID
     let name: String
     let address: String?
+    /// Where it is, for a ride's pickup.
+    var coordinates: Coordinates?
 
     /// "I'm at The Wildrose, 1001 E Pike St." for a friend or a ride.
     var whereIAm: String {
@@ -34,6 +36,15 @@ struct HelpVenue: Hashable, Sendable {
             return String(localized: "I'm at \(name), \(address).")
         }
         return String(localized: "I'm at \(name).")
+    }
+}
+
+extension HelpVenue {
+    init(_ venue: Venue) {
+        self.init(id: venue.id, name: venue.name, address: venue.address)
+        if let coordinate = venue.coordinate {
+            coordinates = Coordinates(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        }
     }
 }
 
@@ -56,6 +67,10 @@ final class SafetyAlertModel {
     private(set) var now = Date()
     /// The user chose "Keep waiting for staff" on the no-answer screen.
     var keepsWaiting = false
+    /// "Get a ride": the ride apps for where the user is.
+    private(set) var rides: [SupportResources.Ride] = []
+    /// Where a ride picks them up: the venue, else where the phone is.
+    private(set) var pickup: RidePickup?
 
     private let api: HotMessAPI
 
@@ -81,6 +96,18 @@ final class SafetyAlertModel {
         if let open = try? await api.safetyAlerts().first(where: { $0.isActive && $0.venue.id.lowercased() == venueID }) {
             apply(open)
         }
+    }
+
+    /// The ride apps for where the user is, with the pickup at the venue
+    /// when the app knows where it is, else at the phone's last position.
+    func loadRides(near coordinates: Coordinates?) async {
+        if let at = venue?.coordinates {
+            pickup = RidePickup(coordinates: at, name: venue?.name)
+        } else if let coordinates {
+            pickup = RidePickup(coordinates: coordinates, name: nil)
+        }
+        let region = await SupportScreen.region(near: pickup?.coordinates ?? coordinates)
+        rides = (try? await api.supportResources(region: region))?.rides ?? []
     }
 
     /// Reads the alert every few seconds while it's open, and ticks the clock.

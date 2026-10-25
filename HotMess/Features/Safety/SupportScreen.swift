@@ -8,7 +8,7 @@ import SwiftUI
 
 /// "Need support?": free, confidential crisis and support lines for where the
 /// user is, from the API's support config (`supportResources`), with Call and
-/// Text and the number written out. 911 comes last. Reachable from Me and
+/// Text and the number written out, then ride apps to get home. 911 comes last. Reachable from Me and
 /// from Get help, never gated on being at a venue. When staff shared it from
 /// an alert, their note comes first.
 struct SupportScreen: View {
@@ -49,6 +49,13 @@ struct SupportScreen: View {
                         Text("Numbers for \(resources.name).")
                     }
                 }
+                if let rides = resources.rides, !rides.isEmpty {
+                    Section {
+                        RideRows(rides: rides, pickup: pickup, shareMessage: pickupMessage)
+                    } header: {
+                        Text("Get home safe")
+                    }
+                }
                 EmergencySection(number: resources.emergency)
             } else if failed {
                 Section {
@@ -63,6 +70,18 @@ struct SupportScreen: View {
         .listStyle(.insetGrouped)
         .navigationTitle(String(localized: "Need support?"))
         .task { await load() }
+    }
+
+    /// Where a ride picks the user up: the phone's last position.
+    private var pickup: RidePickup? {
+        model.location.coordinates.map { RidePickup(coordinates: $0, name: nil) }
+    }
+
+    /// "Pick me up here" with a map link, for another app or a friend.
+    private var pickupMessage: String {
+        guard let at = model.location.coordinates else { return String(localized: "Can you pick me up?") }
+        let map = String(format: "https://maps.apple.com/?ll=%.6f,%.6f", at.latitude, at.longitude)
+        return String(localized: "Can you pick me up? I'm here: \(map)")
     }
 
     private func load() async {
