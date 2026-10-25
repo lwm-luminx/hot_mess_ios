@@ -120,9 +120,10 @@ struct TribeChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Text(name)
+                Text(name.tagLabel)
                     .font(.hotMess(.subheadline, semibold: true))
                     .lineLimit(1)
+                    .accessibilityLabel(name)
                 if showsRemove {
                     Image(systemName: "xmark")
                         .font(.caption2.weight(.bold))

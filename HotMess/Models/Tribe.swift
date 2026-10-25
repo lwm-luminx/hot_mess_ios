@@ -10,6 +10,21 @@ import Foundation
 struct Tribe: Hashable, Sendable, Identifiable, Decodable {
     let id: String
     let name: String
+
+    /// How a chip shows it: "drag-brunch" for Drag Brunch.
+    var label: String { name.tagLabel }
+}
+
+extension String {
+    /// A tag or tribe name as the app shows it: lowercase, with a dash for
+    /// each run of spaces, so "Drag Brunch" reads "drag-brunch". VoiceOver
+    /// still reads the name as typed.
+    var tagLabel: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: "-")
+    }
 }
 
 /// A group of tribes in the picker: "Arts and culture", or "More" for the

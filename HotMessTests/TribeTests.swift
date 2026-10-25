@@ -118,4 +118,11 @@ struct TribeTests {
         #expect(choices.matching("bo").map(\.tribe.name) == ["Board games"])
         #expect(choices.matching("  ").isEmpty)
     }
+
+    @Test("Tags and tribes show lowercase, with dashes for spaces")
+    func tagLabel() {
+        #expect(Tribe(id: "t1", name: "Board games").label == "board-games")
+        #expect("  Resident   DJ ".tagLabel == "resident-dj")
+        #expect("Bear".tagLabel == "bear")
+    }
 }

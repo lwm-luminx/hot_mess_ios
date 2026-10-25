@@ -156,8 +156,9 @@ struct TribePickerScreen: View {
             ForEach(results) { result in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(result.tribe.name)
+                        Text(result.tribe.label)
                             .font(.hotMess(.body, semibold: true))
+                            .accessibilityLabel(result.tribe.name)
                         Text(result.category)
                             .font(.hotMess(.caption))
                             .foregroundStyle(.secondary)
