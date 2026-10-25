@@ -86,19 +86,30 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
     /// "I'm in" from a Ping push joins the whole Ping in the background;
     /// tapping a push opens the `url` its payload carries.
+    ///
+    /// The completion-handler form, not `async`: the system may call this off
+    /// the main thread, and the `async` form's thunk then calls UIKit's
+    /// completion handler from that thread too, which UIKit asserts against
+    /// (TestFlight crash in `_performBlockAfterCATransactionCommitSynchronizes`).
+    /// Here the work and the completion both run on the main actor.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        nonisolated(unsafe) let completion = completionHandler
         let action = response.actionIdentifier
-        guard let notification = PingNotification(userInfo: response.notification.request.content.userInfo) else {
-            return
-        }
+        let notification = PingNotification(userInfo: response.notification.request.content.userInfo)
 
-        if action == PingNotification.joinAction {
-            await AppDelegate.join(notification)
-        } else if action == UNNotificationDefaultActionIdentifier {
-            await AppDelegate.open(notification)
+        Task { @MainActor in
+            if let notification {
+                if action == PingNotification.joinAction {
+                    await AppDelegate.join(notification)
+                } else if action == UNNotificationDefaultActionIdentifier {
+                    AppDelegate.open(notification)
+                }
+            }
+            completion()
         }
     }
 
