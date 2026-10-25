@@ -40,6 +40,42 @@ struct AppConfiguration: Sendable, Hashable {
     static let defaultBaseURL = URL(string: "https://api.audiencekit.com")!
     static let defaultAudienceHost = "hotmess.admin.audiencekit.com"
 
+    /// The two APIs a test build can talk to. Next builds start on `next`
+    /// and testers switch to `production` in Me; an App Store build never
+    /// reads the choice.
+    enum APIServer: String, CaseIterable, Sendable {
+        case next, production
+
+        /// Where the choice is kept between launches.
+        static let defaultsKey = "HotMessAPIServer"
+
+        var baseURL: String {
+            switch self {
+            case .next: "https://api.next.audiencekit.com"
+            case .production: "https://api.audiencekit.com"
+            }
+        }
+
+        var audienceHost: String {
+            switch self {
+            case .next: "hotmess.admin.next.audiencekit.com"
+            case .production: AppConfiguration.defaultAudienceHost
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .next: String(localized: "Next")
+            case .production: String(localized: "Production")
+            }
+        }
+
+        /// The server picked in Me, if any.
+        static func stored(in defaults: UserDefaults = .standard) -> APIServer? {
+            defaults.string(forKey: defaultsKey).flatMap(APIServer.init(rawValue:))
+        }
+    }
+
     init(bundle: Bundle = .main) {
         var serverBase = bundle.object(forInfoDictionaryKey: "HotMessServerBase") as? String
         var host = (bundle.object(forInfoDictionaryKey: "AudienceKitHost") as? String).nonEmpty
@@ -52,6 +88,14 @@ struct AppConfiguration: Sendable, Hashable {
         // builds with test hooks (Debug, Staging); an App Store build always
         // talks to the API its xcconfig names.
         #if TEST_HOOKS
+        // A server picked in Me wins over the xcconfig. The environment (and
+        // so the Facebook app) stays the build's: both APIs share one
+        // database, so the audience's staging app answers on either.
+        if let server = APIServer.stored() {
+            serverBase = server.baseURL
+            host = server.audienceHost
+        }
+
         let processInfo = ProcessInfo.processInfo
         let useNextAPI = processInfo.arguments.contains("-HotMessUseNextAPI") ||
             processInfo.environment["HOTMESS_USE_NEXT_API"] == "1" ||
@@ -132,6 +176,11 @@ struct AppConfiguration: Sendable, Hashable {
         #else
         return environment != .production
         #endif
+    }
+
+    /// Which of the two APIs `baseURL` is, for the server switch in Me.
+    var apiServer: APIServer {
+        baseURL.host?.hasSuffix(".next.audiencekit.com") == true ? .next : .production
     }
 
     /// How the AudienceKit SDK should reach the Hot Mess audience.

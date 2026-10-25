@@ -29,6 +29,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # Hot Mess talks only to the consumer endpoint (/graphql), never
+      # /staffql: managers use Velvet and Backstage.
+      - name: No staff endpoint in Hot Mess
+        run: |
+          if grep -rnE 'endpoint: \.staff|# endpoint: staff|/staffql' HotMess HotMessTests; then
+            echo "::error::Hot Mess must not call the staff endpoint (staffql)."
+            exit 1
+          fi
       - name: GraphQL documents match the API schema
         # The dumps publish from audience-kit `main`; this branch tracks `next`.
         continue-on-error: true
@@ -38,6 +46,3 @@ jobs:
           curl -fsSLO https://developer.audiencekit.com/graphql/schema.graphql
           npm install --silent --no-save --no-package-lock graphql@16
           node check.mjs --schema schema.graphql --endpoint consumer ../HotMess ../HotMessTests
-          # Writing and managing posts go to the staff view (`# endpoint: staff`).
-          curl -fsSLO https://developer.audiencekit.com/graphql/staff_schema.graphql
-          node check.mjs --schema staff_schema.graphql --only-endpoint staff ../HotMess

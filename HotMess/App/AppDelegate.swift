@@ -22,6 +22,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         // First, so it sees the launch and any crash after it.
         if let token = AppConfiguration().newRelicToken {
+            // No per-request events: the agent writes each one to disk under
+            // a single lock, so a burst of failed or cancelled requests (as
+            // when the app goes to the background) parks every GCD worker
+            // thread on it, and the watchdog kills the app (TestFlight
+            // 0x8BADF00D, build 420251). The API's APM covers requests.
+            NewRelic.disableFeatures([
+                NRMAFeatureFlags.NRFeatureFlag_RequestErrorEvents,
+                NRMAFeatureFlags.NRFeatureFlag_NetworkRequestEvents,
+            ])
             NewRelic.start(withApplicationToken: token)
         }
 
@@ -86,19 +95,30 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
     /// "I'm in" from a Ping push joins the whole Ping in the background;
     /// tapping a push opens the `url` its payload carries.
+    ///
+    /// The completion-handler form, not `async`: the system may call this off
+    /// the main thread, and the `async` form's thunk then calls UIKit's
+    /// completion handler from that thread too, which UIKit asserts against
+    /// (TestFlight crash in `_performBlockAfterCATransactionCommitSynchronizes`).
+    /// Here the work and the completion both run on the main actor.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        nonisolated(unsafe) let completion = completionHandler
         let action = response.actionIdentifier
-        guard let notification = PingNotification(userInfo: response.notification.request.content.userInfo) else {
-            return
-        }
+        let notification = PingNotification(userInfo: response.notification.request.content.userInfo)
 
-        if action == PingNotification.joinAction {
-            await AppDelegate.join(notification)
-        } else if action == UNNotificationDefaultActionIdentifier {
-            await AppDelegate.open(notification)
+        Task { @MainActor in
+            if let notification {
+                if action == PingNotification.joinAction {
+                    await AppDelegate.join(notification)
+                } else if action == UNNotificationDefaultActionIdentifier {
+                    AppDelegate.open(notification)
+                }
+            }
+            completion()
         }
     }
 

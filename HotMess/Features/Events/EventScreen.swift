@@ -90,13 +90,7 @@ struct EventScreen: View {
                             .audiencePreset(model.brand.preset)
                         }
 
-                        PostsSection(
-                            title: String(localized: "From the venue and hosts"),
-                            subject: .event(event.id),
-                            eventName: event.name,
-                            eventVenueID: event.venue?.id,
-                            eventPeople: (detail.hosts + detail.people).map(\.id) + [event.person?.id].compactMap { $0 }
-                        )
+                        PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
 
                         PhotosSection(subject: .event(event.id))
 

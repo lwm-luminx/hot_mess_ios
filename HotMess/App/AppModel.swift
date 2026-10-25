@@ -27,7 +27,7 @@ final class AppModel {
     let friends = FriendDirectory()
     /// Who the user blocked, and whether they've agreed to the terms.
     let safety: SafetyStore
-    /// The venues and talent the user manages, for writing and managing posts.
+    /// The venues and talent the user manages, so Me offers Velvet or Backstage.
     let listings: ListingsStore
 
     /// The user's tribes, and whether the API has tribes.
@@ -197,6 +197,18 @@ final class AppModel {
     func signOut() {
         forgetUser()
         session.signOut()
+    }
+
+    /// Points a test build at the other API. A session belongs to the API
+    /// that issued it, so this signs out first, then quits: every service
+    /// holds the configuration it launched with, and the next launch reads
+    /// the new choice.
+    func switchAPIServer(to server: AppConfiguration.APIServer) async {
+        guard configuration.isTestBuild, server != configuration.apiServer else { return }
+        forgetUser()
+        await session.signOutAndWait()
+        UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
+        exit(0)
     }
 
     /// Forgets what was loaded for the signed-in user.
@@ -369,6 +381,20 @@ final class AppModel {
             return true
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
+            return true
+        case let .shortLink(url):
+            // Where the site redirects it, opened as that link would be; a
+            // code it doesn't know (or no network) leaves the user on Venues.
+            shareLinkTask = Task {
+                let target = await ShortLink.target(of: url)
+                guard !Task.isCancelled else { return }
+                if let target, let next = DeepLink.destination(for: target), next != .shortLink(url) {
+                    _ = open(next)
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
             return true
         case nil:
             return false

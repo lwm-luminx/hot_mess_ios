@@ -80,6 +80,16 @@ struct DeepLinkTests {
         #expect(DeepLink.route(for: url) == nil)
     }
 
+    @Test("A venue's short link is followed through the site's redirect")
+    func shortLinks() throws {
+        let link = try #require(URL(string: "https://hotmess.social/v/aB3dE5gH"))
+        #expect(DeepLink.destination(for: link) == .shortLink(link))
+        #expect(DeepLink.destination(for: URL(string: "hotmess://v/aB3dE5gH")) == .shortLink(link))
+        // Not eight letters and digits: not a short link.
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/v/aB3dE5g")) == nil)
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/v/aB3dE5g!")) == nil)
+    }
+
     @Test("Opens a room's chat from its link, as a push about a room the user left carries")
     func chatLinks() throws {
         let venue = try #require(URL(string: "https://hotmess.social/venues/\(id.uuidString.lowercased())/chat"))

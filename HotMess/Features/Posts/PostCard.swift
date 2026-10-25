@@ -9,19 +9,6 @@ import SwiftUI
 struct PostActions {
     var report: (Post) -> Void = { _ in }
     var hidePoster: (PostPoster) -> Void = { _ in }
-    /// Edit, pin, comments, Public or Community, hide from the event, delete:
-    /// for whoever manages the poster (or, to hide, the event's venue).
-    var manage: (Post, PostManageAction) -> Void = { _, _ in }
-}
-
-/// A manager's change to a post, from its card's menu.
-enum PostManageAction: Hashable {
-    case edit
-    case togglePin
-    case toggleComments
-    case toggleVisibility
-    case toggleHiddenFromEvent
-    case delete
 }
 
 /// A post as a full card (design system "Post card"): byline, metadata, body,
@@ -105,25 +92,12 @@ struct PostCard: View {
 
     private var optionsMenu: some View {
         Menu {
-            if model.listings.canManage(post) {
-                Section(String(localized: "As \(post.posterName)")) {
-                    manageButtons
-                }
-            } else if model.listings.canHideFromEvent(post) {
-                Button {
-                    actions.manage(post, .toggleHiddenFromEvent)
-                } label: {
-                    post.hiddenFromEvent
-                        ? Label(String(localized: "Show on This Event"), systemImage: "eye")
-                        : Label(String(localized: "Hide from This Event"), systemImage: "eye.slash")
-                }
-            }
             if let shareURL = post.shareURL {
                 ShareLink(item: shareURL, message: Text(post.body)) {
                     Label(String(localized: "Share Post"), systemImage: "square.and.arrow.up")
                 }
             }
-            if model.session.isSignedIn, !model.listings.canManage(post) {
+            if model.session.isSignedIn {
                 if let poster = post.poster {
                     Button {
                         actions.hidePoster(poster)
@@ -146,50 +120,6 @@ struct PostCard: View {
         }
         .accessibilityLabel(String(localized: "Post options"))
         .accessibilityIdentifier("post.options")
-    }
-
-    @ViewBuilder
-    private var manageButtons: some View {
-        Button {
-            actions.manage(post, .edit)
-        } label: {
-            Label(String(localized: "Edit Post"), systemImage: "pencil")
-        }
-        Button {
-            actions.manage(post, .togglePin)
-        } label: {
-            post.pinned
-                ? Label(String(localized: "Unpin"), systemImage: "pin.slash")
-                : Label(String(localized: "Pin to the Top"), systemImage: "pin")
-        }
-        Button {
-            actions.manage(post, .toggleComments)
-        } label: {
-            post.commentsOpen
-                ? Label(String(localized: "Turn Off Comments"), systemImage: "bubble.left.and.exclamationmark.bubble.right")
-                : Label(String(localized: "Turn On Comments"), systemImage: "bubble.left")
-        }
-        Button {
-            actions.manage(post, .toggleVisibility)
-        } label: {
-            post.visibility == .public
-                ? Label(String(localized: "Make Community"), systemImage: PostVisibility.community.systemImage)
-                : Label(String(localized: "Make Public"), systemImage: PostVisibility.public.systemImage)
-        }
-        if model.listings.canHideFromEvent(post) {
-            Button {
-                actions.manage(post, .toggleHiddenFromEvent)
-            } label: {
-                post.hiddenFromEvent
-                    ? Label(String(localized: "Show on This Event"), systemImage: "eye")
-                    : Label(String(localized: "Hide from This Event"), systemImage: "eye.slash")
-            }
-        }
-        Button(role: .destructive) {
-            actions.manage(post, .delete)
-        } label: {
-            Label(String(localized: "Delete Post"), systemImage: "trash")
-        }
     }
 }
 
