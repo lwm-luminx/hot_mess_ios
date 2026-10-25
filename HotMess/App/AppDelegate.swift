@@ -22,6 +22,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         // First, so it sees the launch and any crash after it.
         if let token = AppConfiguration().newRelicToken {
+            // No per-request events: the agent writes each one to disk under
+            // a single lock, so a burst of failed or cancelled requests (as
+            // when the app goes to the background) parks every GCD worker
+            // thread on it, and the watchdog kills the app (TestFlight
+            // 0x8BADF00D, build 420251). The API's APM covers requests.
+            NewRelic.disableFeatures([
+                NRMAFeatureFlags.NRFeatureFlag_RequestErrorEvents,
+                NRMAFeatureFlags.NRFeatureFlag_NetworkRequestEvents,
+            ])
             NewRelic.start(withApplicationToken: token)
         }
 
