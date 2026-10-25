@@ -17,8 +17,7 @@ struct Tribe: Hashable, Sendable, Identifiable, Decodable {
 
 extension String {
     /// A tag or tribe name as the app shows it: lowercase, with a dash for
-    /// each run of spaces, so "Drag Brunch" reads "drag-brunch". VoiceOver
-    /// still reads the name as typed.
+    /// each run of spaces, so "Drag Brunch" reads "drag-brunch".
     var tagLabel: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

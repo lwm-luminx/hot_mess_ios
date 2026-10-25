@@ -96,7 +96,7 @@ struct TribePickerScreen: View {
                     Section(String(localized: "Your picks")) {
                         ChipFlow {
                             ForEach(editing.pickedTribes) { tribe in
-                                TribeChip(name: tribe.name, isOn: true, showsRemove: true) { toggle(tribe, in: editing) }
+                                TribeChip(name: tribe.label, isOn: true, showsRemove: true) { toggle(tribe, in: editing) }
                             }
                         }
                         .padding(.vertical, 4)
@@ -158,7 +158,6 @@ struct TribePickerScreen: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(result.tribe.label)
                             .font(.hotMess(.body, semibold: true))
-                            .accessibilityLabel(result.tribe.name)
                         Text(result.category)
                             .font(.hotMess(.caption))
                             .foregroundStyle(.secondary)
@@ -180,7 +179,7 @@ struct TribePickerScreen: View {
 
     private func chip(_ tribe: Tribe, editing: TribeChoices) -> some View {
         let isOn = picked.contains(tribe.id)
-        return TribeChip(name: tribe.name, isOn: isOn, isHeldBack: !isOn && editing.isAtCap) {
+        return TribeChip(name: tribe.label, isOn: isOn, isHeldBack: !isOn && editing.isAtCap) {
             toggle(tribe, in: editing)
         }
     }
