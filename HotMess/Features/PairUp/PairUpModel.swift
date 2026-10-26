@@ -17,6 +17,9 @@ final class PairUpModel {
     private(set) var isBusy = false
     /// A refusal from the API, worded for the user.
     var errorMessage: String?
+    /// Set when the API refused because the community terms aren't agreed
+    /// yet; the sheet asks for them and clears it.
+    var needsTerms = false
     /// What the last scan said, when it wasn't a meeting.
     var scanNotice: String?
     /// Set when a meeting is confirmed, for the "You met!" moment.
@@ -140,7 +143,11 @@ final class PairUpModel {
             pairUp = VenuePairUp(here: isHere, mine: mine)
             noteMeeting()
         } catch {
-            errorMessage = NowViewModel.message(for: error)
+            if case .termsNotAccepted? = error as? APIError {
+                needsTerms = true
+            } else {
+                errorMessage = NowViewModel.message(for: error)
+            }
             await load()
         }
     }

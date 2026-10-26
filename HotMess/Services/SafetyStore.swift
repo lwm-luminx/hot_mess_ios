@@ -62,6 +62,13 @@ final class SafetyStore {
         isLoaded = true
     }
 
+    /// The API refused something because the terms aren't agreed (an older
+    /// answer said they were, or they were reset): ask again.
+    func termsRefused() {
+        termsAcceptedAt = nil
+        isLoaded = true
+    }
+
     /// Blocks someone, hiding them straight away and putting them back if the
     /// API refuses.
     func block(_ user: BlockedUser) async throws {

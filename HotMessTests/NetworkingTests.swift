@@ -463,6 +463,13 @@ struct AudienceKitMappingTests {
         #expect(APIError(AudienceKitError(code: "UNAVAILABLE", message: "Down", status: 503)) == .server(status: 503))
         #expect(APIError(AudienceKitError(code: "INTERNAL", message: "Oops", status: 500)) == .server(status: 500))
         #expect(APIError(AudienceKitError(code: "SOMETHING_NEW", message: "Hm", status: 418)) == .transport("Hm"))
+
+        // The terms gate, by its reason, so Quickie and chat can ask for the terms.
+        let terms = AudienceKitError.graphQL([GraphQLError(
+            message: "Agree to the community terms before you post.", path: [.string("joinPairUp")],
+            extensions: ["code": .string("FORBIDDEN"), "reason": .string("terms_not_accepted")]
+        )])
+        #expect(APIError(terms) == .termsNotAccepted("Agree to the community terms before you post."))
     }
 
     @Test("Reads record UUIDs in either case")
@@ -497,7 +504,7 @@ struct APIErrorTests {
     func messages() {
         let errors: [APIError] = [
             .offline, .unauthorized, .notFound, .server(status: 500),
-            .decoding("x"), .invalidURL, .transport("boom"),
+            .decoding("x"), .invalidURL, .transport("boom"), .termsNotAccepted("Agree first"),
         ]
 
         for error in errors {
