@@ -472,7 +472,9 @@ struct HotMessAPI: CoverPaymentAPI {
 
     /// Each Pair me up mutation answers with `{ pairUp }` under its own name.
     private func pairUpMutation(_ document: String, _ variables: [String: GraphQLValue]) async throws -> PairUpState? {
-        try await query(document, variables: variables, as: [String: PairUpPayload].self).values.first?.pairUp
+        // Optional payloads, so a refusal (`{"joinPairUp": null}` beside its error) reads as the API's error
+        // rather than a decoding failure.
+        try await query(document, variables: variables, as: [String: PairUpPayload?].self).values.first??.pairUp
     }
 
     private static func graphQLID(_ id: UUID) -> GraphQLValue {

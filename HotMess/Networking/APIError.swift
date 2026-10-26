@@ -16,6 +16,9 @@ enum APIError: Error, Equatable, Sendable, LocalizedError {
     case decoding(String)
     case invalidURL
     case transport(String)
+    /// The API refused because the member hasn't agreed to the community
+    /// terms yet (FORBIDDEN, reason `terms_not_accepted`): ask, then try again.
+    case termsNotAccepted(String)
 
     var errorDescription: String? {
         switch self {
@@ -31,7 +34,7 @@ enum APIError: Error, Equatable, Sendable, LocalizedError {
             String(localized: "The server sent something we didn't understand.")
         case .invalidURL:
             String(localized: "That request couldn't be built.")
-        case let .transport(message):
+        case let .transport(message), let .termsNotAccepted(message):
             message
         }
     }
@@ -40,7 +43,7 @@ enum APIError: Error, Equatable, Sendable, LocalizedError {
     var isRetryable: Bool {
         switch self {
         case .offline, .server, .transport: true
-        case .unauthorized, .notFound, .decoding, .invalidURL: false
+        case .unauthorized, .notFound, .decoding, .invalidURL, .termsNotAccepted: false
         }
     }
 
@@ -48,6 +51,11 @@ enum APIError: Error, Equatable, Sendable, LocalizedError {
     /// their `code` (the API's vocabulary, or one the SDK raised on the
     /// device), then by HTTP status.
     init(_ error: AudienceKitError) {
+        if error.code == AudienceKitError.Code.forbidden,
+           error.errors.first?.extensions?["reason"] == .string("terms_not_accepted") {
+            self = .termsNotAccepted(error.message)
+            return
+        }
         switch error.code {
         case AudienceKitError.Code.notSignedIn, AudienceKitError.Code.unauthenticated,
              AudienceKitError.Code.signInRejected:
