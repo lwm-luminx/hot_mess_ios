@@ -139,7 +139,7 @@ final class AppReviewUITests: XCTestCase {
 
     // MARK: - Where friends show up
 
-    /// Now: friends going out tonight, friends here, and where your friends are.
+    /// Now: Tonight (your ping, friends here and friends out elsewhere), friends here, and where your friends are.
     /// Scrolls down Now once, pausing on each friends section on the way, then back to the top.
     /// Searching for each section separately kept swiping at the bottom of the page when it wasn't there.
     private func showNow() {
@@ -147,7 +147,7 @@ final class AppReviewUITests: XCTestCase {
         sleep(dwell)
         var shown = Set<String>()
         for _ in 0..<3 {
-            for title in ["Friends going out tonight", "Friends here", "Where your friends are"]
+            for title in ["Tonight", "Friends here", "Where your friends are"]
             where !shown.contains(title) && app.staticTexts[title].isHittable {
                 shown.insert(title)
                 snapshot(title)
@@ -162,7 +162,8 @@ final class AppReviewUITests: XCTestCase {
 
     /// A venue friends are at: who's here on its hero, then its chat room, where friends are listed first.
     private func showFriendVenue() {
-        let section = app.staticTexts["Where your friends are"]
+        // Tonight lists where friends are, unless the layout leaves it out.
+        let section = app.staticTexts["Tonight"].exists ? app.staticTexts["Tonight"] : app.staticTexts["Where your friends are"]
         let pill = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] ' friend'")).firstMatch
         if section.exists, pill.exists, pill.isHittable {
             pill.tap()
