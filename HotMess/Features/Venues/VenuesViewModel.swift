@@ -51,6 +51,34 @@ extension VenueCollection {
 
         self.init(venues: visible.compactMap { Venue($0, resolve: resolve) })
     }
+
+    /// The venues by city for the Everywhere list: `firstCity` leads, the
+    /// rest follow by name, each keeping the audience's order.
+    func byCity(first firstCity: String?) -> [VenueCityGroup] {
+        let other = String(localized: "Elsewhere")
+        var groups: [String: [Venue]] = [:]
+        var cities: [String] = []
+        for venue in venues {
+            let city = venue.subtitle.flatMap { $0.isEmpty ? nil : $0 } ?? other
+            if groups[city] == nil { cities.append(city) }
+            groups[city, default: []].append(venue)
+        }
+        return cities
+            .sorted { lhs, rhs in
+                if (lhs == firstCity) != (rhs == firstCity) { return lhs == firstCity }
+                if (lhs == other) != (rhs == other) { return rhs == other }
+                return lhs.localizedStandardCompare(rhs) == .orderedAscending
+            }
+            .map { VenueCityGroup(city: $0, venues: groups[$0] ?? []) }
+    }
+}
+
+/// One city's venues in the Everywhere list.
+struct VenueCityGroup: Identifiable, Hashable, Sendable {
+    let city: String
+    let venues: [Venue]
+
+    var id: String { city }
 }
 
 extension Venue {
@@ -73,7 +101,10 @@ extension Venue {
 @MainActor
 @Observable
 final class VenuesViewModel {
+    /// The venues in the device's city, or every venue until the city is known.
     private(set) var state: LoadState<VenueCollection> = .idle
+    /// Every venue in the audience, whatever its city.
+    private(set) var everywhere = VenueCollection()
     /// What's on at each venue now, or next, from the locale's events.
     private(set) var nextEvents: [UUID: Event] = [:]
 
@@ -92,6 +123,7 @@ final class VenuesViewModel {
         async let events = Self.upcomingEvents(api: api, localeID: localeID)
         do {
             let venues = try await audienceKit.venues()
+            everywhere = VenueCollection(audienceVenues: venues, localeID: nil, resolve: audienceKit.url(for:))
             state = .loaded(VenueCollection(audienceVenues: venues, localeID: localeID, resolve: audienceKit.url(for:)))
             nextEvents = Self.nextEvents(await events)
         } catch is CancellationError {
