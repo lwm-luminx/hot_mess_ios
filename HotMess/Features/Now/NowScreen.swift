@@ -18,6 +18,9 @@ struct NowScreen: View {
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var showingPingSheet = false
+    /// The place the send sheet opens with picked: "Ping here", or inviting
+    /// friends to where you are without a Ping yet.
+    @State private var pingSheetSeed: PingSeed?
     /// Whether the app places the user at tonight's venue, so "I feel
     /// unsafe" shows. Its own request, so an API without safety alerts still
     /// shows Now.
@@ -102,8 +105,10 @@ struct NowScreen: View {
                         // draw was never asked for.
                         let layout = cardLayout?.layout ?? .fallback(Self.fallbackCards)
                         let pingsWithChat = layout.card(isAtVenue(now) ? CardKind.nowChat : CardKind.nowSmallTalk) != nil
+                        let showsTonight = pingsWithChat || layout.card(CardKind.pings) != nil
                         ForEach(layout.cards) { card in
-                            nowCard(card, now, layoutID: layout.id, pingsWithChat: pingsWithChat)
+                            nowCard(card, now, layoutID: layout.id, pingsWithChat: pingsWithChat,
+                                    showsTonight: showsTonight)
                         }
                         // Passes and who's out depend on this device, so they
                         // aren't cards: they go just above pings.
@@ -163,8 +168,8 @@ struct NowScreen: View {
                 .accessibilityHint(String(localized: "Tell your friends you want to go out tonight"))
             }
         }
-        .sheet(isPresented: $showingPingSheet) {
-            PingSheet { ping in
+        .sheet(isPresented: $showingPingSheet, onDismiss: { pingSheetSeed = nil }) {
+            PingSheet(seed: pingSheetSeed) { ping in
                 viewModel?.show(ping)
             }
             .environment(model)
@@ -388,7 +393,9 @@ struct NowScreen: View {
     /// One of Now's cards: the section it has always been, drawn where the
     /// server ranked it.
     @ViewBuilder
-    private func nowCard(_ card: LayoutCard, _ now: Now, layoutID: String?, pingsWithChat: Bool) -> some View {
+    private func nowCard(
+        _ card: LayoutCard, _ now: Now, layoutID: String?, pingsWithChat: Bool, showsTonight: Bool
+    ) -> some View {
         switch card.kind {
         case CardKind.nowStage:
             stageSection(now)
@@ -415,7 +422,10 @@ struct NowScreen: View {
         case CardKind.venuesNearby:
             nearbySection(now, card: card)
         case CardKind.venuesFriends:
-            friendVenuesSection(now)
+            // Tonight lists where friends are, when it's drawn.
+            if !showsTonight {
+                friendVenuesSection(now)
+            }
         case CardKind.pings:
             venueExtrasSection(now)
             // A layout without the chat card still lists them.
@@ -438,23 +448,57 @@ struct NowScreen: View {
 
     // MARK: - Sections
 
-    /// Your own Ping on top, then friends' Pings, newest first.
+    /// Tonight, in one card: "Did your plans change?" once you've stayed at a
+    /// venue your Ping doesn't name, your Ping (or a way to start one where
+    /// you are), friends here with a way to invite more, then friends out
+    /// elsewhere: their Pings and, away from venues, where they are.
     @ViewBuilder
     private func pingsSection(_ now: Now) -> some View {
-        if let ping = now.myPing, ping.isActive(at: .now) {
-            MyPingCard(ping: ping) {
-                showingPingSheet = true
-            } end: {
-                Task { await viewModel?.endMyPing() }
-            }
-            .disabled(viewModel?.busyPingIDs.contains(ping.id) == true)
-            .padding(.horizontal, 16)
-        }
-
+        let here = isAtVenue(now) ? now.venue : nil
+        let myPing = now.myPing.flatMap { $0.isActive(at: .now) ? $0 : nil }
+        let isBusy = myPing.map { viewModel?.busyPingIDs.contains($0.id) == true } ?? false
         // People the user blocked are left out at once.
         let blocked = model.safety.blockedIDs
-        CardSection(String(localized: "Friends going out tonight")) {
-            ForEach(Ping.friendFeed(now.friendPings, at: .now).filter { !blocked.contains($0.user.id) }) { ping in
+        let friendPings = Ping.friendFeed(now.friendPings, at: .now).filter { !blocked.contains($0.user.id) }
+        let friendsHere = here == nil ? [] : now.friends.filter { $0.id != model.session.userID }
+
+        CardSection(String(localized: "Tonight")) {
+            if let venue = viewModel?.planChangeVenue, let myPing {
+                PlanChangePrompt(
+                    venueName: venue.name,
+                    pingPlaces: myPing.placesSummary ?? "",
+                    isBusy: isBusy,
+                    move: {
+                        Task { await viewModel?.movePing(to: venue, localeID: model.location.locale?.id) }
+                    },
+                    keep: {
+                        viewModel?.keepPing(at: venue)
+                    }
+                )
+            }
+
+            if let myPing {
+                MyPingCard(ping: myPing) {
+                    openPingSheet()
+                } end: {
+                    Task { await viewModel?.endMyPing() }
+                }
+                .disabled(isBusy)
+            } else {
+                StartPingRow(venueName: here?.name) {
+                    openPingSheet(seed: here.map(PingSeed.venue))
+                }
+            }
+
+            if let here, !friendsHere.isEmpty {
+                // With a Ping, the sheet edits it and can text more people;
+                // without one, it starts one here.
+                FriendsHereRow(friends: friendsHere) {
+                    openPingSheet(seed: myPing == nil ? .venue(here) : nil)
+                }
+            }
+
+            ForEach(friendPings) { ping in
                 let sender = BlockedUser(id: ping.user.id, name: ping.user.name, avatarURL: ping.user.avatarURL)
                 FriendPingCard(
                     ping: ping,
@@ -474,7 +518,18 @@ struct NowScreen: View {
                     }
                 )
             }
+
+            if now.venue == nil {
+                ForEach(now.friendVenues) { entry in
+                    friendVenueRow(entry)
+                }
+            }
         }
+    }
+
+    private func openPingSheet(seed: PingSeed? = nil) {
+        pingSheetSeed = seed
+        showingPingSheet = true
     }
 
     /// Venues near you, when you aren't at one, in the server's order.
@@ -670,18 +725,23 @@ struct NowScreen: View {
         if now.venue == nil, !now.friendVenues.isEmpty {
             CardSection(String(localized: "Where your friends are"), grouped: true) {
                 ForEach(now.friendVenues) { entry in
-                    VenueCardLink(venue: entry.venue) {
-                        VenueCard(
-                            venue: entry.venue,
-                            description: entry.friends.map(\.name).formatted(.list(type: .and)),
-                            pill: entry.friendCount == 1
-                                ? String(localized: "1 friend")
-                                : String(localized: "\(entry.friendCount) friends")
-                        ) {
-                            FriendFaces(friends: entry.friends)
-                        }
-                    }
+                    friendVenueRow(entry)
                 }
+            }
+        }
+    }
+
+    /// A venue where friends are, with how many and who.
+    private func friendVenueRow(_ entry: FriendVenue) -> some View {
+        VenueCardLink(venue: entry.venue) {
+            VenueCard(
+                venue: entry.venue,
+                description: entry.friends.map(\.name).formatted(.list(type: .and)),
+                pill: entry.friendCount == 1
+                    ? String(localized: "1 friend")
+                    : String(localized: "\(entry.friendCount) friends")
+            ) {
+                FriendFaces(friends: entry.friends)
             }
         }
     }

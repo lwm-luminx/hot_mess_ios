@@ -428,3 +428,69 @@ struct PingContactTests {
         #expect(invitation.note == nil)
     }
 }
+
+@Suite("Ping plan changes")
+struct PlanChangeTests {
+    /// Jordan's Ping for Drag Bingo or The Wildrose, as Jordan sees it.
+    private func myPing() throws -> Ping {
+        let json = PingFixtures.ping.replacingOccurrences(of: "\"is_mine\":false", with: "\"is_mine\":true")
+        return try PingFixtures.decode(Ping.self, json)
+    }
+
+    private let pony = UUID(uuidString: "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d")!
+    /// 11pm the night of the Ping.
+    private let night = ISO8601DateFormatter().date(from: "2026-10-10T06:00:00Z")!
+
+    @Test("Asks only once you've stayed at a venue the Ping doesn't name")
+    func asksAfterDwell() throws {
+        let ping = try myPing()
+        var check = PlanChangeCheck()
+        check.observe(venueID: pony, at: night)
+
+        #expect(check.venueToAsk(about: ping, at: night.addingTimeInterval(60)) == nil)
+        // Still at Pony on the next refresh: the clock keeps running.
+        check.observe(venueID: pony, at: night.addingTimeInterval(120))
+        #expect(check.venueToAsk(about: ping, at: night.addingTimeInterval(PlanChangeCheck.dwell)) == pony)
+    }
+
+    @Test("Walking past a venue doesn't count, and leaving starts the clock again")
+    func walkingPast() throws {
+        let ping = try myPing()
+        var check = PlanChangeCheck()
+        check.observe(venueID: pony, at: night)
+        check.observe(venueID: nil, at: night.addingTimeInterval(60))
+        check.observe(venueID: pony, at: night.addingTimeInterval(120))
+
+        #expect(check.venueToAsk(about: ping, at: night.addingTimeInterval(PlanChangeCheck.dwell + 60)) == nil)
+    }
+
+    @Test("Never asks at a picked venue, for an anywhere Ping, or for someone else's Ping")
+    func noMismatch() throws {
+        let ping = try myPing()
+        let wildrose = PingFixtures.uuid(PingFixtures.wildrose)
+        let later = night.addingTimeInterval(PlanChangeCheck.dwell * 2)
+
+        var atPick = PlanChangeCheck()
+        atPick.observe(venueID: wildrose, at: night)
+        #expect(atPick.venueToAsk(about: ping, at: later) == nil)
+
+        var check = PlanChangeCheck()
+        check.observe(venueID: pony, at: night)
+        let anywhere = try PingFixtures.decode(Ping.self, PingFixtures.anywhere)
+        #expect(check.venueToAsk(about: anywhere, at: later) == nil)
+        let friends = try PingFixtures.decode(Ping.self, PingFixtures.ping)
+        #expect(check.venueToAsk(about: friends, at: later) == nil)
+        #expect(check.venueToAsk(about: nil, at: later) == nil)
+    }
+
+    @Test("Stops asking once answered, for that Ping at that venue")
+    func answered() throws {
+        let ping = try myPing()
+        var check = PlanChangeCheck()
+        check.observe(venueID: pony, at: night)
+        let later = night.addingTimeInterval(PlanChangeCheck.dwell)
+
+        check.answer(ping, at: pony)
+        #expect(check.venueToAsk(about: ping, at: later) == nil)
+    }
+}
