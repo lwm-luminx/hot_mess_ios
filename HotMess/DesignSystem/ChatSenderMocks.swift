@@ -102,8 +102,8 @@ fileprivate struct SenderAvatar: View {
             .frame(width: size, height: size)
             .overlay(alignment: .bottomTrailing) {
                 if image != nil {
-                    BotMark(size: size * 0.4)
-                        .offset(x: 3, y: 3)
+                    BotMark(size: size * 0.5)
+                        .offset(x: 6, y: 5)
                 }
             }
         case let .venue(name, url):
