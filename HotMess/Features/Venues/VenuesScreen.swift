@@ -10,9 +10,13 @@ import SwiftUI
 /// The venues tab, replacing `VenuesViewController` — a table view controller
 /// with a map view wired in through an outlet, which force-unwrapped that
 /// outlet on every refresh.
+///
+/// Once the device's city is known it opens on that city's venues; every
+/// venue, by city, is a tap away on the segmented control.
 struct VenuesScreen: View {
     @Environment(AppModel.self) private var model
     @State private var viewModel: VenuesViewModel?
+    @State private var scope = Scope.local
     @State private var camera: MapCameraPosition = .automatic
     @State private var isMapExpanded = false
     /// The cards under the map, ranked by the server.
@@ -24,20 +28,40 @@ struct VenuesScreen: View {
     static let cardKinds = [CardKind.venuesTonight, CardKind.venuesNearby] + fallbackCards
         + [CardKind.web, CardKind.promoSlot]
 
+    private enum Scope: Hashable {
+        case local
+        case everywhere
+    }
+
     var body: some View {
-        LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { collection in
+        LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { local in
+            let isEverywhere = scope == .everywhere && model.location.locale != nil
+            let collection = isEverywhere ? viewModel?.everywhere ?? local : local
             ScrollView {
                 VStack(spacing: 24) {
+                    if let locale = model.location.locale {
+                        Picker(String(localized: "Show"), selection: $scope) {
+                            Text(locale.name).tag(Scope.local)
+                            Text("Everywhere").tag(Scope.everywhere)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 16)
+                    }
+
                     map(for: collection)
                         .clipShape(.rect(cornerRadius: CardMetrics.cornerRadius))
                         .padding(.horizontal, 16)
 
-                    // The server sends no list for a city it doesn't know yet; the
-                    // screen's own order stands in then.
-                    let served = cardLayout?.layout
-                    let layout = served?.card(CardKind.venuesAll) != nil ? served! : .fallback(Self.fallbackCards)
-                    ForEach(layout.cards) { card in
-                        venuesCard(card, collection: collection, layoutID: layout.id)
+                    if isEverywhere {
+                        everywhereSections(collection)
+                    } else {
+                        // The server sends no list for a city it doesn't know yet; the
+                        // screen's own order stands in then.
+                        let served = cardLayout?.layout
+                        let layout = served?.card(CardKind.venuesAll) != nil ? served! : .fallback(Self.fallbackCards)
+                        ForEach(layout.cards) { card in
+                            venuesCard(card, collection: collection, layoutID: layout.id)
+                        }
                     }
                 }
                 .padding(.vertical, 16)
@@ -70,6 +94,26 @@ struct VenuesScreen: View {
             async let cards: Void = loadCards(force: true)
             await viewModel?.load(localeID: model.location.locale?.id)
             await cards
+        }
+    }
+
+    /// Every venue, one section per city with the device's city first.
+    @ViewBuilder
+    private func everywhereSections(_ collection: VenueCollection) -> some View {
+        let groups = collection.byCity(first: model.location.locale?.name)
+        if groups.isEmpty {
+            DetailSection(String(localized: "Everywhere")) {
+                Text("No venues yet.")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            ForEach(groups) { group in
+                CardSection(group.city, grouped: true) {
+                    ForEach(group.venues) { venue in
+                        VenueCardLink(venue: venue, nextEvent: viewModel?.nextEvents[venue.id])
+                    }
+                }
+            }
         }
     }
 
