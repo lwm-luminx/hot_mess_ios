@@ -14,7 +14,9 @@ import SwiftUI
 // The five, as the API would send them (a `Sender` interface with `kind`, `name`
 // and `avatarUrl`, implemented by one type per kind):
 // - System: the room itself ("Darcy is on stage"). No avatar, a centred line.
-// - Bot: software with a name, like Glam. No border, no fill, reads as app chrome.
+// - Bot: software with a name, like Glam (the disco ball). Its own art with no
+//   border or fill, so it reads as app chrome, and a small bot mark where a
+//   person's presence dot would be: bots never show presence.
 // - Venue: the place. A squarer avatar, a little larger than people's.
 // - Persona: a human posting as a listing (Ty posting as Anya), with a role
 //   badge that opens the talent page. A circle with a ring, a little larger.
@@ -24,7 +26,8 @@ import SwiftUI
 /// Who a chat line is from.
 fileprivate enum ChatSender: Hashable {
     case system
-    case bot(name: String, symbol: String)
+    /// `image` is the bot's art (Glam's disco ball); without one it draws a glyph.
+    case bot(name: String, image: String?)
     case venue(name: String, photoURL: URL?)
     /// `role` is the badge ("Host"); `hasPage` says whether it links anywhere.
     case persona(name: String, photoURL: URL?, role: String, hasPage: Bool)
@@ -80,12 +83,25 @@ fileprivate struct SenderAvatar: View {
         switch sender {
         case .system:
             EmptyView()
-        case let .bot(_, symbol):
-            // No border, no fill: a glyph in the app's own ink, like toolbar chrome.
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.62, weight: .semibold))
-                .foregroundStyle(Color.hotMessAccent)
-                .frame(width: size, height: size)
+        case let .bot(_, image):
+            // No border, no fill: the bot's own art (or a glyph) on the
+            // transcript, like toolbar chrome.
+            Group {
+                if let image {
+                    Image(image)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: size * 0.62, weight: .semibold))
+                        .foregroundStyle(Color.hotMessAccent)
+                }
+            }
+            .frame(width: size, height: size)
+            .overlay(alignment: .bottomTrailing) {
+                BotMark(size: Avatar.presenceSize(for: size) + 2)
+                    .offset(x: 2, y: 2)
+            }
         case let .venue(name, url):
             Avatar(url: url, initials: name.initialsForDisplay, size: size, isPlace: true)
         case let .persona(name, url, _, hasPage):
@@ -106,6 +122,23 @@ fileprivate struct SenderAvatar: View {
         case let .member(name, url, presence, _):
             Avatar(url: url, initials: name.initialsForDisplay, size: size, presence: presence, tintsInitials: true)
         }
+    }
+}
+
+/// The bot mark on a bot's avatar, where a person's presence dot sits: a
+/// small chip glyph on the app's control fill, ringed off the art.
+fileprivate struct BotMark: View {
+    let size: CGFloat
+    var ringColor: Color = Color(.systemGroupedBackground)
+
+    var body: some View {
+        Image(systemName: "cpu")
+            .font(.system(size: size * 0.62, weight: .bold))
+            .foregroundStyle(.secondary)
+            .frame(width: size, height: size)
+            .background(Color.hotMessControlFill, in: .circle)
+            .background(ringColor, in: .circle.inset(by: -1.5))
+            .accessibilityHidden(true)
     }
 }
 
@@ -220,7 +253,9 @@ fileprivate struct SenderLine: View {
 // MARK: - Preview data
 
 fileprivate enum SenderMockData {
-    static let glam = ChatSender.bot(name: "Glam", symbol: "sparkles")
+    static let glam = ChatSender.bot(name: "Glam", image: "GlamAvatar")
+    /// A bot with no art yet.
+    static let plainBot = ChatSender.bot(name: "Door bot", image: nil)
     static let venue = ChatSender.venue(name: "The Pax", photoURL: nil)
     static let anya = ChatSender.persona(name: "Anya", photoURL: nil, role: "Host", hasPage: true)
     static let darcy = ChatSender.persona(name: "Darcy", photoURL: nil, role: "Host", hasPage: false)
@@ -233,6 +268,7 @@ fileprivate enum SenderMockData {
     static let gallery: [(String, ChatSender, String)] = [
         ("System", .system, "Darcy and Anya are on stage"),
         ("Bot", glam, "Welcome in! Signups for the next round open at 10."),
+        ("Bot, no art", plainBot, "The line is about 10 minutes right now."),
         ("Venue", venue, "Happy hour runs till 9 tonight."),
         ("Persona", anya, "Who's ready to sing? Put your name down!"),
         ("Persona, no page", darcy, "Next up: Jo with Dancing Queen"),
