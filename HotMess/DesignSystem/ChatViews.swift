@@ -1116,7 +1116,8 @@ struct ChatBubble: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        // A bot's words have no bubble, so they sit close under its name.
+        .padding(.vertical, isPlain ? 2 : 8)
         .background {
             if isOwn {
                 shape.fill(Color.hotMessAccent)
