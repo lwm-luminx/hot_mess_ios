@@ -54,10 +54,12 @@ fileprivate enum ChatSender: Hashable {
         }
     }
 
-    /// Venue and persona avatars draw a step up from members' and bots' 24.
+    /// Venue, persona and bot avatars draw a step up from members' 24.
     var avatarSize: CGFloat {
         switch self {
         case .venue, .persona: 30
+        // A persona's 30 plus its ring: bots draw as large as personas.
+        case .bot: 34
         default: ChatMetrics.avatarSize
         }
     }
@@ -99,8 +101,10 @@ fileprivate struct SenderAvatar: View {
             }
             .frame(width: size, height: size)
             .overlay(alignment: .bottomTrailing) {
-                BotMark(size: Avatar.presenceSize(for: size) + 4)
-                    .offset(x: 2, y: 2)
+                if image != nil {
+                    BotMark(size: size * 0.4)
+                        .offset(x: 3, y: 3)
+                }
             }
         case let .venue(name, url):
             Avatar(url: url, initials: name.initialsForDisplay, size: size, isPlace: true)
@@ -125,20 +129,21 @@ fileprivate struct SenderAvatar: View {
     }
 }
 
-/// The bot mark on a bot's avatar, where a person's presence dot sits: a
-/// white chip glyph on the accent, ringed off the art, so it never reads
-/// as a presence dot.
+/// The bot mark over a bot's art, where a person's presence dot sits: the
+/// sparkles, in the accent, edged in the transcript's colour so they lift
+/// off the art. Bots never show presence.
 fileprivate struct BotMark: View {
     let size: CGFloat
-    var ringColor: Color = Color(.systemGroupedBackground)
+    var edge: Color = Color(.systemGroupedBackground)
 
     var body: some View {
-        Image(systemName: "cpu")
-            .font(.system(size: size * 0.66, weight: .bold))
-            .foregroundStyle(Color.hotMessOnAccent)
-            .frame(width: size, height: size)
-            .background(Color.hotMessAccent, in: .circle)
-            .background(ringColor, in: .circle.inset(by: -1.5))
+        Image(systemName: "sparkles")
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(Color.hotMessAccent)
+            .shadow(color: edge, radius: 0, x: 1, y: 0)
+            .shadow(color: edge, radius: 0, x: -1, y: 0)
+            .shadow(color: edge, radius: 0, x: 0, y: 1)
+            .shadow(color: edge, radius: 0, x: 0, y: -1)
             .accessibilityHidden(true)
     }
 }
