@@ -99,7 +99,7 @@ fileprivate struct SenderAvatar: View {
             }
             .frame(width: size, height: size)
             .overlay(alignment: .bottomTrailing) {
-                BotMark(size: Avatar.presenceSize(for: size) + 2)
+                BotMark(size: Avatar.presenceSize(for: size) + 4)
                     .offset(x: 2, y: 2)
             }
         case let .venue(name, url):
@@ -126,17 +126,18 @@ fileprivate struct SenderAvatar: View {
 }
 
 /// The bot mark on a bot's avatar, where a person's presence dot sits: a
-/// small chip glyph on the app's control fill, ringed off the art.
+/// white chip glyph on the accent, ringed off the art, so it never reads
+/// as a presence dot.
 fileprivate struct BotMark: View {
     let size: CGFloat
     var ringColor: Color = Color(.systemGroupedBackground)
 
     var body: some View {
         Image(systemName: "cpu")
-            .font(.system(size: size * 0.62, weight: .bold))
-            .foregroundStyle(.secondary)
+            .font(.system(size: size * 0.66, weight: .bold))
+            .foregroundStyle(Color.hotMessOnAccent)
             .frame(width: size, height: size)
-            .background(Color.hotMessControlFill, in: .circle)
+            .background(Color.hotMessAccent, in: .circle)
             .background(ringColor, in: .circle.inset(by: -1.5))
             .accessibilityHidden(true)
     }
