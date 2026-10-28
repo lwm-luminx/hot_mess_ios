@@ -62,6 +62,12 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// mark. `nil` when the room didn't say (it's only asked for where the
     /// API has tribes); never anyone's other tribes.
     var sharedTribes: [SharedTribe]? = nil
+    /// Who it's from as the server says (`sender { kind }`, the frame's
+    /// `sender_kind`). Older servers don't say; `sender` works it out then.
+    var senderKind: ChatSenderKind? = nil
+    /// Whether a persona's listing has a People page for its badge to open.
+    /// `nil` when the server didn't say.
+    var personHasPage: Bool? = nil
 
     init(
         id: UUID = UUID(),
@@ -102,6 +108,16 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
         postedAsAudience || kind == .prompt
     }
 
+    /// Who it's from: what the server sent, else worked out from the older
+    /// flags (a server that doesn't send it never sends a bot).
+    var sender: ChatSenderKind {
+        if let senderKind { return senderKind }
+        if isFromAudience { return .system }
+        if isFromPlace { return .venue }
+        if personID != nil { return .persona }
+        return .member
+    }
+
     /// A rotating prompt, which the room shows under its title (PromptBar)
     /// rather than in the thread.
     var isPinnedPrompt: Bool {
@@ -112,6 +128,28 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     func isShowing(at date: Date = .now) -> Bool {
         guard kind == .special, let endsAt else { return true }
         return endsAt > date
+    }
+}
+
+/// Who a chat line is from (the API's `ChatSenderKind`), which sets how it's
+/// drawn. More may come: one the app doesn't know draws as a member.
+enum ChatSenderKind: String, Hashable, Sendable {
+    /// The room itself: a centred line with no avatar.
+    case system
+    /// Software with a name, like Glam: its own art with no border or fill,
+    /// the sparkles over it, and a Bot tag.
+    case bot
+    /// Someone posting as the venue: a squarer avatar, a step larger.
+    case venue
+    /// Someone posting as a listing, like a host: a ringed circle and a role
+    /// badge that opens their page.
+    case persona
+    /// Anyone as themself.
+    case member
+
+    /// GraphQL sends `BOT`, the room `bot`.
+    init?(wire: String) {
+        self.init(rawValue: wire.lowercased())
     }
 }
 
@@ -306,9 +344,13 @@ extension VenueMessage {
         let promptID: String?
         let postedAsAudience: Bool
         let sharedTribes: [SharedTribe]?
+        let senderKind: ChatSenderKind?
+        let personHasPage: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt
+            case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt, sender
+            case senderKind = "sender_kind"
+            case hasPage = "has_page"
             case promptID = "prompt_id"
             case postedAsAudience = "posted_as_audience"
             case sharedTribes = "shared_tribes"
@@ -321,6 +363,11 @@ extension VenueMessage {
             case postedAsPerson = "posted_as_person"
             case personID = "person_id"
             case person
+        }
+
+        private enum SenderKeys: String, CodingKey {
+            case kind
+            case hasPage = "has_page"
         }
 
         private enum PersonKeys: String, CodingKey {
@@ -367,6 +414,15 @@ extension VenueMessage {
                 .flatMap { try? $0.decode(UUID.self, forKey: .id) }
             personID = postedAsPerson ? (framePerson ?? nestedPerson) : nil
             presence = (try? container.decodeIfPresent(String.self, forKey: .presence)).flatMap { PresenceState(wire: $0) }
+
+            // Room frames send `sender_kind` and `has_page`; GraphQL a
+            // `sender { kind has_page: hasPage }`.
+            let sender = try? container.nestedContainer(keyedBy: SenderKeys.self, forKey: .sender)
+            senderKind = ((try? container.decodeIfPresent(String.self, forKey: .senderKind)) ?? nil)
+                .flatMap { ChatSenderKind(wire: $0) }
+                ?? ((try? sender?.decodeIfPresent(String.self, forKey: .kind)) ?? nil).flatMap { ChatSenderKind(wire: $0) }
+            personHasPage = ((try? container.decodeIfPresent(Bool.self, forKey: .hasPage)) ?? nil)
+                ?? ((try? sender?.decodeIfPresent(Bool.self, forKey: .hasPage)) ?? nil)
 
             if (try? container.decodeNil(forKey: .event)) == false,
                let shared = try? container.nestedContainer(keyedBy: EventKeys.self, forKey: .event),
@@ -472,6 +528,8 @@ extension VenueMessage {
         promptID = payload.promptID
         postedAsAudience = payload.postedAsAudience
         sharedTribes = payload.sharedTribes
+        senderKind = payload.senderKind
+        personHasPage = payload.personHasPage
     }
 }
 
