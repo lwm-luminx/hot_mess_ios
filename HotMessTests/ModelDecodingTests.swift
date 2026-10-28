@@ -619,6 +619,53 @@ struct VenueMessageTests {
         #expect(VenueMessage(payload: graphQL).personID == person)
     }
 
+    @Test("Glam's lines draw as a bot: plain words, its own group, no card")
+    func botFrame() throws {
+        let frame = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        {
+          "type": "incoming",
+          "id": "3c2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b",
+          "message": "Announcement: Glam (AI host)",
+          "body": "Welcome in! Be kind tonight.",
+          "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "name": "Glam",
+          "role": "venue",
+          "kind": "announcement",
+          "title": "Glam (AI host)",
+          "posted_as_venue": true,
+          "sender_kind": "bot"
+        }
+        """.utf8))
+        let message = VenueMessage(payload: frame)
+        #expect(message.sender == .bot)
+
+        let line = message.threadMessage(currentUserID: nil)
+        #expect(line.sender == .bot)
+        #expect(line.rich == nil)
+        #expect(line.text == "Welcome in! Be kind tonight.")
+        #expect(line.authorID == "bot:6C4D2E80-3A19-4B7F-9E5C-1D0A8B2F3E44")
+        #expect(!line.opensProfile)
+    }
+
+    @Test("Reads the sender from GraphQL, and works it out from older servers")
+    func senderKinds() throws {
+        let persona = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Hi", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "role": "HOST",
+          "posted_as_person": true, "person": { "id": "9e1d2c3b-4a5f-4607-8899-aabbccddeeff" },
+          "sender": { "kind": "PERSONA", "has_page": false } }
+        """.utf8))
+        let line = VenueMessage(payload: persona).threadMessage(currentUserID: nil)
+        #expect(line.sender == .persona)
+        #expect(!line.personHasPage)
+
+        let older = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Doors at 10", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "role": "venue",
+          "posted_as_venue": true }
+        """.utf8))
+        #expect(VenueMessage(payload: older).sender == .venue)
+        #expect(VenueMessage(payload: older).senderKind == nil)
+    }
+
     @Test("Reads GraphQL's uppercase enums")
     func graphQLEnums() throws {
         let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""

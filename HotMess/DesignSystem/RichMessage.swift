@@ -278,16 +278,22 @@ extension VenueMessage {
             self.presence
         }
 
-        return ChatThreadMessage(
+        // A bot says plain words (Glam's lines arrive as announcements under
+        // its title), so it draws them as text, never as a card.
+        let isBot = sender == .bot
+        let botText = written.flatMap { $0.isEmpty ? nil : $0 } ?? body
+
+        var line = ChatThreadMessage(
             id: id.uuidString,
-            // A post as the venue, a listing or the audience groups apart
-            // from the same person's own lines.
+            // A post as the venue, a listing, a bot or the audience groups
+            // apart from the same person's own lines, and from each other.
             authorID: personID.map { "person:\($0.uuidString)" }
+                ?? (isBot ? "bot:\(userID.uuidString)" : nil)
                 ?? (isFromPlace ? "place:\(userID.uuidString)" : nil)
                 ?? (isFromAudience ? "audience:\(userID.uuidString)" : userID.uuidString),
             authorName: isFromListing ? name : (friends[userID]?.name ?? name),
             avatarURL: avatarURL,
-            text: body,
+            text: isBot ? botText : body,
             sentAt: sentAt,
             isOwn: isOutgoing(for: currentUserID),
             presence: presence,
@@ -295,11 +301,15 @@ extension VenueMessage {
             isFromPlace: isFromPlace,
             isFromListing: isFromListing,
             isFromAudience: isFromAudience,
-            rich: rich ? richContent : nil,
+            rich: rich && !isBot ? richContent : nil,
             promptLabel: promptLabel(promptKinds: promptKinds),
             promptID: kind == .text ? promptID : nil,
             promptCard: rich ? promptCard : nil
         )
+        line.sender = sender
+        line.personID = personID
+        line.personHasPage = personHasPage ?? true
+        return line
     }
 }
 
