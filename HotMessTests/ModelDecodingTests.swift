@@ -1007,9 +1007,18 @@ struct VenueMessageTests {
 
         #expect(ChatMetrics.avatarDiameter(for: message()) == 24)
         #expect(ChatMetrics.avatarDiameter(for: message(), compact: true) == 20)
-        #expect(ChatMetrics.avatarDiameter(for: message(listing: true)) == 28)
-        #expect(ChatMetrics.avatarDiameter(for: message(listing: true), compact: true) == 28)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true)) == 30)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true), compact: true) == 30)
         #expect(ChatMetrics.avatarDiameter(for: message(audience: true)) == 24)
+        // Bots draw as big as a persona with its ring; the venue as its listing photo.
+        func message(_ sender: ChatSenderKind) -> ChatThreadMessage {
+            var message = message(listing: sender != .member)
+            message.sender = sender
+            return message
+        }
+        #expect(ChatMetrics.avatarDiameter(for: message(.bot)) == 34)
+        #expect(ChatMetrics.avatarDiameter(for: message(.persona)) == 34)
+        #expect(ChatMetrics.avatarDiameter(for: message(.venue)) == 30)
         #expect(Avatar.presenceSize(for: 24) == 9)
         #expect(Avatar.presenceSize(for: 28) == 10)
         #expect(Avatar.presenceSize(for: 44) == 12)
