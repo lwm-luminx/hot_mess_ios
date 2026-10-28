@@ -130,8 +130,8 @@ fileprivate struct SenderAvatar: View {
 }
 
 /// The bot mark over a bot's art, where a person's presence dot sits: the
-/// sparkles, in the accent, edged in the transcript's colour so they lift
-/// off the art. Bots never show presence.
+/// sparkles, in the accent, on a disc of the transcript's colour so all
+/// three stars sit clear of the art. Bots never show presence.
 fileprivate struct BotMark: View {
     let size: CGFloat
     var edge: Color = Color(.systemGroupedBackground)
@@ -140,10 +140,8 @@ fileprivate struct BotMark: View {
         Image(systemName: "sparkles")
             .font(.system(size: size, weight: .bold))
             .foregroundStyle(Color.hotMessAccent)
-            .shadow(color: edge, radius: 0, x: 1, y: 0)
-            .shadow(color: edge, radius: 0, x: -1, y: 0)
-            .shadow(color: edge, radius: 0, x: 0, y: 1)
-            .shadow(color: edge, radius: 0, x: 0, y: -1)
+            .padding(size * 0.12)
+            .background(edge, in: .circle)
             .accessibilityHidden(true)
     }
 }
