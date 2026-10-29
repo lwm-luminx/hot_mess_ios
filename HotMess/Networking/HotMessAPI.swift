@@ -596,6 +596,21 @@ struct HotMessAPI: CoverPaymentAPI {
         try await query(Documents.recentChatPush, variables: [:], as: RecentChatPushResponse.self).me?.recentChatPush ?? false
     }
 
+    /// The user's calendar subscription link, or nil before they made one.
+    func calendarFeed() async throws -> CalendarFeed? {
+        try await query(Documents.calendarFeed, variables: [:], as: CalendarFeedResponse.self).me?.calendarFeed
+    }
+
+    /// Makes the user's calendar subscription link on first ask; `reset`
+    /// replaces it, so the old link stops working.
+    func createCalendarFeed(reset: Bool = false) async throws -> CalendarFeed {
+        try await query(
+            Documents.createCalendarFeed,
+            variables: ["reset": .bool(reset)],
+            as: CreateCalendarFeedResponse.self
+        ).createCalendarFeed.calendarFeed
+    }
+
     /// Turns those pushes on or off, and returns the setting after the change.
     func setRecentChatPush(_ enabled: Bool) async throws -> Bool {
         try await query(
@@ -1292,6 +1307,18 @@ extension HotMessAPI {
         }
         """
 
+        static let calendarFeed = """
+        query CalendarFeed {
+          me { calendarFeed { url webcalUrl googleUrl } }
+        }
+        """
+
+        static let createCalendarFeed = """
+        mutation CreateCalendarFeed($reset: Boolean) {
+          createCalendarFeed(input: { reset: $reset }) { calendarFeed { url webcalUrl googleUrl } }
+        }
+        """
+
         static let setRecentChatPush = """
         mutation SetRecentChatPush($enabled: Boolean!) {
           setRecentChatPush(input: { enabled: $enabled }) { recent_chat_push: recentChatPush }
@@ -1634,6 +1661,33 @@ struct AcceptTermsResponse: Decodable, Sendable {
     }
 
     let acceptTerms: Payload
+}
+
+/// The user's private calendar subscription (API doc/CALENDAR_SYNC.md):
+/// the events they're going to, as a feed their calendar app keeps up with.
+struct CalendarFeed: Decodable, Equatable, Sendable {
+    /// The https feed, to copy.
+    let url: URL
+    /// The same as webcal://, which Calendar opens as a subscription.
+    let webcalUrl: URL
+    let googleUrl: URL
+}
+
+/// `me { calendarFeed }`.
+struct CalendarFeedResponse: Decodable, Sendable {
+    struct Me: Decodable, Sendable {
+        let calendarFeed: CalendarFeed?
+    }
+
+    let me: Me?
+}
+
+struct CreateCalendarFeedResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable {
+        let calendarFeed: CalendarFeed
+    }
+
+    let createCalendarFeed: Payload
 }
 
 /// `me { recentChatPush }`, and `setRecentChatPush`'s payload.

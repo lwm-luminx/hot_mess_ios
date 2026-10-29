@@ -35,6 +35,7 @@ struct SettingsScreen: View {
             facebookSection
             staffAppsSection
             coverSection
+            calendarSection
             locationSection
             notificationsSection
             helpSection
@@ -215,6 +216,21 @@ struct SettingsScreen: View {
                 Label(String(localized: "Passes"), systemImage: "ticket")
             }
             .accessibilityIdentifier("me.passes")
+        }
+    }
+
+    /// Only for someone signed in: the link is on their account.
+    @ViewBuilder
+    private var calendarSection: some View {
+        if model.session.isSignedIn {
+            Section {
+                NavigationLink {
+                    CalendarSyncScreen()
+                } label: {
+                    Label(String(localized: "Calendar"), systemImage: "calendar")
+                }
+                .accessibilityIdentifier("me.calendar")
+            }
         }
     }
 
