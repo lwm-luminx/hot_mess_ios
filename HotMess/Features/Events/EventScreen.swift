@@ -22,6 +22,7 @@ struct EventScreen: View {
     /// Its venue's lineup on the night, for karaoke signups right here.
     @State private var lineupModel: VenueLineupModel?
     @State private var fixTarget: SuggestionTarget?
+    @State private var calendarEntry: CalendarEntry?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { detail in
@@ -127,6 +128,15 @@ struct EventScreen: View {
                     HStack(spacing: 12) {
                         SignedShareButton(path: "/events/\(event.id.uuidString.lowercased())")
 
+                        Button {
+                            calendarEntry = CalendarEntry(event: event)
+                        } label: {
+                            Image(systemName: "calendar.badge.plus")
+                                .font(.body)
+                        }
+                        .accessibilityLabel(String(localized: "Add to Calendar"))
+                        .accessibilityIdentifier("event.addToCalendar")
+
                         if model.session.isSignedIn {
                             Menu {
                                 // Going and Interested are on the hero.
@@ -175,6 +185,10 @@ struct EventScreen: View {
         .sheet(item: $fixTarget) { target in
             SuggestFixSheet(target: target)
                 .environment(model)
+        }
+        .sheet(item: $calendarEntry) { entry in
+            AddToCalendarSheet(entry: entry) { calendarEntry = nil }
+                .ignoresSafeArea()
         }
         .alert(
             String(localized: "Couldn't update ping"),
