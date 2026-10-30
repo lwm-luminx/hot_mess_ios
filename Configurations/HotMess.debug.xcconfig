@@ -46,4 +46,5 @@ APPLE_PAY_MERCHANT_ID = merchant.social.hotmess
 #include? "Local.debug.xcconfig"
 
 HOTMESS_APP_GROUP = group.social.hotmess
+HOTMESS_BETA_SERVER =
 HOTMESS_DISPLAY_NAME = Hot Mess

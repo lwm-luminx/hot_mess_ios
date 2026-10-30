@@ -10,6 +10,8 @@
 	<string>$(SERVER_SCHEME)://$(SERVER_BASE)</string>
 	<key>ClipAudienceHost</key>
 	<string>$(AUDIENCE_HOST)</string>
+	<key>ClipBetaServer</key>
+	<string>$(HOTMESS_BETA_SERVER)</string>
 	<key>NSAppClip</key>
 	<dict>
 		<key>NSAppClipRequestEphemeralUserNotification</key>

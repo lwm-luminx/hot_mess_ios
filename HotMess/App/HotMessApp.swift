@@ -41,6 +41,7 @@ struct HotMessApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
+                model.updateAppIcon()
                 if model.session.isSignedIn { model.location.start() }
             case .background:
                 model.location.stop()

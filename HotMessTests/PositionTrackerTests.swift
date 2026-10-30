@@ -89,12 +89,23 @@ struct PositionTrackerTests {
         #expect(tracker.current == Coordinates(latitude: 47.61, longitude: -122.32))
     }
 
-    @Test("Only staging and debug builds are test builds")
+    @Test("Only staging and debug builds and beta installs are test builds")
     func testBuilds() {
         let base = URL(string: "https://api.audiencekit.com")!
         #expect(AppConfiguration(baseURL: base, environment: .staging).isTestBuild)
+        #expect(AppConfiguration(baseURL: base, isBetaInstall: true).isTestBuild)
         #if !DEBUG
         #expect(!AppConfiguration(baseURL: base, environment: .production).isTestBuild)
         #endif
+    }
+
+    @Test("Beta installs wear the ribbon for their server; everything else the primary icon")
+    func betaIcons() {
+        let next = URL(string: AppConfiguration.APIServer.next.baseURL)!
+        let production = URL(string: AppConfiguration.APIServer.production.baseURL)!
+        #expect(AppConfiguration(baseURL: next, isBetaInstall: true).alternateIconName == "AppIconNext")
+        #expect(AppConfiguration(baseURL: production, isBetaInstall: true).alternateIconName == "AppIconBeta")
+        #expect(AppConfiguration(baseURL: production).alternateIconName == nil)
+        #expect(AppConfiguration(baseURL: next).alternateIconName == nil)
     }
 }

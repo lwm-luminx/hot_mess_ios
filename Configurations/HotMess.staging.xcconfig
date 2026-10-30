@@ -32,7 +32,10 @@ FACEBOOK_CLIENT_TOKEN = 5d40b408dee01b2985755736fd046296
 // the app, so it is not a secret. Empty leaves the agent off.
 NEW_RELIC_TOKEN = AA38d159f775c3c2174a1a01ec13282bb1e4d0be1a-NRMA
 
-BUNDLE_SUFFIX = .next
+// One bundle ID for every build: TestFlight betas are Release builds that
+// pick the next API at run time (HOTMESS_BETA_SERVER). Staging stays for UI
+// tests and local runs against next.
+BUNDLE_SUFFIX = 
 APNS_ENVIRONMENT = development
 
 // Apple Pay for cover payments. The merchant ID must be registered in the
@@ -45,6 +48,6 @@ APPLE_PAY_MERCHANT_ID = merchant.social.hotmess
 // Local.xcconfig.example to Local.staging.xcconfig to override a value here.
 #include? "Local.staging.xcconfig"
 
-// Separate local data from the production Hot Mess app.
-HOTMESS_APP_GROUP = group.social.hotmess.next
-HOTMESS_DISPLAY_NAME = Hot Mess Next
+HOTMESS_APP_GROUP = group.social.hotmess
+HOTMESS_BETA_SERVER =
+HOTMESS_DISPLAY_NAME = Hot Mess

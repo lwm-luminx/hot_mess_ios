@@ -112,7 +112,7 @@ them.
 | --- | --- | --- |
 | Debug | `http://localhost:3000` | development (842337999153841) |
 | Staging | `https://api.next.audiencekit.com` | staging (1660272792277019) |
-| Release | `https://api.audiencekit.com` | Hot Mess (1168782378316790) |
+| Release | `https://api.audiencekit.com` (TestFlight betas: next, switchable) | Hot Mess (1168782378316790) |
 
 Release signs in with Hot Mess, a Consumer Facebook app, using classic Facebook
 Login with only `public_profile` until App Review is approved. Email and friend
@@ -254,21 +254,46 @@ services come from `AudienceKit`; shared design tokens and UI come from
 (`Authorization: Bearer`, `X-AudienceKit-API-Version`); `GraphQLCable` only reads the
 subscription results.
 
-## Shared App Group
+## One app for TestFlight and the App Store
 
-Release retains `group.social.hotmess` and `group.com.audiencekit.shared`. Staging (scheme **HotMess Next**) uses bundle ID **`social.hotmess.HotMess.next`**, display name **Hot Mess Next**, private group **`group.social.hotmess.next`**, and the cross-app **`group.com.audiencekit.shared`**. The old staging installation remains separate. Debug keeps its existing development identity and entitlements.
+Hot Mess ships under one bundle ID, **`social.hotmess.HotMess`**, with the app group
+`group.social.hotmess` and the cross-app `group.com.audiencekit.shared`. There is no
+separate Next app any more (it was `social.hotmess.HotMess.next`, "Hot Mess Next", with
+`group.social.hotmess.next`). Debug keeps its development identity.
 
-Use `Scripts/testflight.sh --next` to archive and upload Next, or add `--export-only` to stop at export. Next artifacts go into `build/testflight-next`; the default command still archives Release into `build/testflight`. Distribution archives override `APNS_ENVIRONMENT=production` so the packaged runtime setting matches TestFlight push delivery. Direct Staging device builds keep development APNs.
+Every TestFlight and App Store build is a Release build. Xcode Cloud archives `main`
+as an ordinary build (an App Store candidate) and every other branch as a **beta**:
+`ci_scripts/ci_pre_xcodebuild.sh` writes `HOTMESS_BETA_SERVER = next` into
+`Configurations/Local.release.xcconfig`, which lands in Info.plist as
+`HotMessBetaServer`. When TestFlight installed a beta build (its receipt is a sandbox
+one), `AppConfiguration.isBetaInstall` is true and the install:
 
-The shared group is only for deliberate cross-app data, not environment-specific sessions, credentials, or databases. Staging calls the next preview (`api.next.audiencekit.com`), which runs new API code against production data; separate app identifiers and groups do not isolate backend records.
+- starts on the next API and shows the Server switch in Me > About (the choice is
+  `HotMessAPIServer` in UserDefaults);
+- gets the testing aids (`isTestBuild`);
+- wears a ribboned icon, set on activation with an alternate app icon:
+  `AppIconNext` (Next colours, NEXT ribbon) on the next API, `AppIconBeta` (Hot Mess
+  colours, BETA ribbon) on production. iOS shows its "You have changed the icon"
+  alert the first time and after a server switch.
 
-Portal setup: the Next ID and private/shared group assignments are registered. On October 9, 2026, Apple Pay Payment Processing (merchant.social.hotmess), Associated Domains, Push Notifications, Sign in with Apple (primary App ID), and Wallet were enabled and verified on `social.hotmess.HotMess.next`. Provisioning must include these capabilities; a signed archive/export and a separate App Store Connect app record are still needed before TestFlight distribution.
+The same build installed from the App Store (it never is, but a main build is) and
+every main build stay ordinary: production API, primary icon, no switch. App Review
+installs into the same sandbox as TestFlight, which is why only main builds, which
+never set `HOTMESS_BETA_SERVER`, go to review. An App Store install that replaces a
+beta drops the stored server choice and signs out once
+(`AppConfiguration.hasStaleServerChoice`).
 
-Verified on October 9, 2026: signed test builds of Focus, Velvet, Backstage, and Hot Mess were installed on the paired iPhone 15 Pro Max. Their signed entitlements and provisioning profiles include the shared group, and iOS reports the same shared container for all four.
+The Facebook app (Hot Mess, 1168782378316790), the AudienceKit environment
+(production) and APNs (production) are the release build's on both servers: the next
+preview shares production's database, so the audience's production app answers there
+too.
 
-## Next setup verification
-
-On October 9, 2026, an unsigned generic-iOS Staging build of **Hot Mess Next** passed. Packaged values were checked: `social.hotmess.HotMess.next`, `https://api-staging.audiencekit.com`, staging API environment, and production APNs when built for TestFlight. The upload script passed shell syntax and mocked export-only checks for both production and Next, including separate output directories. No upload or signed-device validation was performed. The new App Store Connect record and OAuth provider registration for the new ID remain pending. Portal capabilities are now enabled as recorded above; this does not verify payment processing, push delivery, associated-domain files, or end-to-end sign-in.
+`Scripts/testflight.sh --next` uploads a beta from a Mac (Release, with
+`HOTMESS_BETA_SERVER=next`); without it the script uploads an ordinary build. The
+Staging configuration remains for UI tests and local runs against next, under the same
+bundle ID. Only beta archives report themselves as TestFlight's latest build
+(`ci_post_xcodebuild.sh`), so testers aren't offered a main build their group doesn't
+get.
 
 ## App Clip
 
@@ -323,16 +348,15 @@ and server-side ban checks are the current authenticated fallback. App
 Attest/DeviceCheck verification is not implemented, and no installation identifier
 is treated as ban evidence.
 
-Two targets share the source: `HotMessClip` embeds in `HotMess`, and
-`HotMessNextClip` embeds in `HotMessNext`.
+`HotMessClip` embeds in `HotMess`. A beta build's clip run from TestFlight talks to
+the next API (`ClipBetaServer`), like the app's default.
 
 | Configuration | Clip bundle ID |
 | --- | --- |
 | Debug | `social.hotmess.HotMessDevelopment.Clip` |
-| Staging / Next | `social.hotmess.HotMess.next.Clip` |
-| Release | `social.hotmess.HotMess.Clip` |
+| Staging and Release | `social.hotmess.HotMess.Clip` |
 
-Open `HotMessClip` (Debug/local API) or `HotMessNextClip` (Staging/Next API).
+Open `HotMessClip` with the Debug (local API) or Staging (next API) configuration.
 Replace the zero UUID in `_XCAppClipURL` with a real invocation link. The zero UUID
 is intentionally a missing-record test. Versions must stay aligned with the parent.
 Run the standalone parser and tip-amount checks with `Scripts/test-app-clip.sh`.

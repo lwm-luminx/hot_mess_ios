@@ -61,6 +61,8 @@
 	<string>Hot Mess</string>
 	<key>HotMessAPNSEnvironment</key>
 	<string>$(APNS_ENVIRONMENT)</string>
+	<key>HotMessBetaServer</key>
+	<string>$(HOTMESS_BETA_SERVER)</string>
 	<key>HotMessBeaconID</key>
 	<string>1422F585-E729-49E3-9E1F-B943DE12BAA9</string>
 	<key>HotMessServerBase</key>

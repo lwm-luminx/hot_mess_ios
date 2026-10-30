@@ -36,13 +36,18 @@ struct AppConfiguration: Sendable, Hashable {
     /// The New Relic mobile app's token, from `NEW_RELIC_TOKEN`. Without one
     /// the agent doesn't start.
     let newRelicToken: String?
+    /// A beta install: a build archived for testers (`HOTMESS_BETA_SERVER`
+    /// names its default API) that TestFlight installed. Betas get the server
+    /// switch in Me, the testing aids and the ribboned icon. The same build
+    /// from the App Store, or any main build, is an ordinary install.
+    let isBetaInstall: Bool
 
     static let defaultBaseURL = URL(string: "https://api.audiencekit.com")!
     static let defaultAudienceHost = "hotmess.admin.audiencekit.com"
 
-    /// The two APIs a test build can talk to. Next builds start on `next`
-    /// and testers switch to `production` in Me; an App Store build never
-    /// reads the choice.
+    /// The two APIs a test build can talk to. Beta installs start on the
+    /// build's `HOTMESS_BETA_SERVER` (`next`) and testers switch in Me; an App
+    /// Store install never reads the choice.
     enum APIServer: String, CaseIterable, Sendable {
         case next, production
 
@@ -82,6 +87,18 @@ struct AppConfiguration: Sendable, Hashable {
             ?? Self.defaultAudienceHost
         var env = (bundle.object(forInfoDictionaryKey: "AudienceKitEnvironment") as? String)
             .flatMap(AudienceKitEnvironment.init(rawValue:)) ?? .production
+
+        // One bundle ID serves the App Store and TestFlight, so a beta is told
+        // apart at run time. Only the API changes: the Facebook app, the
+        // environment and APNs stay the release build's on either server (one
+        // database, so the production audience app answers on next too).
+        let betaServer = (bundle.object(forInfoDictionaryKey: "HotMessBetaServer") as? String)
+            .flatMap(APIServer.init(rawValue:))
+        let isBeta = betaServer != nil && Self.isTestFlightInstall
+        if isBeta, let server = APIServer.stored() ?? betaServer {
+            serverBase = server.baseURL
+            host = server.audienceHost
+        }
 
         // UI tests and screenshots can point a build at the next preview
         // (`-HotMessUseNextAPI`) or another API (`HOTMESS_API_URL`). Only in
@@ -126,6 +143,7 @@ struct AppConfiguration: Sendable, Hashable {
         build = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
             .flatMap(Int.init) ?? 0
         apnsEnvironment = (bundle.object(forInfoDictionaryKey: "HotMessAPNSEnvironment") as? String).nonEmpty
+        isBetaInstall = isBeta
     }
 
     init(
@@ -139,7 +157,8 @@ struct AppConfiguration: Sendable, Hashable {
         version: String = "0.0",
         build: Int = 0,
         apnsEnvironment: String? = nil,
-        newRelicToken: String? = nil
+        newRelicToken: String? = nil,
+        isBetaInstall: Bool = false
     ) {
         self.baseURL = baseURL
         self.beaconUUID = beaconUUID
@@ -152,6 +171,37 @@ struct AppConfiguration: Sendable, Hashable {
         self.build = build
         self.apnsEnvironment = apnsEnvironment
         self.newRelicToken = newRelicToken
+        self.isBetaInstall = isBetaInstall
+    }
+
+    /// Whether TestFlight installed this copy: its receipt is a sandbox one.
+    /// Read synchronously because the API is chosen before anything else
+    /// runs; the SDK's `InstallSource` (StoreKit's `AppTransaction`) is async.
+    /// Xcode installs have a sandbox receipt too, so the check only counts in
+    /// builds that set `HOTMESS_BETA_SERVER`, which Xcode Cloud does for
+    /// branches other than main. App Review also installs into the sandbox,
+    /// and only main builds are submitted, so review never sees a beta.
+    static var isTestFlightInstall: Bool {
+        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    }
+
+    /// Whether a server picked in a beta outlived it: the install is no longer
+    /// a beta (the App Store version replaced TestFlight's), so the choice is
+    /// ignored and the session, which the other API issued, has to go.
+    var hasStaleServerChoice: Bool {
+        #if TEST_HOOKS
+        return false
+        #else
+        return !isBetaInstall && APIServer.stored() != nil
+        #endif
+    }
+
+    /// The icon this install should wear: the Next icon with its ribbon for a
+    /// beta on the next API, the usual one with a Beta ribbon for a beta on
+    /// production, and the primary icon for everything else.
+    var alternateIconName: String? {
+        guard isBetaInstall else { return nil }
+        return apiServer == .next ? "AppIconNext" : "AppIconBeta"
     }
 
     /// Whether this build's push tokens belong to APNs' sandbox: the
@@ -168,13 +218,14 @@ struct AppConfiguration: Sendable, Hashable {
         return apnsEnvironment == "development"
     }
 
-    /// Staging and debug builds, which get testing aids such as pretending to
-    /// be at a venue. App Store builds never show them.
+    /// Staging and debug builds and beta installs, which get testing aids
+    /// such as pretending to be at a venue and the server switch. App Store
+    /// installs never show them.
     var isTestBuild: Bool {
         #if DEBUG
         return true
         #else
-        return environment != .production
+        return environment != .production || isBetaInstall
         #endif
     }
 
