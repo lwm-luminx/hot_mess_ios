@@ -63,6 +63,9 @@ final class AppModel {
     /// send sheet on a venue), so Now reloads.
     private(set) var pingRevision = 0
 
+    /// A super admin signed in here (the API's `canSwitchServer`).
+    private(set) var serverSwitchAllowed: Bool
+
     /// Whether testing aids such as "Pretend I'm here" show: test builds, and
     /// the designated App Review account while App Review is on (the API's
     /// `canPretendLocation`). Never for an ordinary App Store user. The
@@ -104,6 +107,7 @@ final class AppModel {
 
     init(configuration: AppConfiguration = AppConfiguration()) {
         self.configuration = configuration
+        serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
 
         let audienceKit = AudienceKitClient(
             configuration: configuration.audienceKit,
@@ -206,16 +210,30 @@ final class AppModel {
         session.signOut()
     }
 
-    /// Points a test build at the other API. A session belongs to the API
+    /// Points a test build, a beta or a super admin's install at the other API. A session belongs to the API
     /// that issued it, so this signs out first, then quits: every service
     /// holds the configuration it launched with, and the next launch reads
     /// the new choice.
     func switchAPIServer(to server: AppConfiguration.APIServer) async {
-        guard configuration.isTestBuild, server != configuration.apiServer else { return }
+        guard canSwitchServer, server != configuration.apiServer else { return }
         forgetUser()
         await session.signOutAndWait()
         UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
         exit(0)
+    }
+
+    /// Whether Me offers the Server picker: test builds and betas, and any
+    /// install where an AudienceKit super admin is signed in.
+    var canSwitchServer: Bool { configuration.isTestBuild || serverSwitchAllowed }
+
+    /// Asks the API whether the signed-in person is a super admin and
+    /// remembers it on this device, so their pick applies from the next
+    /// launch. Someone else signing in takes it away again; a pick made
+    /// meanwhile then counts as stale (``AppConfiguration/hasStaleServerChoice``).
+    func refreshServerSwitch() async {
+        guard session.isSignedIn, let allowed = try? await api.canSwitchServer() else { return }
+        serverSwitchAllowed = allowed
+        UserDefaults.standard.set(allowed, forKey: AppConfiguration.serverSwitchKey)
     }
 
     /// Puts the beta ribbon on a TestFlight install's icon (Next or Beta, by

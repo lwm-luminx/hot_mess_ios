@@ -283,6 +283,15 @@ never set `HOTMESS_BETA_SERVER`, go to review. An App Store install that replace
 beta drops the stored server choice and signs out once
 (`AppConfiguration.hasStaleServerChoice`).
 
+AudienceKit super admins are the exception: when one signs in (the API's
+`me.canSwitchServer`, read when Me opens), the install remembers it
+(`HotMessServerSwitchAllowed`) and shows the Server switch in any build, App Store ones
+included. On next their install wears the Next ribbon; on production it keeps the
+primary icon. When someone who isn't a super admin signs in there, the switch goes
+away and a next choice is dropped on the following launch. The API must serve
+`canSwitchServer` (audience_kit_api) before a build asking for it ships; an older API
+only fails that one query.
+
 The Facebook app (Hot Mess, 1168782378316790), the AudienceKit environment
 (production) and APNs (production) are the release build's on both servers: the next
 preview shares production's database, so the audience's production app answers there

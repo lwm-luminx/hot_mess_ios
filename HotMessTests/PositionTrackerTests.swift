@@ -108,4 +108,14 @@ struct PositionTrackerTests {
         #expect(AppConfiguration(baseURL: production).alternateIconName == nil)
         #expect(AppConfiguration(baseURL: next).alternateIconName == nil)
     }
+
+    @Test("A super admin's App Store install can switch servers and wears the Next ribbon only on next")
+    func superAdminSwitch() {
+        let next = URL(string: AppConfiguration.APIServer.next.baseURL)!
+        let production = URL(string: AppConfiguration.APIServer.production.baseURL)!
+        #expect(AppConfiguration(baseURL: production, isBetaInstall: true).canSwitchServer)
+        #expect(!AppConfiguration(baseURL: production).canSwitchServer)
+        #expect(AppConfiguration(baseURL: next, canSwitchServer: true).alternateIconName == "AppIconNext")
+        #expect(AppConfiguration(baseURL: production, canSwitchServer: true).alternateIconName == nil)
+    }
 }

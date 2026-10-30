@@ -49,6 +49,7 @@ struct SettingsScreen: View {
         .navigationTitle(String(localized: "Me"))
         .task { await model.session.refreshUser() }
         .task { await model.safety.load() }
+        .task { await model.refreshServerSwitch() }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.listings.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
@@ -361,8 +362,9 @@ struct SettingsScreen: View {
             // for updates and Open in TestFlight / on the App Store.
             AboutUpdateRows(updates: model.updates)
             // Which Facebook app and API a build talks to matters only to
-            // testers; App Store builds leave it out.
-            if model.configuration.isTestBuild {
+            // testers and super admins; App Store builds leave it out for
+            // everyone else.
+            if model.canSwitchServer {
                 InfoRow(
                     title: String(localized: "Facebook"),
                     value: model.configuration.facebookEnvironment
