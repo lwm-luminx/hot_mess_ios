@@ -7,8 +7,9 @@
 #   1. POST {api}/v1/token/service { "service_token": $AUDIENCEKIT_RELEASE_TOKEN } -> { "token": "<service JWT>" }
 #   2. PUT  {api}/v1/app_release   { "app", "channel": "testflight", "latest_build", "latest_version", "available_at" }
 #
-# `available_at` is half an hour out, roughly when TestFlight has processed the build. main reports to production,
-# every other branch (next, feature branches) to the next API, as ci_pre_xcodebuild.sh decides. Set
+# `available_at` is half an hour out, roughly when TestFlight has processed the build. Only beta archives report
+# (next and feature branches, to the next API): main and next are one app now, and both APIs share a database, so a
+# main build reporting too would offer TestFlight testers a build their group doesn't get. Set
 # AUDIENCEKIT_RELEASE_TOKEN (a service token, `akst_…`) as a secret environment variable in the workflow; without it
 # this logs a line and does nothing. A reporting failure never fails the build.
 set -u
@@ -26,10 +27,11 @@ if [ -z "${AUDIENCEKIT_RELEASE_TOKEN:-}" ]; then
 fi
 
 branch="${CI_BRANCH:-${CI_PULL_REQUEST_TARGET_BRANCH:-}}"
-case "$branch" in
-main) api="https://api.audiencekit.com" ;;
-*) api="https://api.next.audiencekit.com" ;;
-esac
+if [ "$branch" = "main" ]; then
+    log "main archives are App Store candidates; not reporting the build to TestFlight's channel"
+    exit 0
+fi
+api="https://api.next.audiencekit.com"
 api="${AUDIENCEKIT_API_URL:-$api}" # an override, for trying the script against a local API
 
 # The archived app's own Info.plist values, falling back to what Xcode Cloud says.

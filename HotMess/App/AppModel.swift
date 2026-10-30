@@ -163,6 +163,13 @@ final class AppModel {
     func start() async {
         ErrorReporter.shared.start(audienceKit: audienceKit, configuration: configuration)
 
+        // An App Store install that replaced a beta drops the beta's server
+        // choice; its session belongs to the API the beta picked.
+        if configuration.hasStaleServerChoice {
+            UserDefaults.standard.removeObject(forKey: AppConfiguration.APIServer.defaultsKey)
+            signOut()
+        }
+
         // UI tests start from the login screen.
         if ProcessInfo.processInfo.arguments.contains("-HotMessUITestSignedOut") {
             signOut()
@@ -209,6 +216,22 @@ final class AppModel {
         await session.signOutAndWait()
         UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
         exit(0)
+    }
+
+    /// Puts the beta ribbon on a TestFlight install's icon (Next or Beta, by
+    /// server), and takes it off an App Store install that replaced a beta.
+    /// iOS only changes icons while the app is active, and says so with an
+    /// alert, so this runs on activation and only when the icon is wrong:
+    /// a beta's first run and the launch after a server switch.
+    func updateAppIcon() {
+        let application = UIApplication.shared
+        let wanted = configuration.alternateIconName
+        guard application.supportsAlternateIcons, application.alternateIconName != wanted else { return }
+        application.setAlternateIconName(wanted) { error in
+            if let error {
+                Log.app.error("Couldn't change the app icon to \(wanted ?? "primary", privacy: .public): \(error)")
+            }
+        }
     }
 
     /// Forgets what was loaded for the signed-in user.

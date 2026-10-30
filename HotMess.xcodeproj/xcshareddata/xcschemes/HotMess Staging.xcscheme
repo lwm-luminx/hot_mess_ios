@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AC0000000000000000000013"
-               BuildableName = "HotMessNext.app"
-               BlueprintName = "HotMessNext"
+               BlueprintIdentifier = "AC0000000000000000000010"
+               BuildableName = "HotMess.app"
+               BlueprintName = "HotMess"
                ReferencedContainer = "container:HotMess.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -64,9 +64,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AC0000000000000000000013"
-            BuildableName = "HotMessNext.app"
-            BlueprintName = "HotMessNext"
+            BlueprintIdentifier = "AC0000000000000000000010"
+            BuildableName = "HotMess.app"
+            BlueprintName = "HotMess"
             ReferencedContainer = "container:HotMess.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -81,9 +81,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AC0000000000000000000013"
-            BuildableName = "HotMessNext.app"
-            BlueprintName = "HotMessNext"
+            BlueprintIdentifier = "AC0000000000000000000010"
+            BuildableName = "HotMess.app"
+            BlueprintName = "HotMess"
             ReferencedContainer = "container:HotMess.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

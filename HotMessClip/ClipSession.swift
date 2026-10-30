@@ -23,8 +23,16 @@ final class ClipSession {
 
     init() {
         let info = Bundle.main
-        let base = URL(string: info.object(forInfoDictionaryKey: "ClipAPIBase") as? String ?? "")!
-        let host = info.object(forInfoDictionaryKey: "ClipAudienceHost") as? String
+        var base = URL(string: info.object(forInfoDictionaryKey: "ClipAPIBase") as? String ?? "")!
+        var host = info.object(forInfoDictionaryKey: "ClipAudienceHost") as? String
+        // A beta build's clip from TestFlight talks to the next API, like the
+        // app's default (AppConfiguration.isBetaInstall). The App Store clip
+        // of the same build, and main builds, keep the release API.
+        if (info.object(forInfoDictionaryKey: "ClipBetaServer") as? String) == "next",
+           info.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" {
+            base = URL(string: "https://api.next.audiencekit.com")!
+            host = "hotmess.admin.next.audiencekit.com"
+        }
         let environment = (info.object(forInfoDictionaryKey: "AudienceKitEnvironment") as? String)
             .flatMap(AudienceKitEnvironment.init(rawValue:)) ?? .production
         let client = AudienceKitClient(

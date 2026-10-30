@@ -2,7 +2,7 @@
 # Archives the selected build (Release by default), exports it for App Store Connect and uploads it to TestFlight.
 #
 #   Scripts/testflight.sh                 # archive, export and upload
-#   Scripts/testflight.sh --next          # separate .next app, staging API
+#   Scripts/testflight.sh --next          # a beta: TestFlight installs start on the next API
 #   Scripts/testflight.sh --export-only   # stop after exporting build/testflight/export/HotMess.ipa
 #
 # The build number defaults to the minutes since 2026-01-01 UTC, so every upload is newer than
@@ -29,10 +29,11 @@ mode="upload"
 configuration="Release"
 scheme="HotMess Release"
 channel="production"
+beta_server=""
 for argument in "$@"; do
     case "$argument" in
         --export-only) mode="export" ;;
-        --next) configuration="Staging"; scheme="HotMess Next"; channel="next" ;;
+        --next) channel="next"; beta_server="next" ;;
         *) die "unknown argument $argument" ;;
     esac
 done
@@ -139,6 +140,7 @@ xcodebuild archive \
     -allowProvisioningUpdates \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     CURRENT_PROJECT_VERSION="$build_number" \
+    HOTMESS_BETA_SERVER="$beta_server" \
     APNS_ENVIRONMENT=production
 
 echo "==> Exporting for App Store Connect"
