@@ -3,6 +3,7 @@
 //  HotMessTests
 //
 
+import AudienceKit
 import Foundation
 import Testing
 
@@ -117,5 +118,20 @@ struct PositionTrackerTests {
         #expect(!AppConfiguration(baseURL: production).canSwitchServer)
         #expect(AppConfiguration(baseURL: next, canSwitchServer: true).alternateIconName == "AppIconNext")
         #expect(AppConfiguration(baseURL: production, canSwitchServer: true).alternateIconName == nil)
+    }
+
+    @Test("Next keeps a production session; production signs out a next one")
+    func switchKeepsSession() {
+        func credential(on server: AppConfiguration.APIServer) -> Credential {
+            Credential(token: "t", userId: "u", audienceId: "a", role: "member",
+                       endpoint: URL(string: "\(server.baseURL)/v1/audience/a/graphql")!)
+        }
+        #expect(AppConfiguration.APIServer.next.takes(credential(on: .production)))
+        #expect(AppConfiguration.APIServer.next.takes(credential(on: .next)))
+        #expect(AppConfiguration.APIServer.production.takes(credential(on: .production)))
+        #expect(!AppConfiguration.APIServer.production.takes(credential(on: .next)))
+        #expect(AppConfiguration.APIServer.production.takes(nil))
+        let next = AppConfiguration(baseURL: URL(string: AppConfiguration.APIServer.next.baseURL)!)
+        #expect(next.audienceKit.trustedCredentialOrigins.map(\.host) == ["api.audiencekit.com"])
     }
 }

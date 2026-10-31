@@ -168,10 +168,10 @@ final class AppModel {
         ErrorReporter.shared.start(audienceKit: audienceKit, configuration: configuration)
 
         // An App Store install that replaced a beta drops the beta's server
-        // choice; its session belongs to the API the beta picked.
+        // choice; a session next issued can't be used on production.
         if configuration.hasStaleServerChoice {
             UserDefaults.standard.removeObject(forKey: AppConfiguration.APIServer.defaultsKey)
-            signOut()
+            if !AppConfiguration.APIServer.production.takes(try? SessionStore.credentialStore.load()) { signOut() }
         }
 
         // UI tests start from the login screen.
@@ -210,16 +210,24 @@ final class AppModel {
         session.signOut()
     }
 
-    /// Points a test build, a beta or a super admin's install at the other API. A session belongs to the API
-    /// that issued it, so this signs out first, then quits: every service
-    /// holds the configuration it launched with, and the next launch reads
-    /// the new choice.
+    /// Points a test build, a beta or a super admin's install at the other
+    /// API, then quits: every service holds the configuration it launched
+    /// with, and the next launch reads the new choice. The session stays when
+    /// the other API takes it (``switchKeepsSession(to:)``): production's on
+    /// next. Only a session next issued is signed out going to production.
     func switchAPIServer(to server: AppConfiguration.APIServer) async {
         guard canSwitchServer, server != configuration.apiServer else { return }
-        forgetUser()
-        await session.signOutAndWait()
+        if !switchKeepsSession(to: server) {
+            forgetUser()
+            await session.signOutAndWait()
+        }
         UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
         exit(0)
+    }
+
+    /// Whether switching to `server` keeps the person signed in.
+    func switchKeepsSession(to server: AppConfiguration.APIServer) -> Bool {
+        server.takes(try? SessionStore.credentialStore.load())
     }
 
     /// Whether Me offers the Server picker: test builds and betas, and any

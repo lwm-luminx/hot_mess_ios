@@ -394,11 +394,16 @@ struct SettingsScreen: View {
             titleVisibility: .visible,
             presenting: pendingServer
         ) { server in
-            Button(String(localized: "Sign Out and Close")) {
+            Button(model.switchKeepsSession(to: server)
+                   ? String(localized: "Switch and Close") : String(localized: "Sign Out and Close")) {
                 Task { await model.switchAPIServer(to: server) }
             }
-        } message: { _ in
-            Text("You'll be signed out and Hot Mess will close. Open it again and sign in to use the other server. Both share the same accounts and data.")
+        } message: { server in
+            if model.switchKeepsSession(to: server) {
+                Text("Hot Mess will close. Open it again to use the other server; you stay signed in. Both share the same accounts and data.")
+            } else {
+                Text("You signed in on Next, which Production doesn't accept, so you'll be signed out and Hot Mess will close. Open it again and sign in. Both share the same accounts and data.")
+            }
         }
     }
 
