@@ -450,6 +450,46 @@ struct OnNowDecodingTests {
         }
     }
 
+    @Test("Lists an act's scenes in turn with the breaks after them, not its billing")
+    func actScenesInTurn() throws {
+        let kiki = #"{ "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Kiki" }"#
+        let aurora = #"{ "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Aurora" }"#
+        let act = """
+        "kind": "ACT", "role": "PERFORMER", "title": "First Set", "start_timing": "NONE", "end_timing": "ADVANCE",
+        "person": \(kiki), "people": { "nodes": [\(kiki), \(aurora)] },
+        "scenes": [
+          { "id": "1E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [\(kiki)],
+            "went_on_at": "2026-10-31T04:00:00Z", "came_off_at": "2026-10-31T04:05:00Z" },
+          { "id": "2E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [\(aurora)],
+            "went_on_at": "2026-10-31T04:06:00Z", "came_off_at": null },
+          { "id": "3E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [] }
+        ]
+        """
+        let detail = try decode(VenueWithEvents.self, from: """
+        { "id": "8B4F1B60-9A5D-4D0E-9B3F-2C6B3E5D8A11", "name": "The Stud", "people": {
+          "on_now": { "nodes": [{ "id": "7D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", \(act) }] },
+          "running_order": { "nodes": [
+            { "id": "7D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "state": "ON", \(act) },
+            { "id": "9D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "INTERMISSION", "title": "Bar break",
+              "state": "DONE", "person": null, "role": null,
+              "after_scene": { "id": "1E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D" } }
+          ] }
+        } }
+        """)
+
+        let lineup = detail.onNow.lineup
+        let names = lineup.map { entry -> [String] in
+            switch entry.content {
+            case .act(let appearance): appearance.people.map(\.name)
+            case .intermission(let intermission): [intermission.title ?? ""]
+            }
+        }
+        // The last scene has no performers set, so its act's people are on it.
+        #expect(names == [["Kiki"], ["Bar break"], ["Aurora"], ["Kiki", "Aurora"]])
+        #expect(lineup.map(\.state) == [.done, .done, .on, .upcoming])
+        #expect(detail.onNow.acts.map(\.name) == ["Aurora"])
+    }
+
     @Test("Leaves karaoke singers out of the app's own lineup and On now, with or without a person")
     func singersDropped() throws {
         let detail = try decode(VenueWithEvents.self, from: """
@@ -617,6 +657,53 @@ struct VenueMessageTests {
           "posted_as_person": true, "person": { "id": "9e1d2c3b-4a5f-4607-8899-aabbccddeeff" } }
         """.utf8))
         #expect(VenueMessage(payload: graphQL).personID == person)
+    }
+
+    @Test("Glam's lines draw as a bot: plain words, its own group, no card")
+    func botFrame() throws {
+        let frame = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        {
+          "type": "incoming",
+          "id": "3c2c3d4e-5f60-4718-9a2b-3c4d5e6f7a8b",
+          "message": "Announcement: Glam (AI host)",
+          "body": "Welcome in! Be kind tonight.",
+          "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+          "name": "Glam",
+          "role": "venue",
+          "kind": "announcement",
+          "title": "Glam (AI host)",
+          "posted_as_venue": true,
+          "sender_kind": "bot"
+        }
+        """.utf8))
+        let message = VenueMessage(payload: frame)
+        #expect(message.sender == .bot)
+
+        let line = message.threadMessage(currentUserID: nil)
+        #expect(line.sender == .bot)
+        #expect(line.rich == nil)
+        #expect(line.text == "Welcome in! Be kind tonight.")
+        #expect(line.authorID == "bot:6C4D2E80-3A19-4B7F-9E5C-1D0A8B2F3E44")
+        #expect(!line.opensProfile)
+    }
+
+    @Test("Reads the sender from GraphQL, and works it out from older servers")
+    func senderKinds() throws {
+        let persona = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Hi", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "role": "HOST",
+          "posted_as_person": true, "person": { "id": "9e1d2c3b-4a5f-4607-8899-aabbccddeeff" },
+          "sender": { "kind": "PERSONA", "has_page": false } }
+        """.utf8))
+        let line = VenueMessage(payload: persona).threadMessage(currentUserID: nil)
+        #expect(line.sender == .persona)
+        #expect(!line.personHasPage)
+
+        let older = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+        { "message": "Doors at 10", "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44", "role": "venue",
+          "posted_as_venue": true }
+        """.utf8))
+        #expect(VenueMessage(payload: older).sender == .venue)
+        #expect(VenueMessage(payload: older).senderKind == nil)
     }
 
     @Test("Reads GraphQL's uppercase enums")
@@ -960,9 +1047,18 @@ struct VenueMessageTests {
 
         #expect(ChatMetrics.avatarDiameter(for: message()) == 24)
         #expect(ChatMetrics.avatarDiameter(for: message(), compact: true) == 20)
-        #expect(ChatMetrics.avatarDiameter(for: message(listing: true)) == 28)
-        #expect(ChatMetrics.avatarDiameter(for: message(listing: true), compact: true) == 28)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true)) == 30)
+        #expect(ChatMetrics.avatarDiameter(for: message(listing: true), compact: true) == 30)
         #expect(ChatMetrics.avatarDiameter(for: message(audience: true)) == 24)
+        // Bots draw as big as a persona with its ring; the venue as its listing photo.
+        func message(_ sender: ChatSenderKind) -> ChatThreadMessage {
+            var message = message(listing: sender != .member)
+            message.sender = sender
+            return message
+        }
+        #expect(ChatMetrics.avatarDiameter(for: message(.bot)) == 34)
+        #expect(ChatMetrics.avatarDiameter(for: message(.persona)) == 34)
+        #expect(ChatMetrics.avatarDiameter(for: message(.venue)) == 30)
         #expect(Avatar.presenceSize(for: 24) == 9)
         #expect(Avatar.presenceSize(for: 28) == 10)
         #expect(Avatar.presenceSize(for: 44) == 12)
@@ -1151,6 +1247,20 @@ struct MixinDecodingTests {
         let lineupOnly = try decode(EventDetail.self, from: base + #", "people": { "lineup": { "nodes": [\#(act)] } } }"#)
         #expect(lineupOnly.hosts.isEmpty)
         #expect(lineupOnly.people.map(\.name) == ["Kiko Soirée"])
+    }
+
+    @Test("Shows who presents an event, apart from its hosts and lineup")
+    func eventOrganizers() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let center = #"{ "id": "3C3D4E5F-6071-4C8D-AEBF-2A3B4C5D6E7F", "name": "Utah Pride Center", "avatar_url": null }"#
+        let act = #"{ "id": "2B2C3D4E-5F60-4B7C-9DAE-1F2A3B4C5D6E", "name": "Kiko Soirée", "avatar_url": null }"#
+        let detail = try decode(EventDetail.self, from: base + """
+        , "people": { "organizers": { "nodes": [\(center)] }, "lineup": { "nodes": [\(act)] } } }
+        """)
+
+        #expect(detail.organizers.map(\.name) == ["Utah Pride Center"])
+        #expect(detail.hosts.isEmpty)
+        #expect(detail.people.map(\.name) == ["Kiko Soirée"])
     }
 
     @Test("An event with no venue or no cover module has no venue cover")

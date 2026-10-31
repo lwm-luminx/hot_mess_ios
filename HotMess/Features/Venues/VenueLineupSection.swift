@@ -8,9 +8,10 @@ import AudienceKitUI
 import SwiftUI
 
 /// Tonight at a venue, from AudienceKitUI: the host on now with their links
-/// and Tip, the lineup strip (each act opening its page), karaoke, its first
-/// few singers with See all pushing the whole list, and song requests when
-/// the venue takes them.
+/// and Tip, the lineup strip (each act opening its page, "Hosted by" when
+/// it's only hosts) ending in a "+" that signs up to sing or requests a song
+/// (or says "Signups closed"), karaoke with its first few singers and See
+/// all pushing the whole list, and song requests when the venue takes them.
 struct VenueLineupSection: View {
     let lineupModel: VenueLineupModel
     let lineup: VenueLineup
@@ -18,6 +19,14 @@ struct VenueLineupSection: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var choosingTip = false
+    @State private var signingUp = false
+    @State private var requesting = false
+
+    /// The "+" at the end of the lineup: karaoke signups, then song requests.
+    private var additions: [LineupAddition] {
+        [LineupAddition.karaoke(lineup) { signingUp = true },
+         LineupAddition.songRequests(lineup) { requesting = true }].compactMap { $0 }
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -30,15 +39,18 @@ struct VenueLineupSection: View {
                 )
             }
 
-            VenueLineupStrip(lineup: lineup) { entry in
+            VenueLineupStrip(lineup: lineup, additions: additions, onSelect: { entry in
                 if let id = entry.personID { model.push(.person(id)) }
-            }
+            }, onSelectPerson: { person in
+                if let id = UUID(uuidString: person.id) { model.push(.person(id)) }
+            })
 
             KaraokeQueue(
                 lineup: lineup,
                 viewerName: model.session.singerName,
                 previewLimit: 3,
                 onSeeAll: { model.push(.karaokeList(lineupModel.venueID)) },
+                showsSignUp: false,
                 onSignUp: lineupModel.signUp,
                 onRemove: lineupModel.remove
             )
@@ -47,12 +59,21 @@ struct VenueLineupSection: View {
                 SongRequestsSection(
                     lineup: lineup,
                     signedIn: model.session.isSignedIn,
+                    showsRequestButton: false,
                     onRequest: lineupModel.requestSong,
                     onWithdraw: lineupModel.remove
                 )
             }
         }
         .audiencePreset(model.brand.preset)
+        .sheet(isPresented: $signingUp) {
+            KaraokeSignupSheet(viewerName: model.session.singerName, venueName: lineup.venueName,
+                               hostName: lineup.karaoke?.host?.displayName, submit: lineupModel.signUp)
+        }
+        .sheet(isPresented: $requesting) {
+            SongRequestSheet(venueName: lineup.venueName, hostName: lineup.songRequests?.host?.displayName,
+                             submit: lineupModel.requestSong)
+        }
         .confirmationDialog(
             String(localized: "Tip \(lineupModel.hostEntry?.displayName ?? "")"),
             isPresented: $choosingTip,

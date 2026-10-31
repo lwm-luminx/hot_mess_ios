@@ -63,6 +63,9 @@ final class AppModel {
     /// send sheet on a venue), so Now reloads.
     private(set) var pingRevision = 0
 
+    /// A super admin signed in here (the API's `canSwitchServer`).
+    private(set) var serverSwitchAllowed: Bool
+
     /// Whether testing aids such as "Pretend I'm here" show: test builds, and
     /// the designated App Review account while App Review is on (the API's
     /// `canPretendLocation`). Never for an ordinary App Store user. The
@@ -104,6 +107,7 @@ final class AppModel {
 
     init(configuration: AppConfiguration = AppConfiguration()) {
         self.configuration = configuration
+        serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
 
         let audienceKit = AudienceKitClient(
             configuration: configuration.audienceKit,
@@ -163,6 +167,13 @@ final class AppModel {
     func start() async {
         ErrorReporter.shared.start(audienceKit: audienceKit, configuration: configuration)
 
+        // An App Store install that replaced a beta drops the beta's server
+        // choice; a session next issued can't be used on production.
+        if configuration.hasStaleServerChoice {
+            UserDefaults.standard.removeObject(forKey: AppConfiguration.APIServer.defaultsKey)
+            if !AppConfiguration.APIServer.production.takes(try? SessionStore.credentialStore.load()) { signOut() }
+        }
+
         // UI tests start from the login screen.
         if ProcessInfo.processInfo.arguments.contains("-HotMessUITestSignedOut") {
             signOut()
@@ -199,16 +210,54 @@ final class AppModel {
         session.signOut()
     }
 
-    /// Points a test build at the other API. A session belongs to the API
-    /// that issued it, so this signs out first, then quits: every service
-    /// holds the configuration it launched with, and the next launch reads
-    /// the new choice.
+    /// Points a test build, a beta or a super admin's install at the other
+    /// API, then quits: every service holds the configuration it launched
+    /// with, and the next launch reads the new choice. The session stays when
+    /// the other API takes it (``switchKeepsSession(to:)``): production's on
+    /// next. Only a session next issued is signed out going to production.
     func switchAPIServer(to server: AppConfiguration.APIServer) async {
-        guard configuration.isTestBuild, server != configuration.apiServer else { return }
-        forgetUser()
-        await session.signOutAndWait()
+        guard canSwitchServer, server != configuration.apiServer else { return }
+        if !switchKeepsSession(to: server) {
+            forgetUser()
+            await session.signOutAndWait()
+        }
         UserDefaults.standard.set(server.rawValue, forKey: AppConfiguration.APIServer.defaultsKey)
         exit(0)
+    }
+
+    /// Whether switching to `server` keeps the person signed in.
+    func switchKeepsSession(to server: AppConfiguration.APIServer) -> Bool {
+        server.takes(try? SessionStore.credentialStore.load())
+    }
+
+    /// Whether Me offers the Server picker: test builds and betas, and any
+    /// install where an AudienceKit super admin is signed in.
+    var canSwitchServer: Bool { configuration.isTestBuild || serverSwitchAllowed }
+
+    /// Asks the API whether the signed-in person is a super admin and
+    /// remembers it on this device, so their pick applies from the next
+    /// launch. Someone else signing in takes it away again; a pick made
+    /// meanwhile then counts as stale (``AppConfiguration/hasStaleServerChoice``).
+    func refreshServerSwitch() async {
+        guard session.isSignedIn, let allowed = try? await api.canSwitchServer() else { return }
+        serverSwitchAllowed = allowed
+        UserDefaults.standard.set(allowed, forKey: AppConfiguration.serverSwitchKey)
+    }
+
+    /// Puts the beta ribbon on a TestFlight install's icon (Next or Beta, by
+    /// server), and takes it off an App Store install that replaced a beta.
+    /// iOS only changes icons while the app is active, and says so with an
+    /// alert, so this runs on activation and only when the icon is wrong:
+    /// a beta's first run and the launch after a server switch.
+    func updateAppIcon() {
+        let application = UIApplication.shared
+        let wanted = configuration.alternateIconName
+        guard application.supportsAlternateIcons, application.alternateIconName != wanted else { return }
+        application.setAlternateIconName(wanted) { error in
+            if let error {
+                Log.app.error("Couldn't change the app icon to \(wanted ?? "primary", privacy: .public): \(error)")
+            }
+        }
     }
 
     /// Forgets what was loaded for the signed-in user.

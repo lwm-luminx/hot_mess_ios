@@ -39,6 +39,13 @@ APNS_ENVIRONMENT = production
 // empty to take cards only.
 APPLE_PAY_MERCHANT_ID = merchant.social.hotmess
 
+// The API a TestFlight install starts on, which also turns on the beta
+// install (server switch in Me, testing aids, ribboned icon). Empty for main,
+// so App Store candidates behave the same in TestFlight and App Review.
+// ci_scripts/ci_pre_xcodebuild.sh sets `next` in Local.release.xcconfig when
+// Xcode Cloud archives any other branch; Scripts/testflight.sh --next passes it.
+HOTMESS_BETA_SERVER =
+
 // Local overrides that stay out of git. Copy
 // Local.xcconfig.example to Local.release.xcconfig to override a value here.
 #include? "Local.release.xcconfig"

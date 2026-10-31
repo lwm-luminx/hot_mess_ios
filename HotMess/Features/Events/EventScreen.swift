@@ -22,6 +22,7 @@ struct EventScreen: View {
     /// Its venue's lineup on the night, for karaoke signups right here.
     @State private var lineupModel: VenueLineupModel?
     @State private var fixTarget: SuggestionTarget?
+    @State private var calendarEntry: CalendarEntry?
 
     var body: some View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { detail in
@@ -127,6 +128,15 @@ struct EventScreen: View {
                     HStack(spacing: 12) {
                         SignedShareButton(path: "/events/\(event.id.uuidString.lowercased())")
 
+                        Button {
+                            calendarEntry = CalendarEntry(event: event)
+                        } label: {
+                            Image(systemName: "calendar.badge.plus")
+                                .font(.body)
+                        }
+                        .accessibilityLabel(String(localized: "Add to Calendar"))
+                        .accessibilityIdentifier("event.addToCalendar")
+
                         if model.session.isSignedIn {
                             Menu {
                                 // Going and Interested are on the hero.
@@ -175,6 +185,10 @@ struct EventScreen: View {
         .sheet(item: $fixTarget) { target in
             SuggestFixSheet(target: target)
                 .environment(model)
+        }
+        .sheet(item: $calendarEntry) { entry in
+            AddToCalendarSheet(entry: entry) { calendarEntry = nil }
+                .ignoresSafeArea()
         }
         .alert(
             String(localized: "Couldn't update ping"),
@@ -254,6 +268,10 @@ struct EventScreen: View {
                     .font(.hotMess(.subheadline, semibold: true))
             }
 
+            if !detail.organizers.isEmpty {
+                organizersLine(detail.organizers)
+            }
+
             if !detail.hosts.isEmpty {
                 hostsLine(detail.hosts)
             }
@@ -274,18 +292,30 @@ struct EventScreen: View {
         return String(localized: "\(day) · \(start) to \(end)")
     }
 
+    /// "Presented by Utah Pride Center": the organizations putting it on.
+    private func organizersLine(_ organizers: [Person]) -> some View {
+        peopleLine(organizers,
+                   text: String(localized: "Presented by \(organizers.map(\.name).formatted(.list(type: .and)))"))
+    }
+
     /// "Hosted by Sasha and Bea" with their faces; one host opens their page.
-    @ViewBuilder
     private func hostsLine(_ hosts: [Person]) -> some View {
+        peopleLine(hosts, text: String(localized: "Hosted by \(hosts.map(\.name).formatted(.list(type: .and)))"))
+    }
+
+    /// A line of people with their faces, like "Hosted by …" or "Presented by
+    /// …"; one person opens their page.
+    @ViewBuilder
+    private func peopleLine(_ people: [Person], text: String) -> some View {
         let line = HStack(spacing: 8) {
-            HeroFaces(people: hosts)
-            Text("Hosted by \(hosts.map(\.name).formatted(.list(type: .and)))")
+            HeroFaces(people: people)
+            Text(text)
                 .font(.hotMess(.subheadline, semibold: true))
                 .lineLimit(2)
         }
 
-        if hosts.count == 1, let host = hosts.first {
-            NavigationLink(value: AppRoute.person(host.id)) { line }
+        if people.count == 1, let person = people.first {
+            NavigationLink(value: AppRoute.person(person.id)) { line }
                 .buttonStyle(.plain)
         } else {
             line

@@ -684,7 +684,11 @@ final class VenueChatViewModel {
     /// the content filter), which is worth showing; `nil` for being offline
     /// or a server fault, which the line's "Not sent. Tap to retry." covers.
     static func refusalMessage(for error: any Error) -> String? {
-        guard case let .transport(message)? = error as? APIError else { return nil }
+        let message: String
+        switch error as? APIError {
+        case let .transport(text)?, let .termsNotAccepted(text)?: message = text
+        default: return nil
+        }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

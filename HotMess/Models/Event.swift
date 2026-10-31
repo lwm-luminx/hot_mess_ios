@@ -187,26 +187,31 @@ struct UpcomingEventsMixin: Codable, Hashable, Sendable {
     }
 }
 
-/// An event's `people` mixin: who is hosting it and its whole lineup, both
-/// connections the documents read as `people { hosts { nodes { … } } lineup
-/// { nodes { … } } }`. The lineup includes the hosts. A missing or null
+/// An event's `people` mixin: who is hosting it, its whole lineup and the
+/// organizations presenting it, connections the documents read as `people {
+/// hosts { nodes { … } } organizers { nodes { … } } lineup { nodes { … } } }`.
+/// The lineup includes the hosts, never the organizers. A missing or null
 /// connection reads as no one.
 struct EventPeopleMixin: Codable, Hashable, Sendable {
     let hosts: [Person]
     let lineup: [Person]
+    /// Who presents it, like a pride center putting it on at a bar.
+    let organizers: [Person]
 
-    init(hosts: [Person] = [], lineup: [Person] = []) {
+    init(hosts: [Person] = [], lineup: [Person] = [], organizers: [Person] = []) {
         self.hosts = hosts
         self.lineup = lineup
+        self.organizers = organizers
     }
 
-    enum CodingKeys: String, CodingKey { case hosts, lineup }
+    enum CodingKeys: String, CodingKey { case hosts, lineup, organizers }
     private enum ConnectionKeys: String, CodingKey { case nodes }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hosts = try Self.decodeConnection(container, forKey: .hosts)
         lineup = try Self.decodeConnection(container, forKey: .lineup)
+        organizers = try Self.decodeConnection(container, forKey: .organizers)
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -215,6 +220,8 @@ struct EventPeopleMixin: Codable, Hashable, Sendable {
         try hostConnection.encode(hosts, forKey: .nodes)
         var lineupConnection = container.nestedContainer(keyedBy: ConnectionKeys.self, forKey: .lineup)
         try lineupConnection.encode(lineup, forKey: .nodes)
+        var organizerConnection = container.nestedContainer(keyedBy: ConnectionKeys.self, forKey: .organizers)
+        try organizerConnection.encode(organizers, forKey: .nodes)
     }
 
     private static func decodeConnection(
@@ -230,6 +237,8 @@ struct EventPeopleMixin: Codable, Hashable, Sendable {
 /// `/v1/events/{id}` — an event plus who is hosting it and who else is on.
 struct EventDetail: Codable, Hashable, Sendable, Identifiable {
     var event: Event
+    /// Who presents it ("Presented by"): organizations, not on its lineup.
+    let organizers: [Person]
     /// Who is hosting it.
     let hosts: [Person]
     /// Who else is on: the lineup without the hosts.
@@ -273,6 +282,7 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         // reads as no one. The lineup includes the hosts, so they're taken out.
         let lineup = try container.decodeIfPresent(EventPeopleMixin.self, forKey: .people) ?? EventPeopleMixin()
         hosts = lineup.hosts
+        organizers = lineup.organizers
         let hostIDs = Set(lineup.hosts.map(\.id))
         people = lineup.lineup.filter { !hostIDs.contains($0.id) }
         coverCharge = try container.decodeIfPresent(TicketsMixin.self, forKey: .tickets)?.cover?.coverCharge
@@ -295,11 +305,13 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         try event.encode(to: encoder)
 
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(EventPeopleMixin(hosts: hosts, lineup: hosts + people), forKey: .people)
+        try container.encode(EventPeopleMixin(hosts: hosts, lineup: hosts + people, organizers: organizers),
+                             forKey: .people)
     }
 
     init(
         event: Event,
+        organizers: [Person] = [],
         hosts: [Person] = [],
         people: [Person] = [],
         coverCharge: CoverCharge? = nil,
@@ -308,6 +320,7 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         friendPings: [Ping] = []
     ) {
         self.event = event
+        self.organizers = organizers
         self.hosts = hosts
         self.people = people
         self.coverCharge = coverCharge

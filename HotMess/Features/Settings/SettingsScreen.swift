@@ -35,6 +35,7 @@ struct SettingsScreen: View {
             facebookSection
             staffAppsSection
             coverSection
+            calendarSection
             locationSection
             notificationsSection
             helpSection
@@ -48,6 +49,7 @@ struct SettingsScreen: View {
         .navigationTitle(String(localized: "Me"))
         .task { await model.session.refreshUser() }
         .task { await model.safety.load() }
+        .task { await model.refreshServerSwitch() }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.listings.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
@@ -218,6 +220,21 @@ struct SettingsScreen: View {
         }
     }
 
+    /// Only for someone signed in: the link is on their account.
+    @ViewBuilder
+    private var calendarSection: some View {
+        if model.session.isSignedIn {
+            Section {
+                NavigationLink {
+                    CalendarSyncScreen()
+                } label: {
+                    Label(String(localized: "Calendar"), systemImage: "calendar")
+                }
+                .accessibilityIdentifier("me.calendar")
+            }
+        }
+    }
+
     @ViewBuilder
     private var locationSection: some View {
         Section(String(localized: "Location")) {
@@ -345,8 +362,9 @@ struct SettingsScreen: View {
             // for updates and Open in TestFlight / on the App Store.
             AboutUpdateRows(updates: model.updates)
             // Which Facebook app and API a build talks to matters only to
-            // testers; App Store builds leave it out.
-            if model.configuration.isTestBuild {
+            // testers and super admins; App Store builds leave it out for
+            // everyone else.
+            if model.canSwitchServer {
                 InfoRow(
                     title: String(localized: "Facebook"),
                     value: model.configuration.facebookEnvironment
@@ -376,11 +394,16 @@ struct SettingsScreen: View {
             titleVisibility: .visible,
             presenting: pendingServer
         ) { server in
-            Button(String(localized: "Sign Out and Close")) {
+            Button(model.switchKeepsSession(to: server)
+                   ? String(localized: "Switch and Close") : String(localized: "Sign Out and Close")) {
                 Task { await model.switchAPIServer(to: server) }
             }
-        } message: { _ in
-            Text("You'll be signed out and Hot Mess will close. Open it again and sign in to use the other server. Both share the same accounts and data.")
+        } message: { server in
+            if model.switchKeepsSession(to: server) {
+                Text("Hot Mess will close. Open it again to use the other server; you stay signed in. Both share the same accounts and data.")
+            } else {
+                Text("You signed in on Next, which Production doesn't accept, so you'll be signed out and Hot Mess will close. Open it again and sign in. Both share the same accounts and data.")
+            }
         }
     }
 

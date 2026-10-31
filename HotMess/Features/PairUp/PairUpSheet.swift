@@ -14,6 +14,10 @@ struct PairUpSheet: View {
     let venueName: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
+    /// Until the API says whether they've agreed to the terms, which come
+    /// before anyone joins (the API refuses otherwise).
+    @State private var isCheckingTerms = true
     @State private var lookFor = ""
     /// The code on screen, for the match and topic it was issued for; a new topic clears the old code.
     @State private var shownCode: (key: String, code: String)?
@@ -23,17 +27,27 @@ struct PairUpSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    if let notice = model.scanNotice {
-                        NoticeCard(text: notice) { model.scanNotice = nil }
+            Group {
+                if asksForTerms {
+                    // Your hint and the topic are seen by someone else, so the
+                    // terms come first, as in chat.
+                    ChatTermsPrompt {
+                        try await app.safety.acceptTerms()
                     }
-                    if let bonus = model.state?.bonus {
-                        BonusCard(match: bonus) { Task { await model.cancel(bonus) } }
+                } else {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if let notice = model.scanNotice {
+                                NoticeCard(text: notice) { model.scanNotice = nil }
+                            }
+                            if let bonus = model.state?.bonus {
+                                BonusCard(match: bonus) { Task { await model.cancel(bonus) } }
+                            }
+                            content
+                        }
+                        .padding(20)
                     }
-                    content
                 }
-                .padding(20)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle(String(localized: "Quickie"))
@@ -52,6 +66,15 @@ struct PairUpSheet: View {
             }
         }
         .task { await model.poll() }
+        .task {
+            await app.safety.load()
+            isCheckingTerms = false
+        }
+        .onChange(of: model.needsTerms, initial: true) { _, needed in
+            guard needed else { return }
+            model.needsTerms = false
+            app.safety.termsRefused()
+        }
         .onAppear { lookFor = model.state?.lookFor ?? "" }
         .sheet(isPresented: $isScanning) {
             PairUpScanner { code in Task { await model.scan(code) } }
@@ -73,9 +96,16 @@ struct PairUpSheet: View {
         }
     }
 
+    /// About to join (not in yet, or going again after a meeting), and the
+    /// API said they haven't agreed to the terms.
+    private var asksForTerms: Bool {
+        guard model.isLoaded, !isCheckingTerms, app.safety.isLoaded, !app.safety.hasAcceptedTerms else { return false }
+        return model.state.map { $0.status == .left || $0.status == .met } ?? true
+    }
+
     @ViewBuilder
     private var content: some View {
-        if !model.isLoaded {
+        if !model.isLoaded || isCheckingTerms {
             ProgressView().frame(maxWidth: .infinity, minHeight: 200)
         } else if let state = model.state, state.status != .left {
             switch state.status {

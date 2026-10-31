@@ -3,6 +3,7 @@
 //  HotMessTests
 //
 
+import AudienceKit
 import Foundation
 import Testing
 
@@ -89,12 +90,48 @@ struct PositionTrackerTests {
         #expect(tracker.current == Coordinates(latitude: 47.61, longitude: -122.32))
     }
 
-    @Test("Only staging and debug builds are test builds")
+    @Test("Only staging and debug builds and beta installs are test builds")
     func testBuilds() {
         let base = URL(string: "https://api.audiencekit.com")!
         #expect(AppConfiguration(baseURL: base, environment: .staging).isTestBuild)
+        #expect(AppConfiguration(baseURL: base, isBetaInstall: true).isTestBuild)
         #if !DEBUG
         #expect(!AppConfiguration(baseURL: base, environment: .production).isTestBuild)
         #endif
+    }
+
+    @Test("Beta installs wear the ribbon for their server; everything else the primary icon")
+    func betaIcons() {
+        let next = URL(string: AppConfiguration.APIServer.next.baseURL)!
+        let production = URL(string: AppConfiguration.APIServer.production.baseURL)!
+        #expect(AppConfiguration(baseURL: next, isBetaInstall: true).alternateIconName == "AppIconNext")
+        #expect(AppConfiguration(baseURL: production, isBetaInstall: true).alternateIconName == "AppIconBeta")
+        #expect(AppConfiguration(baseURL: production).alternateIconName == nil)
+        #expect(AppConfiguration(baseURL: next).alternateIconName == nil)
+    }
+
+    @Test("A super admin's App Store install can switch servers and wears the Next ribbon only on next")
+    func superAdminSwitch() {
+        let next = URL(string: AppConfiguration.APIServer.next.baseURL)!
+        let production = URL(string: AppConfiguration.APIServer.production.baseURL)!
+        #expect(AppConfiguration(baseURL: production, isBetaInstall: true).canSwitchServer)
+        #expect(!AppConfiguration(baseURL: production).canSwitchServer)
+        #expect(AppConfiguration(baseURL: next, canSwitchServer: true).alternateIconName == "AppIconNext")
+        #expect(AppConfiguration(baseURL: production, canSwitchServer: true).alternateIconName == nil)
+    }
+
+    @Test("Next keeps a production session; production signs out a next one")
+    func switchKeepsSession() {
+        func credential(on server: AppConfiguration.APIServer) -> Credential {
+            Credential(token: "t", userId: "u", audienceId: "a", role: "member",
+                       endpoint: URL(string: "\(server.baseURL)/v1/audience/a/graphql")!)
+        }
+        #expect(AppConfiguration.APIServer.next.takes(credential(on: .production)))
+        #expect(AppConfiguration.APIServer.next.takes(credential(on: .next)))
+        #expect(AppConfiguration.APIServer.production.takes(credential(on: .production)))
+        #expect(!AppConfiguration.APIServer.production.takes(credential(on: .next)))
+        #expect(AppConfiguration.APIServer.production.takes(nil))
+        let next = AppConfiguration(baseURL: URL(string: AppConfiguration.APIServer.next.baseURL)!)
+        #expect(next.audienceKit.trustedCredentialOrigins.map(\.host) == ["api.audiencekit.com"])
     }
 }

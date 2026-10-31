@@ -21,6 +21,7 @@ struct VenueScreen: View {
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var pingSeed: PingSeed?
+    @State private var ordering: BrowsedLink?
     @State private var reportSubject: ReportSubject?
     @State private var blockTarget: BlockedUser?
     /// Whether it's reported closed, and its details as a fix starts from.
@@ -227,6 +228,10 @@ struct VenueScreen: View {
         .task { await model.session.refreshUser() }
         // Whether App Review may pretend to be here.
         .task { await model.safety.load() }
+        .sheet(item: $ordering) { link in
+            SafariView(url: link.url)
+                .ignoresSafeArea()
+        }
         .sheet(item: $pingSeed) { seed in
             PingSheet(seed: seed)
                 .environment(model)
@@ -307,7 +312,7 @@ struct VenueScreen: View {
                     .accessibilityIdentifier("venue.heroPing")
 
                     Button {
-                        model.helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: venue.address))
+                        model.helpPresentation = .venue(HelpVenue(venue))
                     } label: {
                         Label(String(localized: "Safety"), systemImage: "shield.fill")
                             .heroGlass(selected: true)
@@ -321,6 +326,17 @@ struct VenueScreen: View {
                         Label(String(localized: "Directions"), systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                             .heroGlass()
                     }
+                }
+
+                if let orderingURL = overview.orderingURL {
+                    Button {
+                        ordering = BrowsedLink(url: orderingURL)
+                    } label: {
+                        Label(String(localized: "Order"), systemImage: "fork.knife")
+                            .heroGlass()
+                    }
+                    .accessibilityHint(String(localized: "Opens the venue's ordering page"))
+                    .accessibilityIdentifier("venue.order")
                 }
 
                 if overview.chatOpen {

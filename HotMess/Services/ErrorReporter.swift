@@ -181,7 +181,7 @@ extension APIError {
         switch self {
         case .decoding, .invalidURL: true
         case let .server(status): status >= 500
-        case .offline, .unauthorized, .notFound, .transport: false
+        case .offline, .unauthorized, .notFound, .transport, .termsNotAccepted: false
         }
     }
 

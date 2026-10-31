@@ -100,7 +100,8 @@ struct HotMessAPI: CoverPaymentAPI {
             viewerAdmission: venue.viewerAdmission,
             viewerCoatCheck: venue.viewerCoatCheck,
             onNow: venue.onNow,
-            friendPings: venue.friendPings
+            friendPings: venue.friendPings,
+            orderingURL: venue.orderingURL
         )
     }
 
@@ -472,7 +473,9 @@ struct HotMessAPI: CoverPaymentAPI {
 
     /// Each Pair me up mutation answers with `{ pairUp }` under its own name.
     private func pairUpMutation(_ document: String, _ variables: [String: GraphQLValue]) async throws -> PairUpState? {
-        try await query(document, variables: variables, as: [String: PairUpPayload].self).values.first?.pairUp
+        // Optional payloads, so a refusal (`{"joinPairUp": null}` beside its error) reads as the API's error
+        // rather than a decoding failure.
+        try await query(document, variables: variables, as: [String: PairUpPayload?].self).values.first??.pairUp
     }
 
     private static func graphQLID(_ id: UUID) -> GraphQLValue {
@@ -484,6 +487,14 @@ struct HotMessAPI: CoverPaymentAPI {
     /// Who the user blocked and whether they've agreed to the terms of use.
     func safety() async throws -> SafetyState {
         try await query(Documents.safety, variables: [:], as: SafetyResponse.self).me ?? SafetyState()
+    }
+
+    /// Whether the signed-in person may pick the API server in any install
+    /// (AudienceKit super admins). Its own query, so an API that predates
+    /// `canSwitchServer` fails only this.
+    func canSwitchServer() async throws -> Bool {
+        try await query(Documents.serverSwitch, variables: [:], as: ServerSwitchResponse.self).me?.canSwitchServer
+            ?? false
     }
 
     func blockUser(_ id: UUID) async throws -> [BlockedUser] {
@@ -592,6 +603,21 @@ struct HotMessAPI: CoverPaymentAPI {
     /// they left in the last 30 minutes. Off until they turn it on.
     func recentChatPush() async throws -> Bool {
         try await query(Documents.recentChatPush, variables: [:], as: RecentChatPushResponse.self).me?.recentChatPush ?? false
+    }
+
+    /// The user's calendar subscription link, or nil before they made one.
+    func calendarFeed() async throws -> CalendarFeed? {
+        try await query(Documents.calendarFeed, variables: [:], as: CalendarFeedResponse.self).me?.calendarFeed
+    }
+
+    /// Makes the user's calendar subscription link on first ask; `reset`
+    /// replaces it, so the old link stops working.
+    func createCalendarFeed(reset: Bool = false) async throws -> CalendarFeed {
+        try await query(
+            Documents.createCalendarFeed,
+            variables: ["reset": .bool(reset)],
+            as: CreateCalendarFeedResponse.self
+        ).createCalendarFeed.calendarFeed
     }
 
     /// Turns those pushes on or off, and returns the setting after the change.
@@ -871,6 +897,7 @@ extension HotMessAPI {
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
         posted_as_person: postedAsPerson person { id } \
+        sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
         \(promptLineFields)
@@ -888,10 +915,13 @@ extension HotMessAPI {
         static let personSummaryFields = "id name avatar_url: avatarUrl"
 
         /// An act on a venue's lineup (see `Appearance`): its people for a
-        /// duet, and its timing for one on in the show's order.
+        /// duet, its timing for one on in the show's order, and its scenes
+        /// (and a break's scene before it), which the lineup lists in turn.
         static let appearanceFields = """
         id kind title role starts_at: startsAt ends_at: endsAt start_timing: startTiming end_timing: endTiming \
-        person { \(personSummaryFields) } people { nodes { \(personSummaryFields) } }
+        person { \(personSummaryFields) } people { nodes { \(personSummaryFields) } } \
+        scenes { id performers { \(personSummaryFields) } went_on_at: wentOnAt came_off_at: cameOffAt } \
+        after_scene: afterScene { id }
         """
 
         /// Who is on at a venue right now, and what its show has on stage and
@@ -1013,6 +1043,7 @@ extension HotMessAPI {
             \(onNowFields)
             \(lineupFields)
             ping { friend_pings: friendPings { \(pingFields) } }
+            ordering { url }
           } }
         }
         """
@@ -1026,7 +1057,11 @@ extension HotMessAPI {
         static let event = """
         query Event($id: ID!) {
           events { event(id: $id) {
-            \(eventFields) people { hosts { nodes { \(personFields) } } lineup { nodes { \(personFields) } } }
+            \(eventFields) people {
+              hosts { nodes { \(personFields) } }
+              organizers { nodes { \(personFields) } }
+              lineup { nodes { \(personFields) } }
+            }
             ping { friend_pings: friendPings { \(pingFields) } }
             tickets { cover { cover_charge: charge { \(coverChargeFields) } } }
             venue_cover: venue { venue { \(venueCoverFields) } }
@@ -1215,6 +1250,12 @@ extension HotMessAPI {
         }
         """
 
+        static let serverSwitch = """
+        query ServerSwitch {
+          me { can_switch_server: canSwitchServer }
+        }
+        """
+
         static let blockedUserFields = "id name avatar_url: avatarUrl"
 
         static let safety = """
@@ -1245,6 +1286,7 @@ extension HotMessAPI {
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
         posted_as_person: postedAsPerson person { id } \
+        sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
         \(promptLineFields)
@@ -1285,6 +1327,18 @@ extension HotMessAPI {
         static let recentChatPush = """
         query RecentChatPush {
           me { recent_chat_push: recentChatPush }
+        }
+        """
+
+        static let calendarFeed = """
+        query CalendarFeed {
+          me { calendarFeed { url webcalUrl googleUrl } }
+        }
+        """
+
+        static let createCalendarFeed = """
+        mutation CreateCalendarFeed($reset: Boolean) {
+          createCalendarFeed(input: { reset: $reset }) { calendarFeed { url webcalUrl googleUrl } }
         }
         """
 
@@ -1391,13 +1445,17 @@ struct VenueWithEvents: Decodable, Sendable {
     /// Who is on there right now, by start.
     let onNow: OnNow
     let friendPings: [Ping]
+    /// The venue's own ordering page, which the Order button opens; nil
+    /// when it has none.
+    let orderingURL: URL?
 
     private enum CodingKeys: String, CodingKey {
-        case events, friends, tickets, profile, ping, chat, people
+        case events, friends, tickets, profile, ping, chat, people, ordering
         case bannerPhotos = "banner_photos"
     }
 
     private struct BannerPhoto: Decodable { let url: String? }
+    private struct OrderingMixin: Decodable { let url: String? }
 
     init(from decoder: any Decoder) throws {
         venue = try Venue(from: decoder)
@@ -1424,6 +1482,11 @@ struct VenueWithEvents: Decodable, Sendable {
         onNow = (try? container.decodeIfPresent(VenuePeopleMixin.self, forKey: .people))?.onNow ?? []
         // Friends' Pings come through the ping mixin; missing reads as none.
         friendPings = try container.decodeIfPresent(PingsResponse.self, forKey: .ping)?.friendPings ?? []
+        // The ordering mixin is a facet: only venues with an ordering page
+        // have it. Only https pages open.
+        orderingURL = ((try? container.decodeIfPresent(OrderingMixin.self, forKey: .ordering)) ?? nil)?.url
+            .flatMap(URL.init(string:))
+            .flatMap { $0.scheme?.lowercased() == "https" ? $0 : nil }
     }
 }
 
@@ -1581,6 +1644,17 @@ struct MeResponse: Decodable, Sendable {
     let me: State?
 }
 
+struct ServerSwitchResponse: Decodable, Sendable {
+    struct Me: Decodable, Sendable {
+        let canSwitchServer: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case canSwitchServer = "can_switch_server"
+        }
+    }
+    let me: Me?
+}
+
 struct SafetyResponse: Decodable, Sendable {
     let me: SafetyState?
 }
@@ -1630,6 +1704,33 @@ struct AcceptTermsResponse: Decodable, Sendable {
     }
 
     let acceptTerms: Payload
+}
+
+/// The user's private calendar subscription (API doc/CALENDAR_SYNC.md):
+/// the events they're going to, as a feed their calendar app keeps up with.
+struct CalendarFeed: Decodable, Equatable, Sendable {
+    /// The https feed, to copy.
+    let url: URL
+    /// The same as webcal://, which Calendar opens as a subscription.
+    let webcalUrl: URL
+    let googleUrl: URL
+}
+
+/// `me { calendarFeed }`.
+struct CalendarFeedResponse: Decodable, Sendable {
+    struct Me: Decodable, Sendable {
+        let calendarFeed: CalendarFeed?
+    }
+
+    let me: Me?
+}
+
+struct CreateCalendarFeedResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable {
+        let calendarFeed: CalendarFeed
+    }
+
+    let createCalendarFeed: Payload
 }
 
 /// `me { recentChatPush }`, and `setRecentChatPush`'s payload.

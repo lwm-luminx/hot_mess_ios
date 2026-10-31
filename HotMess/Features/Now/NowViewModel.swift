@@ -36,6 +36,7 @@ final class NowViewModel {
             guard let now else { return }
             friends?.remember(now)
             state = .loaded(now)
+            planCheck.observe(venueID: now.venues == nil ? now.venue?.id : nil, at: .now)
         } catch is CancellationError {
             // The view went away; leave whatever was on screen alone.
         } catch {
@@ -62,6 +63,36 @@ final class NowViewModel {
 
     func leave(_ ping: Ping) async {
         await update(ping) { try await $0.leavePing(ping.id) }
+    }
+
+    /// Whether to ask "Did your plans change?", and where you've been.
+    private(set) var planCheck = PlanChangeCheck()
+
+    /// The venue to ask "Did your plans change?" about, if any.
+    var planChangeVenue: Venue? {
+        guard let now = state.value, let venueID = planCheck.venueToAsk(about: now.myPing, at: .now) else { return nil }
+        return now.venue?.id == venueID ? now.venue : nil
+    }
+
+    /// "Yes, I'm here now": the user's Ping picks this venue (tonight's
+    /// event here, when one is on) instead of its old picks. Keeps the note
+    /// and who can see it; whoever was in on an old pick stays in on the
+    /// Ping as a whole.
+    func movePing(to venue: Venue, localeID: UUID?) async {
+        guard let now = state.value, let ping = now.myPing else { return }
+        planCheck.answer(ping, at: venue.id)
+        var place = PingPlace.venue(venue.id)
+        if let event = now.event, event.venue?.id == venue.id { place = .event(event.id) }
+        await update(ping) {
+            try await $0.sendPing(places: [place], note: ping.note, localeID: localeID, reach: ping.reach)
+        }
+    }
+
+    /// "No, keep my ping": the Ping stays as it is, and Now stops asking
+    /// about this venue.
+    func keepPing(at venue: Venue) {
+        guard let ping = state.value?.myPing else { return }
+        planCheck.answer(ping, at: venue.id)
     }
 
     func endMyPing() async {

@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import Kingfisher
 import SwiftUI
 import UIKit
 
@@ -31,17 +32,25 @@ enum ChatMetrics {
     static let avatarSize: CGFloat = 24
     /// A TinyAvatar in ChatPeek.
     static let peekAvatarSize: CGFloat = 20
-    /// `size-avatar-sm`: the venue, and talent posting as their listing,
-    /// keep their photos at this size.
-    static let listingAvatarSize: CGFloat = 28
+    /// The venue, and someone posting as a listing, draw a step larger than
+    /// people, so a place or a page never passes for a person.
+    static let listingAvatarSize: CGFloat = 30
+    /// A persona's 30 with its ring: bots draw as large as personas.
+    static let botAvatarSize: CGFloat = 34
     /// A PromptCard is at most this wide, centred in the thread.
     static let promptCardMaxWidth: CGFloat = 330
 
-    /// How big a sender's avatar draws: 28 for the venue and talent posting
-    /// as their listing, else 24 (20 in ChatPeek).
+    /// How big a sender's avatar draws: 34 for a bot, 30 for the venue and
+    /// a persona (34 with the persona's ring), else 24 (20 in ChatPeek).
     static func avatarDiameter(for message: ChatThreadMessage, compact: Bool = false) -> CGFloat {
-        if message.isFromListing, !message.isFromAudience { return listingAvatarSize }
-        return compact ? peekAvatarSize : avatarSize
+        switch message.sender {
+        case .bot: return botAvatarSize
+        case .persona: return listingAvatarSize + 2 * PersonaRing.inset
+        case .venue: return listingAvatarSize
+        case .system, .member:
+            if message.isFromListing, !message.isFromAudience { return listingAvatarSize }
+            return compact ? peekAvatarSize : avatarSize
+        }
     }
     /// Messages from one sender closer together than this form a group.
     static let groupGap: TimeInterval = 5 * 60
@@ -191,6 +200,13 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     /// The tribes the reader and the sender both picked: a BothMark on the
     /// avatar and the BothLine after the name. Only the two of them see it.
     var sharedTribes: [SharedTribe] = []
+    /// Who it's from, which sets how its avatar, tag and bubble draw.
+    var sender: ChatSenderKind = .member
+    /// The listing a persona posted as: its badge opens their page.
+    var personID: UUID? = nil
+    /// Whether that listing has a page. Without one (a guest host) the
+    /// persona draws a host glyph and links nowhere.
+    var personHasPage = true
 
     /// Someone the reader can tap for their profile sheet: another person
     /// posting as themself. Not the venue, talent posting as their listing,
@@ -637,7 +653,13 @@ private struct ChatThreadRowView: View {
                 // ordinary messages as themselves need no name.
                 if row.isFirstInGroup, !message.isOwn || message.isFromPlace {
                     profileButton(horizontalSlop: 0, verticalSlop: 14) {
-                        ChatSenderLine(name: message.authorName, role: message.role, tribes: message.sharedTribes)
+                        ChatSenderLine(
+                            name: message.authorName,
+                            role: message.role,
+                            tribes: message.sharedTribes,
+                            sender: message.sender,
+                            personID: message.personHasPage ? message.personID : nil
+                        )
                     }
                     .padding(message.isOwn ? .trailing : .leading, message.rich == nil ? 12 : 4)
                     .accessibilityHidden(true)
@@ -652,6 +674,7 @@ private struct ChatThreadRowView: View {
                             isOwn: message.isOwn,
                             isLastInGroup: row.isLastInGroup,
                             isRole: message.role?.tintsBubble == true,
+                            isPlain: message.sender == .bot,
                             label: message.promptLabel,
                             onLabelTap: onGoToPrompt
                         )
@@ -836,6 +859,23 @@ struct ChatAvatar: View {
 
         if message.isFromAudience {
             AudienceMark(name: message.authorName, size: size)
+        } else if message.sender == .bot {
+            BotAvatar(url: message.avatarURL, size: size)
+        } else if message.sender == .persona {
+            Group {
+                if message.personHasPage {
+                    Avatar(url: message.avatarURL, initials: message.authorName?.initialsForDisplay,
+                           size: ChatMetrics.listingAvatarSize, tintsInitials: true)
+                } else {
+                    // A lineup name with no page: a host glyph, not a face.
+                    Image(systemName: "music.mic")
+                        .font(.system(size: ChatMetrics.listingAvatarSize * 0.45, weight: .semibold))
+                        .foregroundStyle(Color.hotMessAccentInk)
+                        .frame(width: ChatMetrics.listingAvatarSize, height: ChatMetrics.listingAvatarSize)
+                        .background(Color.hotMessAccentSoft, in: .circle)
+                }
+            }
+            .modifier(PersonaRing())
         } else {
             Avatar(
                 url: message.avatarURL,
@@ -858,9 +898,13 @@ struct ChatSenderLine: View {
     let role: ChatRole?
     /// What the reader shares with them: the BothLine after the name.
     var tribes: [SharedTribe] = []
+    /// A bot gets a Bot tag in place of any role.
+    var sender: ChatSenderKind = .member
+    /// A persona's listing with a page: its role badge opens it.
+    var personID: UUID? = nil
 
     var body: some View {
-        if (name?.isEmpty == false) || role != nil || !tribes.isEmpty {
+        if (name?.isEmpty == false) || role != nil || !tribes.isEmpty || sender == .bot {
             HStack(spacing: 6) {
                 if let name, !name.isEmpty {
                     Text(name)
@@ -869,7 +913,15 @@ struct ChatSenderLine: View {
                         .lineLimit(1)
                 }
 
-                if let role {
+                if sender == .bot {
+                    BotTag()
+                } else if let role, let personID, sender == .persona {
+                    NavigationLink(value: AppRoute.person(personID)) {
+                        RoleTag(role: role, opensPage: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "\(role.title), view their page"))
+                } else if let role {
                     RoleTag(role: role)
                 }
 
@@ -901,17 +953,25 @@ extension ChatRole {
 /// word, so the tint never carries meaning alone.
 struct RoleTag: View {
     let role: ChatRole
+    /// A persona's badge that opens their page: a chevron after the word.
+    var opensPage = false
 
     var body: some View {
-        Text(role.title)
-            .font(.hotMess(fixedSize: 11, semibold: true))
-            .tracking(0.2)
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .padding(.horizontal, 6)
-            .frame(minHeight: 16)
-            .background(background, in: .capsule)
-            .fixedSize()
+        HStack(spacing: 2) {
+            Text(role.title)
+            if opensPage {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+            }
+        }
+        .font(.hotMess(fixedSize: 11, semibold: true))
+        .tracking(0.2)
+        .foregroundStyle(foreground)
+        .lineLimit(1)
+        .padding(.horizontal, 6)
+        .frame(minHeight: 16)
+        .background(background, in: .capsule)
+        .fixedSize()
     }
 
     private var foreground: Color {
@@ -931,6 +991,61 @@ struct RoleTag: View {
     }
 }
 
+/// The tag after a bot's name: "Bot", in the app's own grey.
+struct BotTag: View {
+    var body: some View {
+        Text("Bot")
+            .font(.hotMess(fixedSize: 11, semibold: true))
+            .tracking(0.2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .frame(minHeight: 16)
+            .background(Color.hotMessControlFill, in: .capsule)
+            .fixedSize()
+    }
+}
+
+/// The accent ring around a persona's avatar: a listing, not the person.
+struct PersonaRing: ViewModifier {
+    static let inset: CGFloat = 2
+
+    func body(content: Content) -> some View {
+        content
+            .padding(Self.inset)
+            .overlay { Circle().strokeBorder(Color.hotMessAccent, lineWidth: 2) }
+    }
+}
+
+/// A bot's avatar: its own art with no border or fill, like the app's own
+/// chrome. Without art, the sparkles stand in.
+struct BotAvatar: View {
+    let url: URL?
+    var size: CGFloat = ChatMetrics.botAvatarSize
+
+    var body: some View {
+        Group {
+            if let url {
+                KFImage(url)
+                    .cancelOnDisappear(true)
+                    .placeholder { sparkles }
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                sparkles
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private var sparkles: some View {
+        Image(systemName: "sparkles")
+            .font(.system(size: size * 0.62, weight: .bold))
+            .foregroundStyle(Color.hotMessAccent)
+    }
+}
+
 /// One chat bubble. The last bubble of a group drops its corner nearest the
 /// sender to a small "tail".
 struct ChatBubble: View {
@@ -940,6 +1055,8 @@ struct ChatBubble: View {
     /// From the venue or a host: `accent-soft` with primary text, no shadow.
     /// Ignored on the reader's own bubbles.
     var isRole: Bool = false
+    /// From a bot: no fill and no shadow, so it reads as the app's own words.
+    var isPlain: Bool = false
     /// Lines of text before an ellipsis; `nil` shows it all.
     var lineLimit: Int? = nil
     /// Off where the bubble sits inside a button, like ChatPeek.
@@ -988,10 +1105,13 @@ struct ChatBubble: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        // A bot's words have no bubble, so they sit close under its name.
+        .padding(.vertical, isPlain ? 2 : 8)
         .background {
             if isOwn {
                 shape.fill(Color.hotMessAccent)
+            } else if isPlain {
+                Color.clear
             } else if isRole {
                 shape.fill(Color.hotMessAccentSoft)
             } else {
@@ -1212,6 +1332,12 @@ struct ChatComposer: View {
     let send: () -> Void
 
     @FocusState private var isFocused: Bool
+    /// Rebuilds the field after a send. A vertical TextField that still has
+    /// the keyboard can keep showing its old text when the room clears the
+    /// binding, so the room's "" never reaches the screen.
+    @State private var fieldID = 0
+    /// Between pressing Send and the room clearing the line.
+    @State private var isSending = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1249,7 +1375,20 @@ struct ChatComposer: View {
                 .font(.hotMess(.body))
                 .lineLimit(1 ... 4)
                 .submitLabel(.send)
-                .onSubmit(send)
+                .onSubmit(submit)
+                .id(fieldID)
+                .onChange(of: text) { old, new in
+                    // A vertical field types Return as a newline rather than
+                    // submitting; the key says Send, so it sends.
+                    if new.hasSuffix("\n") {
+                        text.removeLast()
+                        submit()
+                    } else if isSending, new.isEmpty, !old.isEmpty {
+                        isSending = false
+                        fieldID += 1
+                        isFocused = true
+                    }
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .frame(minHeight: 40)
@@ -1259,7 +1398,7 @@ struct ChatComposer: View {
                         .strokeBorder(Color(.systemGray), lineWidth: 1)
                 }
 
-            Button(action: send) {
+            Button(action: submit) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(canSend ? Color.hotMessOnAccent : Color.secondary)
@@ -1270,6 +1409,12 @@ struct ChatComposer: View {
             .disabled(!canSend)
             .accessibilityLabel(String(localized: "Send"))
         }
+    }
+
+    private func submit() {
+        guard canSend else { return }
+        isSending = true
+        send()
     }
 }
 
@@ -1418,4 +1563,31 @@ private enum ChatPreviewData {
         ChatLine(author: nil, avatarURL: nil, text: "A longer line that runs past two lines on a phone so it shows the ellipsis at the end of the second line.", time: "1h")
     }
     .padding()
+}
+
+#Preview("Senders") {
+    let start = ChatPreviewData.start
+    func line(_ index: Int, _ author: String, _ text: String, sender: ChatSenderKind, role: ChatRole? = nil,
+              hasPage: Bool = true, presence: PresenceState? = nil) -> ChatThreadMessage {
+        var message = ChatThreadMessage(
+            id: "\(index)", authorID: "\(sender):\(author)", authorName: author, avatarURL: nil, text: text,
+            sentAt: start.addingTimeInterval(Double(index) * 60), isOwn: false, presence: presence, role: role,
+            isFromPlace: sender == .venue || sender == .bot, isFromListing: sender != .member
+        )
+        message.sender = sender
+        message.personID = sender == .persona ? UUID() : nil
+        message.personHasPage = hasPage
+        return message
+    }
+
+    return NavigationStack {
+        ChatThreadView(messages: [
+            line(0, "Glam", "Hi all, I'm Glam, the room's bot. Be kind tonight.", sender: .bot, role: .venue),
+            line(1, "Anya", "We're live! Signups are open.", sender: .persona, role: .host),
+            line(2, "Sam R.", "Saving the booth by the stage", sender: .member, presence: .online),
+            line(3, "Darcy", "Jo, you're up after this one", sender: .persona, role: .host, hasPage: false),
+            line(4, "The Pax", "Two-for-one wings till 10.", sender: .venue, role: .venue),
+        ], roomName: "The Pax")
+        .background(Color(.systemGroupedBackground))
+    }
 }

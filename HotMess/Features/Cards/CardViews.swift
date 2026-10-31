@@ -211,7 +211,8 @@ struct CardsYouSeeScreen: View {
     }
 }
 
-private struct BrowsedLink: Identifiable {
+/// A link opened in an in-app Safari sheet.
+struct BrowsedLink: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
 }

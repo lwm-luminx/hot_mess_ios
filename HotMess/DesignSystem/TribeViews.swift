@@ -226,9 +226,9 @@ struct ChipFlow: Layout {
         BothLine(tribes: tribes)
         BothLine(tribes: Array(tribes.prefix(1)))
         ChipFlow {
-            TribeChip(name: "Bear", isOn: true, showsRemove: true) {}
-            TribeChip(name: "Karaoke regular", isOn: false) {}
-            TribeChip(name: "Board games", isOn: false, isHeldBack: true) {}
+            TribeChip(name: "Bear".tagLabel, isOn: true, showsRemove: true) {}
+            TribeChip(name: "Karaoke regular".tagLabel, isOn: false) {}
+            TribeChip(name: "Board games".tagLabel, isOn: false, isHeldBack: true) {}
         }
         PickCounter(picked: 7, cap: 31)
     }
