@@ -40,14 +40,15 @@ extension VenueCollection {
         ])
     }
 
-    /// The audience's visible venues from AudienceKit GraphQL, in the audience's
-    /// order. Only venues in `localeID` are kept once the device's locale is
-    /// known; until then every venue shows.
+    /// The audience's visible venues from AudienceKit GraphQL, in the order the
+    /// API lists them: the audience's order, with community spaces (places that
+    /// host events but aren't venues to go out to) after the rest. Only venues
+    /// in `localeID` are kept once the device's locale is known; until then
+    /// every venue shows.
     init(audienceVenues: [AudienceKit.Venue], localeID: UUID?, resolve: (String?) -> URL?) {
         let visible = audienceVenues
             .filter { !$0.hidden }
             .filter { localeID == nil || RecordID.uuid($0.locale.id) == localeID }
-            .sorted { ($0.order, $0.name) < ($1.order, $1.name) }
 
         self.init(venues: visible.compactMap { Venue($0, resolve: resolve) })
     }

@@ -268,6 +268,10 @@ struct EventScreen: View {
                     .font(.hotMess(.subheadline, semibold: true))
             }
 
+            if !detail.organizers.isEmpty {
+                organizersLine(detail.organizers)
+            }
+
             if !detail.hosts.isEmpty {
                 hostsLine(detail.hosts)
             }
@@ -288,18 +292,30 @@ struct EventScreen: View {
         return String(localized: "\(day) · \(start) to \(end)")
     }
 
+    /// "Presented by Utah Pride Center": the organizations putting it on.
+    private func organizersLine(_ organizers: [Person]) -> some View {
+        peopleLine(organizers,
+                   text: String(localized: "Presented by \(organizers.map(\.name).formatted(.list(type: .and)))"))
+    }
+
     /// "Hosted by Sasha and Bea" with their faces; one host opens their page.
-    @ViewBuilder
     private func hostsLine(_ hosts: [Person]) -> some View {
+        peopleLine(hosts, text: String(localized: "Hosted by \(hosts.map(\.name).formatted(.list(type: .and)))"))
+    }
+
+    /// A line of people with their faces, like "Hosted by …" or "Presented by
+    /// …"; one person opens their page.
+    @ViewBuilder
+    private func peopleLine(_ people: [Person], text: String) -> some View {
         let line = HStack(spacing: 8) {
-            HeroFaces(people: hosts)
-            Text("Hosted by \(hosts.map(\.name).formatted(.list(type: .and)))")
+            HeroFaces(people: people)
+            Text(text)
                 .font(.hotMess(.subheadline, semibold: true))
                 .lineLimit(2)
         }
 
-        if hosts.count == 1, let host = hosts.first {
-            NavigationLink(value: AppRoute.person(host.id)) { line }
+        if people.count == 1, let person = people.first {
+            NavigationLink(value: AppRoute.person(person.id)) { line }
                 .buttonStyle(.plain)
         } else {
             line

@@ -1052,7 +1052,11 @@ extension HotMessAPI {
         static let event = """
         query Event($id: ID!) {
           events { event(id: $id) {
-            \(eventFields) people { hosts { nodes { \(personFields) } } lineup { nodes { \(personFields) } } }
+            \(eventFields) people {
+              hosts { nodes { \(personFields) } }
+              organizers { nodes { \(personFields) } }
+              lineup { nodes { \(personFields) } }
+            }
             ping { friend_pings: friendPings { \(pingFields) } }
             tickets { cover { cover_charge: charge { \(coverChargeFields) } } }
             venue_cover: venue { venue { \(venueCoverFields) } }

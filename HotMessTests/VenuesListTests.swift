@@ -26,15 +26,28 @@ struct VenueCollectionLocaleTests {
     @Test("Shows only venues in the current locale")
     func filtersToLocale() throws {
         let venues = [
-            try venue("Neighbours", locale: seattle, order: 2),
+            try venue("R Place", locale: seattle, order: 1),
             try venue("Crush", locale: portland),
             try venue("Hidden", locale: seattle, hidden: true),
-            try venue("R Place", locale: seattle, order: 1)
+            try venue("Neighbours", locale: seattle, order: 2)
         ]
 
         let collection = VenueCollection(audienceVenues: venues, localeID: seattle) { _ in nil }
 
         #expect(collection.venues.map(\.name) == ["R Place", "Neighbours"])
+    }
+
+    @Test("Keeps the API's order, community spaces after the venues to go out to")
+    func keepsServerOrder() throws {
+        // The API lists a community space last even when it's first in the audience's order.
+        let venues = [
+            try venue("Neighbours", locale: seattle, order: 2),
+            try venue("Utah Pride Center", locale: seattle, order: 1)
+        ]
+
+        let collection = VenueCollection(audienceVenues: venues, localeID: seattle) { _ in nil }
+
+        #expect(collection.venues.map(\.name) == ["Neighbours", "Utah Pride Center"])
     }
 
     @Test("Shows every visible venue until the locale is known")
@@ -50,8 +63,8 @@ struct VenueCollectionLocaleTests {
     func groupsByCity() throws {
         let venues = [
             try venue("Crush", locale: portland, city: "Portland"),
-            try venue("Neighbours", locale: seattle, city: "Seattle", order: 2),
-            try venue("R Place", locale: seattle, city: "Seattle", order: 1)
+            try venue("R Place", locale: seattle, city: "Seattle", order: 1),
+            try venue("Neighbours", locale: seattle, city: "Seattle", order: 2)
         ]
 
         let groups = VenueCollection(audienceVenues: venues, localeID: nil) { _ in nil }.byCity(first: "Seattle")
