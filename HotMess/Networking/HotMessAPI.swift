@@ -100,7 +100,8 @@ struct HotMessAPI: CoverPaymentAPI {
             viewerAdmission: venue.viewerAdmission,
             viewerCoatCheck: venue.viewerCoatCheck,
             onNow: venue.onNow,
-            friendPings: venue.friendPings
+            friendPings: venue.friendPings,
+            orderingURL: venue.orderingURL
         )
     }
 
@@ -1039,6 +1040,7 @@ extension HotMessAPI {
             \(onNowFields)
             \(lineupFields)
             ping { friend_pings: friendPings { \(pingFields) } }
+            ordering { url }
           } }
         }
         """
@@ -1436,13 +1438,17 @@ struct VenueWithEvents: Decodable, Sendable {
     /// Who is on there right now, by start.
     let onNow: OnNow
     let friendPings: [Ping]
+    /// The venue's own ordering page, which the Order button opens; nil
+    /// when it has none.
+    let orderingURL: URL?
 
     private enum CodingKeys: String, CodingKey {
-        case events, friends, tickets, profile, ping, chat, people
+        case events, friends, tickets, profile, ping, chat, people, ordering
         case bannerPhotos = "banner_photos"
     }
 
     private struct BannerPhoto: Decodable { let url: String? }
+    private struct OrderingMixin: Decodable { let url: String? }
 
     init(from decoder: any Decoder) throws {
         venue = try Venue(from: decoder)
@@ -1469,6 +1475,11 @@ struct VenueWithEvents: Decodable, Sendable {
         onNow = (try? container.decodeIfPresent(VenuePeopleMixin.self, forKey: .people))?.onNow ?? []
         // Friends' Pings come through the ping mixin; missing reads as none.
         friendPings = try container.decodeIfPresent(PingsResponse.self, forKey: .ping)?.friendPings ?? []
+        // The ordering mixin is a facet: only venues with an ordering page
+        // have it. Only https pages open.
+        orderingURL = ((try? container.decodeIfPresent(OrderingMixin.self, forKey: .ordering)) ?? nil)?.url
+            .flatMap(URL.init(string:))
+            .flatMap { $0.scheme?.lowercased() == "https" ? $0 : nil }
     }
 }
 

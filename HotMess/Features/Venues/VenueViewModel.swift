@@ -30,6 +30,9 @@ struct VenueOverview: Sendable, Equatable {
     var onNow: OnNow = []
     /// Friends' Pings that pick this venue or one of its events.
     var friendPings: [Ping] = []
+    /// The venue's own ordering page (e.g. its Toast online ordering), which
+    /// the Order button opens; nil when it has none.
+    var orderingURL: URL?
 
     /// What the hero rotates through: its banner (its Google photo when it
     /// has one) and then its banner images, else its own photo.
