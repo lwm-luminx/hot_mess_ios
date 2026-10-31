@@ -1249,6 +1249,20 @@ struct MixinDecodingTests {
         #expect(lineupOnly.people.map(\.name) == ["Kiko Soirée"])
     }
 
+    @Test("Shows who presents an event, apart from its hosts and lineup")
+    func eventOrganizers() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let center = #"{ "id": "3C3D4E5F-6071-4C8D-AEBF-2A3B4C5D6E7F", "name": "Utah Pride Center", "avatar_url": null }"#
+        let act = #"{ "id": "2B2C3D4E-5F60-4B7C-9DAE-1F2A3B4C5D6E", "name": "Kiko Soirée", "avatar_url": null }"#
+        let detail = try decode(EventDetail.self, from: base + """
+        , "people": { "organizers": { "nodes": [\(center)] }, "lineup": { "nodes": [\(act)] } } }
+        """)
+
+        #expect(detail.organizers.map(\.name) == ["Utah Pride Center"])
+        #expect(detail.hosts.isEmpty)
+        #expect(detail.people.map(\.name) == ["Kiko Soirée"])
+    }
+
     @Test("An event with no venue or no cover module has no venue cover")
     func eventWithoutVenueCover() throws {
         let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
