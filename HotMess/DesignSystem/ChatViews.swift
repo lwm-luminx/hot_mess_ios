@@ -860,7 +860,7 @@ struct ChatAvatar: View {
         if message.isFromAudience {
             AudienceMark(name: message.authorName, size: size)
         } else if message.sender == .bot {
-            BotAvatar(url: message.avatarURL, size: size, surface: presenceRing)
+            BotAvatar(url: message.avatarURL, size: size)
         } else if message.sender == .persona {
             Group {
                 if message.personHasPage {
@@ -1018,41 +1018,30 @@ struct PersonaRing: ViewModifier {
 }
 
 /// A bot's avatar: its own art with no border or fill, like the app's own
-/// chrome, and the sparkles over its corner where a person's presence dot
-/// would be (bots never show presence). Without art, the sparkles alone.
+/// chrome. Without art, the sparkles stand in.
 struct BotAvatar: View {
     let url: URL?
     var size: CGFloat = ChatMetrics.botAvatarSize
-    /// The surface behind it, for the disc the sparkles sit on.
-    var surface: Color = Color(.systemGroupedBackground)
 
     var body: some View {
         Group {
             if let url {
                 KFImage(url)
                     .cancelOnDisappear(true)
-                    .placeholder { sparkles(size * 0.62) }
+                    .placeholder { sparkles }
                     .resizable()
                     .scaledToFit()
             } else {
-                sparkles(size * 0.62)
+                sparkles
             }
         }
         .frame(width: size, height: size)
-        .overlay(alignment: .bottomTrailing) {
-            if url != nil {
-                sparkles(size * 0.5)
-                    .padding(size * 0.06)
-                    .background(surface, in: .circle)
-                    .offset(x: 6, y: 5)
-            }
-        }
         .accessibilityHidden(true)
     }
 
-    private func sparkles(_ glyph: CGFloat) -> some View {
+    private var sparkles: some View {
         Image(systemName: "sparkles")
-            .font(.system(size: glyph, weight: .bold))
+            .font(.system(size: size * 0.62, weight: .bold))
             .foregroundStyle(Color.hotMessAccent)
     }
 }
@@ -1343,6 +1332,12 @@ struct ChatComposer: View {
     let send: () -> Void
 
     @FocusState private var isFocused: Bool
+    /// Rebuilds the field after a send. A vertical TextField that still has
+    /// the keyboard can keep showing its old text when the room clears the
+    /// binding, so the room's "" never reaches the screen.
+    @State private var fieldID = 0
+    /// Between pressing Send and the room clearing the line.
+    @State private var isSending = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1380,7 +1375,20 @@ struct ChatComposer: View {
                 .font(.hotMess(.body))
                 .lineLimit(1 ... 4)
                 .submitLabel(.send)
-                .onSubmit(send)
+                .onSubmit(submit)
+                .id(fieldID)
+                .onChange(of: text) { old, new in
+                    // A vertical field types Return as a newline rather than
+                    // submitting; the key says Send, so it sends.
+                    if new.hasSuffix("\n") {
+                        text.removeLast()
+                        submit()
+                    } else if isSending, new.isEmpty, !old.isEmpty {
+                        isSending = false
+                        fieldID += 1
+                        isFocused = true
+                    }
+                }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .frame(minHeight: 40)
@@ -1390,7 +1398,7 @@ struct ChatComposer: View {
                         .strokeBorder(Color(.systemGray), lineWidth: 1)
                 }
 
-            Button(action: send) {
+            Button(action: submit) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(canSend ? Color.hotMessOnAccent : Color.secondary)
@@ -1401,6 +1409,12 @@ struct ChatComposer: View {
             .disabled(!canSend)
             .accessibilityLabel(String(localized: "Send"))
         }
+    }
+
+    private func submit() {
+        guard canSend else { return }
+        isSending = true
+        send()
     }
 }
 

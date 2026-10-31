@@ -136,8 +136,8 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
 enum ChatSenderKind: String, Hashable, Sendable {
     /// The room itself: a centred line with no avatar.
     case system
-    /// Software with a name, like Glam: its own art with no border or fill,
-    /// the sparkles over it, and a Bot tag.
+    /// Software with a name, like Glam: its own art with no border or fill
+    /// and a Bot tag.
     case bot
     /// Someone posting as the venue: a squarer avatar, a step larger.
     case venue
