@@ -450,6 +450,45 @@ struct OnNowDecodingTests {
         }
     }
 
+    @Test("Lists an act's scenes in turn with the breaks after them, not its billing")
+    func actScenesInTurn() throws {
+        let kiki = #"{ "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Kiki" }"#
+        let aurora = #"{ "id": "2A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Aurora" }"#
+        let act = """
+        "kind": "ACT", "role": "PERFORMER", "title": "First Set", "start_timing": "NONE", "end_timing": "ADVANCE",
+        "person": \(kiki), "people": { "nodes": [\(kiki), \(aurora)] },
+        "scenes": [
+          { "id": "1E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [\(kiki)],
+            "went_on_at": "2026-10-31T04:00:00Z", "came_off_at": "2026-10-31T04:05:00Z" },
+          { "id": "2E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [\(aurora)],
+            "went_on_at": "2026-10-31T04:06:00Z", "came_off_at": null },
+          { "id": "3E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "performers": [] }
+        ]
+        """
+        let detail = try decode(VenueWithEvents.self, from: """
+        { "id": "8B4F1B60-9A5D-4D0E-9B3F-2C6B3E5D8A11", "name": "The Stud", "people": {
+          "on_now": { "nodes": [{ "id": "7D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", \(act) }] },
+          "running_order": { "nodes": [
+            { "id": "7D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "state": "ON", \(act) },
+            { "id": "9D2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D", "kind": "INTERMISSION", "title": "Bar break",
+              "state": "DONE", "person": null, "role": null,
+              "after_scene": { "id": "1E2C1B0A-9E8F-4A7B-8C6D-5E4F3A2B1C0D" } }
+          ] }
+        } }
+        """)
+
+        let lineup = detail.onNow.lineup
+        let names = lineup.map { entry -> String in
+            switch entry.content {
+            case .act(let appearance): appearance.name
+            case .intermission(let intermission): intermission.title ?? ""
+            }
+        }
+        #expect(names == ["Kiki", "Bar break", "Aurora", "Kiki & Aurora"])
+        #expect(lineup.map(\.state) == [.done, .done, .on, .upcoming])
+        #expect(detail.onNow.acts.map(\.name) == ["Aurora"])
+    }
+
     @Test("Leaves karaoke singers out of the app's own lineup and On now, with or without a person")
     func singersDropped() throws {
         let detail = try decode(VenueWithEvents.self, from: """

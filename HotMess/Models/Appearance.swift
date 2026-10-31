@@ -23,6 +23,20 @@ struct Appearance: Hashable, Sendable, Identifiable {
     /// Whether it goes on in the lineup's order, when the venue advances the
     /// show, rather than at a set time. Its times then aren't a set.
     let inOrder: Bool
+    /// An act's scenes (its numbers, each with who's on) in order; empty for
+    /// anything else or from an older API. The lineup lists them in turn
+    /// rather than the act's billing (see `turns(in:)`).
+    var scenes: [Scene] = []
+
+    /// One number in an act: who's on it, and whether advancing has put it
+    /// on or taken it off.
+    struct Scene: Hashable, Sendable {
+        let id: UUID
+        /// Who performs it; empty means the act's people.
+        let performers: [Person]
+        let wentOn: Bool
+        let cameOff: Bool
+    }
 
     enum Role: String, Hashable, Sendable {
         case host, dj, performer, mc
@@ -82,9 +96,38 @@ struct Appearance: Hashable, Sendable, Identifiable {
     }
 }
 
+extension Appearance {
+    /// Its scenes in turn, each as an appearance of its own (the scene's ID,
+    /// its performers, no billing) with its state: the act's, and in an act
+    /// on now, as advancing marked it; in an act on now with no scene put on
+    /// yet (run as one act), its first scene is on. Just itself without
+    /// scenes.
+    func turns(in state: LineupEntry.State) -> [(appearance: Appearance, state: LineupEntry.State)] {
+        guard !scenes.isEmpty else { return [(self, state)] }
+        let started = scenes.contains(where: \.wentOn)
+        return scenes.enumerated().map { index, scene in
+            let sceneState: LineupEntry.State = if state != .on { state }
+                else if scene.cameOff { .done }
+                else if scene.wentOn { .on }
+                else { !started && index == 0 ? .on : .upcoming }
+            let people = scene.performers.isEmpty ? self.people : scene.performers
+            let turn = Appearance(id: scene.id, person: people.first ?? person, people: people, role: role,
+                                  startsAt: index == 0 ? startsAt : nil, inOrder: index == 0 ? inOrder : true)
+            return (turn, sceneState)
+        }
+    }
+
+    /// The scene in `state`, else its first: what an act with scenes shows on
+    /// now or up next. Itself without scenes.
+    func turn(_ state: LineupEntry.State, actState: LineupEntry.State) -> Appearance {
+        let turns = turns(in: actState)
+        return (turns.first { $0.state == state } ?? turns.first)?.appearance ?? self
+    }
+}
+
 extension Appearance: Decodable {
     enum CodingKeys: String, CodingKey {
-        case id, person, people, title, role
+        case id, person, people, title, role, scenes
         case startsAt = "starts_at"
         case endsAt = "ends_at"
         case startTiming = "start_timing"
@@ -121,6 +164,7 @@ extension Appearance: Decodable {
         let startTiming = try? container.decodeIfPresent(String.self, forKey: .startTiming)
         let endTiming = try? container.decodeIfPresent(String.self, forKey: .endTiming)
         inOrder = startTiming == "NONE" || startTiming == "SOFT" || endTiming == "ADVANCE"
+        scenes = (try? container.decodeIfPresent([LenientScene].self, forKey: .scenes))?.compactMap(\.scene) ?? []
     }
 
     /// GraphQL's ISO 8601, with or without the decoder's date strategy.
@@ -184,6 +228,8 @@ struct LineupEntry: Hashable, Sendable, Identifiable {
 
     let content: Content
     let state: State
+    /// A break inside an act: the scene it follows.
+    var afterSceneID: UUID?
 
     var id: UUID {
         switch content {
@@ -194,7 +240,11 @@ struct LineupEntry: Hashable, Sendable, Identifiable {
 }
 
 extension LineupEntry: Decodable {
-    private enum CodingKeys: String, CodingKey { case id, kind, title, state }
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, title, state
+        case afterScene = "after_scene"
+    }
+    private struct Ref: Decodable { let id: UUID }
 
     /// An act needs a `person` with a name, as `Appearance` does; an unknown
     /// state reads as still to come.
@@ -210,6 +260,25 @@ extension LineupEntry: Decodable {
         }
         let wire = try? container.decodeIfPresent(String.self, forKey: .state)
         state = wire.flatMap { State(rawValue: $0) } ?? .upcoming
+        afterSceneID = (try? container.decodeIfPresent(Ref.self, forKey: .afterScene))?.id
+    }
+}
+
+extension LineupEntry {
+    /// A running order as it runs: an act with scenes is each of its scenes
+    /// in turn (who's on, not its billing like "First Set"), each followed by
+    /// the breaks after it.
+    static func inTurn(_ entries: [LineupEntry]) -> [LineupEntry] {
+        let acts = entries.compactMap { if case .act(let act) = $0.content { act } else { nil } }
+        let sceneIDs = Set(acts.flatMap { $0.scenes.map(\.id) })
+        let inside = { (entry: LineupEntry) in entry.afterSceneID.map(sceneIDs.contains) ?? false }
+        let after = Dictionary(grouping: entries.filter(inside), by: { $0.afterSceneID })
+        return entries.filter { !inside($0) }.flatMap { entry -> [LineupEntry] in
+            guard case .act(let act) = entry.content, !act.scenes.isEmpty else { return [entry] }
+            return zip(act.scenes, act.turns(in: entry.state)).flatMap { scene, turn in
+                [LineupEntry(content: .act(turn.appearance), state: turn.state)] + (after[scene.id] ?? [])
+            }
+        }
     }
 }
 
@@ -248,8 +317,10 @@ struct VenuePeopleMixin: Decodable {
         let upNext: Appearance? = next?.kind == "INTERMISSION" ? nil : (try? container.decodeIfPresent(Appearance.self, forKey: .upNext)) ?? nil
         let order = try? container.nestedContainer(keyedBy: ConnectionKeys.self, forKey: .runningOrder)
         let entries = (try? order?.decodeIfPresent([LenientLineupEntry].self, forKey: .nodes)) ?? nil
-        onNow = OnNow(acts: acts, intermission: intermission, upNext: upNext,
-                      lineup: entries?.compactMap(\.entry) ?? [])
+        // An act with scenes shows who's on in the scene on now, and the one up next.
+        onNow = OnNow(acts: acts.map { $0.turn(.on, actState: .on) }, intermission: intermission,
+                      upNext: upNext.map { $0.turn(.upcoming, actState: $0.scenes.contains(where: \.wentOn) ? .on : .upcoming) },
+                      lineup: LineupEntry.inTurn(entries?.compactMap(\.entry) ?? []))
     }
 }
 
@@ -268,6 +339,26 @@ private struct LenientPerson: Decodable {
 
     init(from decoder: any Decoder) throws {
         person = try? Person(from: decoder)
+    }
+}
+
+private struct LenientScene: Decodable {
+    let scene: Appearance.Scene?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, performers
+        case wentOnAt = "went_on_at"
+        case cameOffAt = "came_off_at"
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let id = try? container.decode(UUID.self, forKey: .id) else { scene = nil; return }
+        let performers = (try? container.decodeIfPresent([LenientPerson].self, forKey: .performers))?
+            .compactMap(\.person) ?? []
+        let wentOn = ((try? container.decodeIfPresent(String.self, forKey: .wentOnAt)) ?? nil) != nil
+        let cameOff = ((try? container.decodeIfPresent(String.self, forKey: .cameOffAt)) ?? nil) != nil
+        scene = Appearance.Scene(id: id, performers: performers, wentOn: wentOn, cameOff: cameOff)
     }
 }
 
