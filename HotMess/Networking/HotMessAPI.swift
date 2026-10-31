@@ -915,10 +915,13 @@ extension HotMessAPI {
         static let personSummaryFields = "id name avatar_url: avatarUrl"
 
         /// An act on a venue's lineup (see `Appearance`): its people for a
-        /// duet, and its timing for one on in the show's order.
+        /// duet, its timing for one on in the show's order, and its scenes
+        /// (and a break's scene before it), which the lineup lists in turn.
         static let appearanceFields = """
         id kind title role starts_at: startsAt ends_at: endsAt start_timing: startTiming end_timing: endTiming \
-        person { \(personSummaryFields) } people { nodes { \(personSummaryFields) } }
+        person { \(personSummaryFields) } people { nodes { \(personSummaryFields) } } \
+        scenes { id performers { \(personSummaryFields) } went_on_at: wentOnAt came_off_at: cameOffAt } \
+        after_scene: afterScene { id }
         """
 
         /// Who is on at a venue right now, and what its show has on stage and
