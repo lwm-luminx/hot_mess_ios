@@ -478,13 +478,14 @@ struct OnNowDecodingTests {
         """)
 
         let lineup = detail.onNow.lineup
-        let names = lineup.map { entry -> String in
+        let names = lineup.map { entry -> [String] in
             switch entry.content {
-            case .act(let appearance): appearance.name
-            case .intermission(let intermission): intermission.title ?? ""
+            case .act(let appearance): appearance.people.map(\.name)
+            case .intermission(let intermission): [intermission.title ?? ""]
             }
         }
-        #expect(names == ["Kiki", "Bar break", "Aurora", "Kiki & Aurora"])
+        // The last scene has no performers set, so its act's people are on it.
+        #expect(names == [["Kiki"], ["Bar break"], ["Aurora"], ["Kiki", "Aurora"]])
         #expect(lineup.map(\.state) == [.done, .done, .on, .upcoming])
         #expect(detail.onNow.acts.map(\.name) == ["Aurora"])
     }
