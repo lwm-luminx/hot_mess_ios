@@ -488,6 +488,14 @@ struct HotMessAPI: CoverPaymentAPI {
         try await query(Documents.safety, variables: [:], as: SafetyResponse.self).me ?? SafetyState()
     }
 
+    /// Whether the signed-in person may pick the API server in any install
+    /// (AudienceKit super admins). Its own query, so an API that predates
+    /// `canSwitchServer` fails only this.
+    func canSwitchServer() async throws -> Bool {
+        try await query(Documents.serverSwitch, variables: [:], as: ServerSwitchResponse.self).me?.canSwitchServer
+            ?? false
+    }
+
     func blockUser(_ id: UUID) async throws -> [BlockedUser] {
         try await query(
             Documents.blockUser,
@@ -1233,6 +1241,12 @@ extension HotMessAPI {
         }
         """
 
+        static let serverSwitch = """
+        query ServerSwitch {
+          me { can_switch_server: canSwitchServer }
+        }
+        """
+
         static let blockedUserFields = "id name avatar_url: avatarUrl"
 
         static let safety = """
@@ -1610,6 +1624,17 @@ struct MeResponse: Decodable, Sendable {
     }
 
     let me: State?
+}
+
+struct ServerSwitchResponse: Decodable, Sendable {
+    struct Me: Decodable, Sendable {
+        let canSwitchServer: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case canSwitchServer = "can_switch_server"
+        }
+    }
+    let me: Me?
 }
 
 struct SafetyResponse: Decodable, Sendable {

@@ -41,6 +41,15 @@ struct AppConfiguration: Sendable, Hashable {
     /// switch in Me, the testing aids and the ribboned icon. The same build
     /// from the App Store, or any main build, is an ordinary install.
     let isBetaInstall: Bool
+    /// Whether the Server picker shows and its choice counts: a beta, or an
+    /// install where an AudienceKit super admin signed in (the API's
+    /// `canSwitchServer`, remembered under ``serverSwitchKey``), App Store
+    /// builds included.
+    let canSwitchServer: Bool
+
+    /// Remembers that a super admin signed in here, so the server they picked
+    /// applies from launch, before anyone has signed in.
+    static let serverSwitchKey = "HotMessServerSwitchAllowed"
 
     static let defaultBaseURL = URL(string: "https://api.audiencekit.com")!
     static let defaultAudienceHost = "hotmess.admin.audiencekit.com"
@@ -95,7 +104,8 @@ struct AppConfiguration: Sendable, Hashable {
         let betaServer = (bundle.object(forInfoDictionaryKey: "HotMessBetaServer") as? String)
             .flatMap(APIServer.init(rawValue:))
         let isBeta = betaServer != nil && Self.isTestFlightInstall
-        if isBeta, let server = APIServer.stored() ?? betaServer {
+        let canSwitch = isBeta || UserDefaults.standard.bool(forKey: Self.serverSwitchKey)
+        if canSwitch, let server = APIServer.stored() ?? betaServer {
             serverBase = server.baseURL
             host = server.audienceHost
         }
@@ -144,6 +154,7 @@ struct AppConfiguration: Sendable, Hashable {
             .flatMap(Int.init) ?? 0
         apnsEnvironment = (bundle.object(forInfoDictionaryKey: "HotMessAPNSEnvironment") as? String).nonEmpty
         isBetaInstall = isBeta
+        canSwitchServer = canSwitch
     }
 
     init(
@@ -158,7 +169,8 @@ struct AppConfiguration: Sendable, Hashable {
         build: Int = 0,
         apnsEnvironment: String? = nil,
         newRelicToken: String? = nil,
-        isBetaInstall: Bool = false
+        isBetaInstall: Bool = false,
+        canSwitchServer: Bool? = nil
     ) {
         self.baseURL = baseURL
         self.beaconUUID = beaconUUID
@@ -172,6 +184,7 @@ struct AppConfiguration: Sendable, Hashable {
         self.apnsEnvironment = apnsEnvironment
         self.newRelicToken = newRelicToken
         self.isBetaInstall = isBetaInstall
+        self.canSwitchServer = canSwitchServer ?? isBetaInstall
     }
 
     /// Whether TestFlight installed this copy: its receipt is a sandbox one.
@@ -185,23 +198,27 @@ struct AppConfiguration: Sendable, Hashable {
         Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     }
 
-    /// Whether a server picked in a beta outlived it: the install is no longer
-    /// a beta (the App Store version replaced TestFlight's), so the choice is
+    /// Whether a server picked earlier outlived the right to pick it: the
+    /// install is no longer a beta (the App Store version replaced
+    /// TestFlight's) and no super admin signed in here, so the choice is
     /// ignored and the session, which the other API issued, has to go.
     var hasStaleServerChoice: Bool {
         #if TEST_HOOKS
         return false
         #else
-        return !isBetaInstall && APIServer.stored() != nil
+        return !canSwitchServer && APIServer.stored() != nil
         #endif
     }
 
     /// The icon this install should wear: the Next icon with its ribbon for a
     /// beta on the next API, the usual one with a Beta ribbon for a beta on
-    /// production, and the primary icon for everything else.
+    /// production, and the primary icon for everything else (but a super
+    /// admin's install on next).
     var alternateIconName: String? {
-        guard isBetaInstall else { return nil }
-        return apiServer == .next ? "AppIconNext" : "AppIconBeta"
+        if isBetaInstall { return apiServer == .next ? "AppIconNext" : "AppIconBeta" }
+        // A super admin's App Store install keeps its icon on production and
+        // wears the Next ribbon on next, so it's never mistaken for the other.
+        return canSwitchServer && apiServer == .next ? "AppIconNext" : nil
     }
 
     /// Whether this build's push tokens belong to APNs' sandbox: the
