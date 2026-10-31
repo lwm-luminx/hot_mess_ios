@@ -280,8 +280,14 @@ The same build installed from the App Store (it never is, but a main build is) a
 every main build stay ordinary: production API, primary icon, no switch. App Review
 installs into the same sandbox as TestFlight, which is why only main builds, which
 never set `HOTMESS_BETA_SERVER`, go to review. An App Store install that replaces a
-beta drops the stored server choice and signs out once
-(`AppConfiguration.hasStaleServerChoice`).
+beta drops the stored server choice (`AppConfiguration.hasStaleServerChoice`), and
+signs out only if the session came from next.
+
+Switching servers closes the app and keeps the person signed in where it can. The next
+API takes production's sign-ins (its `TRUSTED_API_ORIGIN`, audience_kit_api), so a
+production session carries over to next (`APIServer.trustedCredentialOrigins`, the SDK's
+`trustedCredentialOrigins`). Production never takes next's, so a session that began on
+next is signed out when switching to production (`APIServer.takes`).
 
 AudienceKit super admins are the exception: when one signs in (the API's
 `me.canSwitchServer`, read when Me opens), the install remembers it

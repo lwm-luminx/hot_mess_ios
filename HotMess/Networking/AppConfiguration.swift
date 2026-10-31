@@ -70,6 +70,21 @@ struct AppConfiguration: Sendable, Hashable {
             }
         }
 
+        /// The other APIs whose sign-ins this one takes: next takes
+        /// production's, so switching there keeps the session.
+        var trustedCredentialOrigins: [URL] {
+            self == .next ? [URL(string: APIServer.production.baseURL)!] : []
+        }
+
+        /// Whether a session `credential` belongs to works on this API: one
+        /// it issued, or production's on next (the API's
+        /// `TRUSTED_API_ORIGIN`). A session next issued doesn't work on
+        /// production, so going back there signs out.
+        func takes(_ credential: Credential?) -> Bool {
+            guard let host = credential?.origin?.host?.lowercased() else { return true }
+            return ([URL(string: baseURL)!] + trustedCredentialOrigins).contains { $0.host?.lowercased() == host }
+        }
+
         var audienceHost: String {
             switch self {
             case .next: "hotmess.admin.next.audiencekit.com"
@@ -260,7 +275,8 @@ struct AppConfiguration: Sendable, Hashable {
             facebookAppID: facebookAppID,
             environment: environment,
             coverPassPrefix: CoverPass.prefix,
-            feeLabel: String(localized: "Service fee")
+            feeLabel: String(localized: "Service fee"),
+            trustedCredentialOrigins: apiServer.trustedCredentialOrigins
         )
     }
 
