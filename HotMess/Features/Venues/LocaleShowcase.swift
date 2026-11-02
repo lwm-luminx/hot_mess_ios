@@ -94,7 +94,9 @@ struct LocaleScreen: View {
         LoadStateView(state: venues, retry: { Task { await load() } }) { local in
             ScrollView {
                 VStack(spacing: 24) {
-                    let layout = cardLayout?.layout ?? .fallback(Self.fallbackCards)
+                    // A layout without the locale's venues (a city the server doesn't know) gets the built-in order.
+                    let served = cardLayout?.layout
+                    let layout = served?.card(CardKind.venuesAll) != nil ? served! : .fallback(Self.fallbackCards)
                     ForEach(layout.cards) { card in
                         localeCard(card, local: local, layoutID: layout.id)
                     }
@@ -112,8 +114,9 @@ struct LocaleScreen: View {
     private func localeCard(_ card: LayoutCard, local: VenueCollection, layoutID: String?) -> some View {
         switch card.kind {
         case CardKind.eventsUpcoming:
-            let shown = card.isFallback ? Array(events.prefix(Self.fallbackEventCount))
-                : ordered(events, by: card.eventIDs, isFallback: false)
+            let picked = card.isFallback ? [] : ordered(events, by: card.eventIDs, isFallback: false)
+            // Ids this list doesn't have (an event at a venue filed elsewhere) fall back to the next few.
+            let shown = picked.isEmpty ? Array(events.prefix(Self.fallbackEventCount)) : picked
             CardSection(card.title ?? String(localized: "Coming up")) {
                 ForEach(shown) { event in
                     EventCardLink(event: event)

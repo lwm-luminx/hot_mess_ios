@@ -96,7 +96,9 @@ struct VenuesScreen: View {
         .task {
             // The ranking moves with the night: ask again when it says to.
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(cardLayout?.layout.refreshAfter ?? 60))
+                // Whichever of the two layouts is due first.
+                let after = min(cardLayout?.layout.refreshAfter ?? 60, everywhereLayout?.layout.refreshAfter ?? 60)
+                try? await Task.sleep(for: .seconds(after))
                 await loadCards(force: false)
             }
         }
