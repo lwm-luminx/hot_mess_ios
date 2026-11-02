@@ -24,11 +24,14 @@ enum AppRoute: Hashable, Sendable {
     case posts(PostsSubject, title: String)
     /// A locale's updates feed, from Now.
     case updates(AppLocale)
+    /// A locale's own page from the Venues tab's Everywhere view: some of
+    /// its events and its venues, as the server lays them out.
+    case locale(UUID, name: String)
 
     /// Which tab the route belongs in.
     var tab: AppTab {
         switch self {
-        case .venue, .venueChat, .karaokeList: .venues
+        case .venue, .venueChat, .karaokeList, .locale: .venues
         case .event: .events
         case .person: .people
         case .localeChat, .eventChat, .ping, .updates: .now

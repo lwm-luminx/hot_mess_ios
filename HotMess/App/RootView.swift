@@ -143,6 +143,8 @@ struct RouteDestination: View {
             PostsScreen(subject: subject, title: title)
         case let .updates(locale):
             UpdatesScreen(locale: locale)
+        case let .locale(id, name):
+            LocaleScreen(localeID: id, name: name)
         }
     }
 }
