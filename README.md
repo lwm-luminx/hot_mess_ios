@@ -184,10 +184,26 @@ The previous suite authenticated against Facebook with a token committed to the
 repository and then called the live API, so it could not run offline and could
 not distinguish a regression from an outage.
 
-There is no CI build: macOS runner minutes cost ten times Linux ones. Before merging,
-build on a Mac from the AudienceKit checkout with `scripts/verify-apple.sh hotmess`
-(see the AudienceKit README, "Verifying Apple targets"). What CI does run is
-`.github/workflows/graphql-documents.yml`, which checks every GraphQL document in
+### CI
+
+The app builds and tests in **Xcode Cloud**, not GitHub Actions: macOS runner
+minutes on GitHub cost ten times Linux ones. Every push to `main` and `next` runs
+an Xcode Cloud workflow (`HotMess | Default` for `main`, `HotMess | Next` for
+`next`) that builds, runs the tests and archives, and the results show on the
+commit in GitHub as the `HotMess | … | Build - iOS`, `Test - iOS` and
+`Archive - iOS` checks. `ci_scripts/ci_pre_xcodebuild.sh` points the UI tests at
+the API for the branch being built (`main` → production, anything else → next)
+and marks non-`main` archives as betas; `ci_scripts/ci_post_xcodebuild.sh`
+reports beta archives to AudienceKit so TestFlight testers are offered them.
+
+Pull request branches aren't built by Xcode Cloud, so before merging, build on a
+Mac from the AudienceKit checkout with `scripts/verify-apple.sh hotmess` (see the
+AudienceKit README, "Verifying Apple targets"); a regression that slips past it
+fails the `next` build that the merge triggers, ahead of the release PR that
+promotes `next` to `main`.
+
+GitHub Actions runs `.github/workflows/graphql-documents.yml` on pushes and pull
+requests that touch Swift sources. It checks every GraphQL document in
 `HotMess/` and `HotMessTests/` against the published consumer schema (see
 [Validate your GraphQL documents](https://developer.audiencekit.com/api/validate-documents/)).
 The dumps publish from the API's `main`, so while this app tracks `next` the step
