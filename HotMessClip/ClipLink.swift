@@ -45,4 +45,6 @@ struct ClipCard: Decodable, Sendable {
     let title: String
     let description: String
     let image: Image?
+    /// `view=clip` only: what the clip can sell before sign-in.
+    var clip: ClipOffer? = nil
 }

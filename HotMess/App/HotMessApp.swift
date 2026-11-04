@@ -31,6 +31,12 @@ struct HotMessApp: App {
                 .environment(model)
                 .tint(model.brand.accent)
                 .task { await start() }
+                // Covers and tips paid in the App Clip before signing in
+                // become this account's (their claim tokens are in the
+                // clip's keychain, which iOS hands the app on install).
+                .task(id: model.session.isSignedIn) {
+                    if model.session.isSignedIn { await GuestPurchaseClaims.claim(client: model.audienceKit) }
+                }
                 .onOpenURL(perform: handle)
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }

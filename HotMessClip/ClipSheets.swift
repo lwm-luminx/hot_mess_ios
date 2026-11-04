@@ -3,12 +3,15 @@ import AuthenticationServices
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-/// The sheet over the record: sign in if there's no session (the API needs
-/// one for prices, tiers and payments), pick a tier or an amount, pay with
-/// Apple Pay, then the pass or the receipt with the app underneath.
+/// The sheet over the record. Pay first where the API takes guest checkout
+/// (the share card's `clip` block): pick a tier or an amount, pay with Apple
+/// Pay, then offer Sign in with Apple to keep the pass or receipt. Where it
+/// doesn't (Square, a Community record), sign in first as before.
 struct ClipCheckoutSheet: View {
     let flow: ClipFlow
     let link: ClipLink
+    /// The share card's title: the venue, event or performer.
+    let title: String
     @Bindable var session: ClipSession
     let getApp: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +23,9 @@ struct ClipCheckoutSheet: View {
         case signIn
         case cover(ClipDetails)
         case tip(ClipPerformer, preselected: Int?)
+        case guestCover(venueID: UUID, cover: ClipOffer.Cover)
+        case guestTip(personID: UUID, tipping: ClipOffer.Tipping, preselected: Int?)
+        case keep(ClipReceipt)
         case pass(Admission)
         case thanks(ClipTip, ClipPerformer)
         case unavailable(String)
@@ -49,6 +55,26 @@ struct ClipCheckoutSheet: View {
                         case let .failed(message): failure = message
                         }
                     }
+                case let .guestCover(venueID, cover):
+                    ClipGuestCoverPicker(venueID: venueID, title: title, cover: cover, checkout: session.checkout) { result in
+                        session.guestPurchasesChanged()
+                        switch result {
+                        case let .paid(admission): step = .keep(.pass(admission))
+                        case .canceled: break
+                        case let .failed(message): failure = message
+                        }
+                    }
+                case let .guestTip(personID, tipping, preselected):
+                    ClipGuestTipPicker(personID: personID, name: title, tipping: tipping, preselected: preselected,
+                                       checkout: session.checkout) { result in
+                        switch result {
+                        case let .paid(tip): step = .keep(.thanks(tip))
+                        case .canceled: break
+                        case let .failed(message): failure = message
+                        }
+                    }
+                case let .keep(receipt):
+                    ClipKeepView(receipt: receipt, name: title, session: session) { step = after(receipt) }
                 case let .pass(admission):
                     ClipPassView(admission: admission, session: session, getApp: getApp)
                 case let .thanks(tip, performer):
@@ -82,10 +108,53 @@ struct ClipCheckoutSheet: View {
 
     private var isPass: Bool { if case .pass = step { true } else { false } }
 
+    /// The performer the guest tip went to, from the share card.
+    private var guestPerformer: ClipPerformer {
+        ClipPerformer(id: session.offer?.personId ?? UUID(), name: title.isEmpty ? nil : title, tipping: nil)
+    }
+
+    private func after(_ receipt: ClipReceipt) -> Step {
+        switch receipt {
+        case let .pass(admission): .pass(admission)
+        case let .thanks(tip): .thanks(tip, guestPerformer)
+        }
+    }
+
     @MainActor private func advance() async {
         switch step {
         case .pass, .thanks: return
+        case let .keep(receipt):
+            // Signed in on the keep screen: the session claimed the purchase.
+            if session.signedIn { step = after(receipt) }
+            return
         default: break
+        }
+        if !session.signedIn, case .cover = flow, let purchase = session.guestPass {
+            // Paid here before, as a guest: show that pass again.
+            step = .loading
+            do {
+                step = .pass(try await session.checkout.refreshGuestCover(purchase))
+                return
+            } catch let error as AudienceKitError where error.status == 404 {
+                // Claimed elsewhere, or gone: forget it and sell a new one.
+                GuestPurchaseStore.shared.update { $0.remove(token: purchase.claimToken) }
+                session.guestPurchasesChanged()
+            } catch {
+                guard !Task.isCancelled else { return }
+                step = .unavailable(error.localizedDescription)
+                return
+            }
+        }
+        if session.guestCheckout(for: flow), let offer = session.offer {
+            switch flow {
+            case .cover:
+                if let guest = offer.guestCover { step = .guestCover(venueID: guest.venueID, cover: guest.cover); return }
+            case let .tip(preselected):
+                if let guest = offer.guestTipping {
+                    step = .guestTip(personID: guest.personID, tipping: guest.tipping, preselected: preselected)
+                    return
+                }
+            }
         }
         guard session.signedIn else { step = .signIn; return }
         step = .loading
@@ -211,26 +280,7 @@ struct ClipCoverPicker: View {
     }
 
     private func tierRow(name: String, detail: String?, price: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Circle().strokeBorder(selected ? ClipTheme.accent : ClipTheme.borderStrong, lineWidth: selected ? 7 : 1.5)
-                    .frame(width: 22, height: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.ink)
-                    if let detail, !detail.isEmpty { Text(detail).font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted).lineLimit(2) }
-                }
-                Spacer()
-                Text(price).font(.system(size: 15, weight: .bold)).foregroundStyle(ClipTheme.ink)
-            }
-            .padding(12)
-            .background(selected ? ClipTheme.accentSoft : ClipTheme.surfaceSunken,
-                        in: RoundedRectangle(cornerRadius: ClipTheme.controlRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: ClipTheme.controlRadius, style: .continuous)
-                .strokeBorder(ClipTheme.accent, lineWidth: selected ? 2 : 0))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
-        .disabled(checkout.busy)
+        ClipTierRow(name: name, detail: detail, price: price, selected: selected, disabled: checkout.busy, action: action)
     }
 }
 
@@ -325,6 +375,10 @@ struct ClipPassView: View {
     @State private var confirmRefund = false
     @State private var refunding = false
     @State private var error: String?
+    /// Its claim token, while this is a guest pass (bought before sign-in and
+    /// not claimed): no Wallet pass or refund until it's on an account.
+    @State private var guestPurchase: GuestPurchase?
+    @State private var checking = false
 
     var body: some View {
         ScrollView {
@@ -355,15 +409,21 @@ struct ClipPassView: View {
                 }
                 VStack(spacing: 0) {
                     row("Tier", admission.tier ?? "General admission")
-                    row("Guest", admission.profile?.name ?? "You")
+                    row("Guest", admission.profile?.name ?? (admission.quantity > 1 ? "You +\(admission.quantity - 1)" : "You"))
                     row("Paid", "\(admission.quantity) admission · \(admission.price)")
                     row("Valid", admission.nightTitle)
                 }
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 if let error { Text(error).font(.system(size: 13)).foregroundStyle(Color(hex: 0xFFC9A3)) }
-                if admission.isPaid { ClipWalletPassButton(admission: admission, client: session.client) }
+                if admission.isPaid, guestPurchase == nil, session.signedIn {
+                    ClipWalletPassButton(admission: admission, client: session.client)
+                }
+                if !admission.isPaid, let guestPurchase, admission.status == .pending {
+                    Button(checking ? "Checking…" : "Check again") { Task { await check(guestPurchase) } }
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.8)).disabled(checking)
+                }
                 Button("Keep this pass in Hot Mess") { getApp() }.buttonStyle(ClipAccentButtonStyle())
-                if admission.isPaid, admission.isRefundable {
+                if admission.isPaid, admission.isRefundable, guestPurchase == nil {
                     Button("Refund") { confirmRefund = true }
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.8)).disabled(refunding)
                         .confirmationDialog("Refund this cover?", isPresented: $confirmRefund, titleVisibility: .visible) {
@@ -375,6 +435,13 @@ struct ClipPassView: View {
             }
         }
         .scrollIndicators(.hidden)
+        .task(id: session.guestRevision) { guestPurchase = GuestPurchaseStore.shared.load().purchase(id: admission.id) }
+    }
+
+    @MainActor private func check(_ purchase: GuestPurchase) async {
+        checking = true
+        defer { checking = false }
+        do { admission = try await session.checkout.refreshGuestCover(purchase) } catch { self.error = error.localizedDescription }
     }
 
     private func row(_ label: String, _ value: String) -> some View {
@@ -422,5 +489,243 @@ struct ClipThanksView: View {
             Button("Follow \(performer.firstName) in Hot Mess") { getApp() }.buttonStyle(ClipAccentButtonStyle())
             ClipFinePrint(text: Text("Their shows, posts and the chat are in the app."))
         }
+    }
+}
+
+// MARK: - Guest checkout
+
+/// What a guest just paid for, shown under "Keep your pass".
+enum ClipReceipt {
+    case pass(Admission)
+    case thanks(ClipTip)
+}
+
+/// After a guest payment: Sign in with Apple to keep it on an account, or
+/// skip. Skipping keeps the pass on this phone (its claim token is in the
+/// keychain) and the app claims it after its own sign-in.
+struct ClipKeepView: View {
+    let receipt: ClipReceipt
+    let name: String
+    @Bindable var session: ClipSession
+    let skip: () -> Void
+    @State private var verdict: AgeGate.Verdict?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ClipSpectrumBar(height: 4)
+            ClipOverline(text: overline)
+            Text(title).font(.system(size: 24, weight: .bold)).kerning(-0.3).foregroundStyle(ClipTheme.ink)
+            Text(message).font(.system(size: 15)).foregroundStyle(ClipTheme.inkMuted)
+            if verdict == .minor {
+                Text("Hot Mess accounts are for people 18 and older.").font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.warning)
+            } else {
+                SignInWithAppleButton(.continue) { $0.requestedScopes = [.fullName, .email] } onCompletion: { result in
+                    AgeGate.confirm()
+                    Task { await session.signIn(result) }
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 50).clipShape(Capsule())
+                .disabled(session.busy)
+                if session.busy { ProgressView("Signing in…").tint(ClipTheme.accentInk).font(.system(size: 13)) }
+                if let error = session.error { Text(error).font(.system(size: 13)).foregroundStyle(ClipTheme.warning) }
+            }
+            Button(skipTitle, action: skip).buttonStyle(ClipQuietButtonStyle()).disabled(session.busy)
+            if verdict != .minor {
+                ClipFinePrint(text: Text("By continuing you confirm you're 18 or older and accept the [Terms](https://hotmess.social/terms/) and [Privacy Policy](https://hotmess.social/privacy/). Hide My Email is fine."))
+            }
+        }
+        .task { verdict = await AgeGate.requestDeclaredAge() }
+    }
+
+    private var overline: String {
+        switch receipt {
+        case let .pass(admission): admission.isPaid ? "You're on the list" : "Payment processing"
+        case let .thanks(tip): tip.isPaid ? "Sent" : "Processing"
+        }
+    }
+
+    private var title: String {
+        switch receipt {
+        case .pass: "Keep your pass"
+        case .thanks: "Thank you!"
+        }
+    }
+
+    private var message: String {
+        switch receipt {
+        case let .pass(admission):
+            "Sign in with Apple to keep your \(admission.venueName.isEmpty ? "" : "\(admission.venueName) ")pass on your account, so it's waiting in Hot Mess and you can refund it there. Or skip: the pass stays on this phone tonight."
+        case let .thanks(tip):
+            "\(tip.amount.formatted) is on its way to \(name.isEmpty ? "them" : name). Sign in with Apple to put your first name on it and keep the receipt in Hot Mess."
+        }
+    }
+
+    private var skipTitle: String {
+        switch receipt {
+        case .pass: "Not now, show my pass"
+        case .thanks: "Not now"
+        }
+    }
+}
+
+/// Tonight's cover from the share card, before sign-in.
+struct ClipGuestCoverPicker: View {
+    let venueID: UUID
+    let title: String
+    let cover: ClipOffer.Cover
+    @Bindable var checkout: ClipCheckout
+    let done: (ClipCheckout.CoverResult) -> Void
+    @State private var tier: ClipOffer.Tier?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ClipOverline(text: "Cover · \(CoverFormat.night(cover.night))")
+            Text(title).font(.system(size: 24, weight: .bold)).kerning(-0.3).foregroundStyle(ClipTheme.ink)
+            if let from = cover.coverFrom.flatMap(CoverFormat.time) {
+                Text("Doors \(from)\(cover.coverUntil.flatMap(CoverFormat.time).map { " · until \($0)" } ?? "")")
+                    .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+            }
+            VStack(spacing: 8) {
+                ClipTierRow(name: "General admission", detail: nil, price: cover.total.formatted, selected: tier == nil,
+                            disabled: checkout.busy) { tier = nil }
+                ForEach(cover.tiers) { item in
+                    ClipTierRow(name: item.name, detail: item.description, price: item.total(cover.currency).formatted,
+                                selected: tier == item, disabled: checkout.busy) { tier = item }
+                }
+            }
+            let total = tier?.total(cover.currency) ?? cover.total
+            let fee = tier?.fee(cover.currency) ?? cover.fee
+            HStack {
+                Text("1 person").font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                Spacer()
+                Text(fee.cents > 0 ? "\(total.formatted) total, includes a \(fee.formatted) fee" : "\(total.formatted) total")
+                    .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+            }
+            if checkout.busy {
+                ProgressView("Processing…").tint(ClipTheme.accentInk).frame(maxWidth: .infinity).frame(height: 50)
+            } else {
+                ClipApplePayButton(label: .checkout) {
+                    Task { done(await checkout.payGuestCover(venueID: venueID, venueName: title, night: cover.night, tier: tier)) }
+                }
+            }
+            ClipFinePrint(text: Text("No account needed. Paid to \(title) through Hot Mess. Sign in afterwards to keep the pass in Hot Mess. [Terms](https://hotmess.social/terms/)"))
+        }
+    }
+}
+
+/// A tier's radio row, shared by the member and guest pickers.
+struct ClipTierRow: View {
+    let name: String
+    let detail: String?
+    let price: String
+    let selected: Bool
+    var disabled = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Circle().strokeBorder(selected ? ClipTheme.accent : ClipTheme.borderStrong, lineWidth: selected ? 7 : 1.5)
+                    .frame(width: 22, height: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.ink)
+                    if let detail, !detail.isEmpty { Text(detail).font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted).lineLimit(2) }
+                }
+                Spacer()
+                Text(price).font(.system(size: 15, weight: .bold)).foregroundStyle(ClipTheme.ink)
+            }
+            .padding(12)
+            .background(selected ? ClipTheme.accentSoft : ClipTheme.surfaceSunken,
+                        in: RoundedRectangle(cornerRadius: ClipTheme.controlRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: ClipTheme.controlRadius, style: .continuous)
+                .strokeBorder(ClipTheme.accent, lineWidth: selected ? 2 : 0))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .disabled(disabled)
+    }
+}
+
+/// A tip from the share card's presets, before sign-in: chips, another
+/// amount, a note and whether to show a first name once it's claimed.
+struct ClipGuestTipPicker: View {
+    let personID: UUID
+    let name: String
+    let tipping: ClipOffer.Tipping
+    let preselected: Int?
+    @Bindable var checkout: ClipCheckout
+    let done: (ClipCheckout.TipResult) -> Void
+    @State private var selected: Int?
+    @State private var typed = ""
+    @State private var note = ""
+    @State private var showFirstName = true
+    @FocusState private var typing: Bool
+
+    private var amounts: ClipTipAmounts { tipping.amounts }
+    private var amountCents: Int? { selected ?? amounts.cents(fromTyped: typed) }
+    private var firstName: String { name.isEmpty ? "them" : name.firstNameForDisplay }
+    private var noteLimit: Int { tipping.noteLength ?? 140 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ClipOverline(text: "Tip")
+            Text(name.isEmpty ? "Tip the performer" : "Tip \(name)").font(.system(size: 24, weight: .bold)).kerning(-0.3).foregroundStyle(ClipTheme.ink)
+            let chips = amounts.chips
+            if !chips.isEmpty {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: min(chips.count, 4)), spacing: 8) {
+                    ForEach(chips, id: \.self) { cents in
+                        ClipChip(title: ClipTipAmounts.whole(cents, amounts.currency), selected: selected == cents, height: 56) {
+                            selected = cents
+                            typed = ""
+                            typing = false
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Or another amount").font(.system(size: 13, weight: .semibold)).foregroundStyle(ClipTheme.inkMuted)
+                HStack(spacing: 6) {
+                    Text(amounts.currency.lowercased() == "usd" ? "$" : amounts.currency.uppercased())
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.inkMuted)
+                    TextField("0", text: $typed).keyboardType(.decimalPad).focused($typing).font(.system(size: 15))
+                        .onChange(of: typed) { _, _ in if !typed.isEmpty { selected = nil } }
+                }
+                .padding(.horizontal, 12).frame(height: 44)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(typing ? ClipTheme.accent : ClipTheme.borderStrong))
+                Text(amounts.boundsText).font(.system(size: 12)).foregroundStyle(ClipTheme.inkMuted)
+            }
+            TextField("Add a note (optional)", text: $note, axis: .vertical)
+                .lineLimit(1...3).font(.system(size: 15))
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(ClipTheme.borderStrong))
+                .onChange(of: note) { _, _ in if note.count > noteLimit { note = String(note.prefix(noteLimit)) } }
+            Toggle("Show \(firstName) my first name", isOn: $showFirstName)
+                .font(.system(size: 15)).tint(ClipTheme.accent)
+            if let amountCents {
+                if let quote = tipping.quote(for: amountCents) {
+                    Text(quote.feeCents > 0 ? "\(quote.amount.formatted) tip + \(quote.fee.formatted) fee = \(quote.total.formatted)" : "\(quote.total.formatted) total")
+                        .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                } else {
+                    Text("A small card fee is added so \(firstName) gets the full tip. Apple Pay shows the total.")
+                        .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                }
+            }
+            if checkout.busy {
+                ProgressView("Processing…").tint(ClipTheme.accentInk).frame(maxWidth: .infinity).frame(height: 50)
+            } else if let amountCents {
+                ClipApplePayButton(label: .tip) {
+                    typing = false
+                    Task {
+                        done(await checkout.payGuestTip(personID: personID, performerName: name.isEmpty ? "the performer" : name,
+                                                        amountCents: amountCents, note: note, showFirstName: showFirstName))
+                    }
+                }
+            } else {
+                Text("Pick an amount").font(.system(size: 17, weight: .semibold)).foregroundStyle(ClipTheme.inkMuted)
+                    .frame(maxWidth: .infinity).frame(height: 50).background(ClipTheme.controlFill, in: Capsule())
+            }
+            ClipFinePrint(text: Text("No account needed. Paid to \(firstName) through Hot Mess. Your first name shows once you sign in. Tips aren't refundable. [Terms](https://hotmess.social/terms/)"))
+        }
+        .onAppear { selected = preselected.flatMap { amounts.isAllowed($0) ? $0 : nil } ?? amounts.suggested }
     }
 }

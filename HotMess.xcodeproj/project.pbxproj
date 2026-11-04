@@ -27,6 +27,8 @@
 		ACCB00000000000000000073 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000006; };
 		ACCB00000000000000000074 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000007; };
 		ACCB00000000000000000075 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000008; };
+		ACCB00000000000000000076 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000009; };
+		ACCB00000000000000000077 = { isa = PBXBuildFile; fileRef = ACCB0000000000000000000A; };
 		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = AC0000000000000000000093; };
 		ACCB000000000000000000D3 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F0; };
 		ACCC0000000000000000000A = {isa = PBXBuildFile; fileRef = ACCC00000000000000000001; };
@@ -73,6 +75,8 @@
 		ACCB00000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/User.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/DisplayText.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000008 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/Decoding.swift"; sourceTree = SOURCE_ROOT; };
+		ACCB00000000000000000009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/GuestPurchases.swift"; sourceTree = SOURCE_ROOT; };
+		ACCB0000000000000000000A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/GuestPurchaseClaims.swift"; sourceTree = SOURCE_ROOT; };
 		ACCC00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotMess/Models/ShareInvitation.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -165,6 +169,8 @@
 				ACCB00000000000000000006,
 				ACCB00000000000000000007,
 				ACCB00000000000000000008,
+				ACCB00000000000000000009,
+				ACCB0000000000000000000A,
 				ACCC00000000000000000001,
 				ACCA00000000000000000001,
 				AC0000000000000000000004 /* Configurations */,
@@ -445,7 +451,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000077,ACCB00000000000000000076,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
