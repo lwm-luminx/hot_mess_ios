@@ -119,7 +119,10 @@ final class AppModel {
         let api = HotMessAPI(client: APIClient(audienceKit: audienceKit))
         self.api = api
 
-        updates = AudienceUpdates.configure(session: audienceKit, appName: String(localized: "Hot Mess"))
+        // A beta (next or a feature branch) is compared with TestFlight's betas, main's archives with main's: build
+        // numbers only compare within the branch that made them.
+        updates = AudienceUpdates.configure(session: audienceKit, appName: String(localized: "Hot Mess"),
+                                            isBeta: configuration.isBetaInstall)
 
         brand = BrandStore(audienceKit: audienceKit)
         cards = CardSettings(audienceKit: audienceKit)

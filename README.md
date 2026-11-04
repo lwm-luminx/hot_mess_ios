@@ -194,7 +194,8 @@ commit in GitHub as the `HotMess | … | Build - iOS`, `Test - iOS` and
 `Archive - iOS` checks. `ci_scripts/ci_pre_xcodebuild.sh` points the UI tests at
 the API for the branch being built (`main` → production, anything else → next)
 and marks non-`main` archives as betas; `ci_scripts/ci_post_xcodebuild.sh`
-reports beta archives to AudienceKit so TestFlight testers are offered them.
+reports each archive to AudienceKit so TestFlight testers are offered it: `main`'s on
+the `testflight` channel, betas on `testflight_beta`.
 
 Pull request branches aren't built by Xcode Cloud, so before merging, build on a
 Mac from the AudienceKit checkout with `scripts/verify-apple.sh hotmess` (see the
@@ -322,9 +323,11 @@ too.
 `Scripts/testflight.sh --next` uploads a beta from a Mac (Release, with
 `HOTMESS_BETA_SERVER=next`); without it the script uploads an ordinary build. The
 Staging configuration remains for UI tests and local runs against next, under the same
-bundle ID. Only beta archives report themselves as TestFlight's latest build
-(`ci_post_xcodebuild.sh`), so testers aren't offered a main build their group doesn't
-get.
+bundle ID. Build numbers from `main` and `next` interleave on the one Xcode Cloud
+counter but only compare within their branch, so each reports on its own update
+channel (`ci_post_xcodebuild.sh`): main's archives on `testflight`, betas on
+`testflight_beta`. A beta install reads the beta channel (`AudienceUpdates(isBeta:)`),
+so nobody is offered a build their TestFlight group doesn't get.
 
 ## App Clip
 
