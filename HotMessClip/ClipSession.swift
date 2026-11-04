@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import AuthenticationServices
 import Observation
 import SwiftUI
@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 @Observable
 final class ClipSession {
-    let client: AudienceKitClient
+    let client: AudienceSession
     let api: ClipAPI
     let guest: ClipGuestAPI
     let checkout: ClipCheckout
@@ -48,7 +48,7 @@ final class ClipSession {
         }
         let environment = (info.object(forInfoDictionaryKey: "AudienceKitEnvironment") as? String)
             .flatMap(AudienceKitEnvironment.init(rawValue:)) ?? .production
-        let client = AudienceKitClient(
+        let client = AudienceSession(
             configuration: AudienceKitConfiguration(baseURL: base, host: host, environment: environment),
             credentialStore: HotMessAuthentication.clipStore
         )

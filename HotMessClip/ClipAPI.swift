@@ -1,10 +1,10 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 
 /// Authenticated reads and the two payments the clip takes. Same audience
 /// endpoint and ban checks as Hot Mess; every call here needs a session.
 struct ClipAPI: Sendable {
-    let client: AudienceKitClient
+    let client: AudienceSession
 
     // MARK: Records
 
@@ -276,7 +276,7 @@ enum ClipError: LocalizedError {
 /// their `confirm`, audience_kit_api doc/APP_CLIP_CHECKOUT.md). No session:
 /// `host` picks the audience and the claim token is the key to the purchase.
 struct ClipGuestAPI: Sendable {
-    let client: AudienceKitClient
+    let client: AudienceSession
 
     private var host: String? { client.configuration.host }
 

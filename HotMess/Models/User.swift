@@ -3,7 +3,7 @@
 //  HotMess
 //
 
-import AudienceKit
+import AudienceCore
 import Foundation
 
 struct User: Codable, Hashable, Sendable, Identifiable {
