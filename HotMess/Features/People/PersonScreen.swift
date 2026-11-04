@@ -57,10 +57,10 @@ struct PersonScreen: View {
                                 Text("No upcoming events.")
                                     .foregroundStyle(.secondary)
                             }
-                        } else if detail.events.count > 1 {
-                            // The next one is on the hero.
+                        } else if !Event.listedAfterHero(detail.events).isEmpty {
+                            // The next one is on the hero; it's listed again unless it's on now.
                             CardSection(String(localized: "More Events")) {
-                                ForEach(detail.events.dropFirst()) { event in
+                                ForEach(Event.listedAfterHero(detail.events)) { event in
                                     EventCardLink(event: event, photoURL: event.photoURL(prioritizing: .venueFirst, personFallback: detail.person))
                                 }
                             }

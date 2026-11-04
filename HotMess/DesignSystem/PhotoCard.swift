@@ -381,6 +381,14 @@ extension Event {
         startDate <= date && date < (endDate ?? startDate.addingTimeInterval(4 * 3600))
     }
 
+    /// A list under a hero that names `events.first`: the first is left out
+    /// only while it's on, since the hero then leads with it. One that hasn't
+    /// started yet stays listed, so it still shows with the others.
+    static func listedAfterHero(_ events: [Event], at date: Date = .now) -> ArraySlice<Event> {
+        if let first = events.first, first.isOn(at: date) { return events.dropFirst() }
+        return events[...]
+    }
+
     /// A venue row's line: "Bear Night · until 2 AM" while it's on, else the
     /// next-up line ("Tonight · Drag Bingo at 9 PM").
     func venueRowLine(at date: Date = .now) -> String {
