@@ -10,6 +10,10 @@ struct EventSection: Hashable, Sendable, Identifiable {
     let id: String
     let title: String
     let events: [Event]
+
+    /// The Featured section `EventListing(upcoming:)` makes; its cards are featured height.
+    static let featuredID = "recommended"
+    var isFeatured: Bool { id == Self.featuredID }
 }
 
 /// `/v1/locales/{id}/events` returns `sections` as a dictionary keyed by
@@ -32,7 +36,7 @@ struct EventListing: Decodable, Hashable, Sendable {
         let upcoming = sorted.filter { !featuredIDs.contains($0.id) }
 
         sections = [
-            EventSection(id: "recommended", title: String(localized: "Featured"), events: featured),
+            EventSection(id: EventSection.featuredID, title: String(localized: "Featured"), events: featured),
             EventSection(id: "upcoming", title: String(localized: "Upcoming"), events: upcoming),
         ].filter { !$0.events.isEmpty }
     }

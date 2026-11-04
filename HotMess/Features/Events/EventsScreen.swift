@@ -37,7 +37,12 @@ struct EventsScreen: View {
                             )
                         } else {
                             ForEach(listing.sections) { section in
-                                eventsSection(section.title, events: section.events, empty: String(localized: "No events."))
+                                eventsSection(
+                                    section.title,
+                                    events: section.events,
+                                    empty: String(localized: "No events."),
+                                    featured: section.isFeatured
+                                )
                             }
                         }
                     }
@@ -59,7 +64,7 @@ struct EventsScreen: View {
     }
 
     @ViewBuilder
-    private func eventsSection(_ title: String, events: [Event], empty: String) -> some View {
+    private func eventsSection(_ title: String, events: [Event], empty: String, featured: Bool = false) -> some View {
         if events.isEmpty {
             DetailSection(title) {
                 Text(empty)
@@ -68,7 +73,8 @@ struct EventsScreen: View {
         } else {
             CardSection(title) {
                 ForEach(events) { event in
-                    EventCardLink(event: event)
+                    // Featured is sized as featured; elsewhere a card goes by the event's own flag.
+                    EventCardLink(event: event, featured: featured ? true : nil)
                 }
             }
         }
