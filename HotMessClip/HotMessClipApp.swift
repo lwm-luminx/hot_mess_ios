@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import StoreKit
 import SwiftUI
 

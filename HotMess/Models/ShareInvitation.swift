@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 
 struct ShareInvitation: Decodable, Sendable {
@@ -18,7 +18,7 @@ struct ShareInvitation: Decodable, Sendable {
         case senderName = "sender_name", expiresAt = "expires_at"
     }
 
-    static func load(path: String, token: String, client: AudienceKitClient) async throws -> Self {
+    static func load(path: String, token: String, client: AudienceSession) async throws -> Self {
         let data = try await client.data(for: APIRequest(path: "/v1/share/invitation", queryItems: [
             URLQueryItem(name: "host", value: client.configuration.host),
             URLQueryItem(name: "path", value: path), URLQueryItem(name: "e", value: token)

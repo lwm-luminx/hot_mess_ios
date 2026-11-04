@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 
 /// Attaches the clip's guest covers and tips to whoever just signed in
@@ -15,7 +15,7 @@ enum GuestPurchaseClaims {
 
     /// Claims every waiting token. Errors leave the tokens for the next try.
     @discardableResult
-    static func claim(client: AudienceKitClient, store: GuestPurchaseStore = .shared) async -> Outcome {
+    static func claim(client: AudienceSession, store: GuestPurchaseStore = .shared) async -> Outcome {
         store.update { $0.prune(today: GuestPurchaseList.today()) }
         let tokens = store.load().claimable(host: client.configuration.host)
         guard !tokens.isEmpty else { return Outcome() }

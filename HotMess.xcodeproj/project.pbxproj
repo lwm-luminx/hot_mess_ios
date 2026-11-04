@@ -29,7 +29,7 @@
 		ACCB00000000000000000075 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000008; };
 		ACCB00000000000000000076 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000009; };
 		ACCB00000000000000000077 = { isa = PBXBuildFile; fileRef = ACCB0000000000000000000A; };
-		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = AC0000000000000000000093; };
+		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F1; };
 		ACCB000000000000000000D3 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F0; };
 		ACCC0000000000000000000A = {isa = PBXBuildFile; fileRef = ACCC00000000000000000001; };
 /* End PBXBuildFile section */
@@ -303,7 +303,7 @@
 			productReference = AC0000000000000000000024 /* HotMessScreenshots.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; packageProductDependencies = (AC0000000000000000000093, ACCB000000000000000000F0,); productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
+		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; packageProductDependencies = (ACCB000000000000000000F1, ACCB000000000000000000F0,); productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -1113,6 +1113,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AC0000000000000000000084 /* XCRemoteSwiftPackageReference "in-app-payments-ios" */;
 			productName = SquareInAppPaymentsSDK;
+		};
+		ACCB000000000000000000F1 /* AudienceCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
+			productName = AudienceCore;
 		};
 		ACCB000000000000000000F0 /* StripeApplePay */ = {
 			isa = XCSwiftPackageProductDependency;

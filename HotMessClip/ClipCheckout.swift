@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 import Observation
 @preconcurrency import PassKit

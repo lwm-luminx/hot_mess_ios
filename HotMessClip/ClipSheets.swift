@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import AuthenticationServices
 import CoreImage.CIFilterBuiltins
 import SwiftUI

@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 
 /// Both products use the SDK's credential format. iOS grants the corresponding
