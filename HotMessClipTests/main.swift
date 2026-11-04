@@ -48,3 +48,57 @@ assert(open.isAllowed(100_000))
 assert(open.boundsText == "$1 or more")
 assert(ClipTipAmounts.whole(1050, "usd") == "$10.50")
 print("App Clip tip amount checks passed")
+
+// The share card's `clip` block (GET /v1/share?view=clip), as audience_kit_api doc/APP_CLIP_CHECKOUT.md answers it.
+let venueID = "6f1c1d2e-0000-4000-8000-000000000001"
+let coverCard = Data("""
+{"title":"Purr","description":"","image":null,"clip":{"kind":"cover","venue_id":"\(venueID)","sign_in_required":false,
+"cover":{"night":"2026-10-09","event_id":null,"amount_cents":1000,"fee_cents":50,"total_cents":1112,"currency":"usd",
+"cover_from":"21:00","cover_until":null,"tiers":[{"id":"vip","name":"VIP","description":"Skip the line","amount_cents":2000,"total_cents":2212,"currency":"usd"}],
+"payable":true,"provider":"stripe","guest_checkout":true,"max_quantity":10}}}
+""".utf8)
+let coverOffer = try ClipOffer.decoder().decode(ClipCard.self, from: coverCard).clip!
+assert(coverOffer.guestCover?.venueID == UUID(uuidString: venueID))
+assert(coverOffer.cover?.totalCents == 1112 && coverOffer.cover?.tiers.first?.feeCents == nil)
+assert(coverOffer.guestTipping == nil)
+let square = try ClipOffer.decoder().decode(ClipOffer.self, from: Data("""
+{"kind":"cover","venue_id":"\(venueID)","sign_in_required":false,"cover":{"night":"2026-10-09","amount_cents":1000,
+"total_cents":1000,"currency":"usd","tiers":[],"payable":true,"provider":"square","guest_checkout":false}}
+""".utf8))
+assert(square.guestCover == nil, "Square goes to the app")
+let community = try ClipOffer.decoder().decode(ClipOffer.self, from: Data(#"{"kind":"cover","venue_id":null,"cover":null,"sign_in_required":true}"#.utf8))
+assert(community.signInRequired && community.guestCover == nil)
+let tipOffer = try ClipOffer.decoder().decode(ClipOffer.self, from: Data("""
+{"kind":"tip","person_id":"\(venueID)","sign_in_required":false,"tipping":{"in_app":true,"provider":"stripe",
+"guest_checkout":true,"minimum_cents":100,"maximum_cents":20000,"preset_cents":[500,1000,2000],"fee_payer":"fan",
+"note_length":140,"quotes":[{"amount_cents":1000,"fee_cents":61,"total_cents":1061,"currency":"usd"}]}}
+""".utf8))
+assert(tipOffer.guestTipping?.tipping.quote(for: 1000)?.totalCents == 1061)
+assert(tipOffer.guestTipping?.tipping.amounts.suggested == 1000)
+// A card without `clip` (pings, older APIs) still decodes.
+let plain = try ClipOffer.decoder().decode(ClipCard.self, from: fixture)
+assert(plain.clip == nil)
+print("App Clip guest offer checks passed")
+
+// Claim tokens: kept per host, claimed ones dropped, ALREADY_HAS_COVER kept as a guest pass for the night.
+var list = GuestPurchaseList()
+list.add(GuestPurchase(kind: .cover, id: "a1", claimToken: "t1", host: "hotmess.social", venueID: venueID.uppercased(), night: "2026-10-09"))
+list.add(GuestPurchase(kind: .tip, id: "p1", claimToken: "t2", host: "hotmess.social"))
+list.add(GuestPurchase(kind: .cover, id: "a2", claimToken: "t3", host: "next.example", venueID: venueID, night: "2026-10-09"))
+assert(list.claimable(host: "hotmess.social") == ["t1", "t2"])
+assert(list.cover(venueID: venueID, night: "2026-10-09")?.id == "a2")
+list.apply(claimed: ["t2"], notFound: [], alreadyHasCover: ["t1"])
+assert(list.claimable(host: "hotmess.social").isEmpty, "a kept guest pass isn't retried")
+assert(list.purchase(id: "a1")?.keptAsGuest == true && list.purchase(id: "p1") == nil)
+list.prune(now: .now, today: "2026-10-10")
+assert(list.purchase(id: "a1") == nil, "a kept guest pass goes once its night is over")
+assert(list.purchase(id: "a2") != nil)
+list.remove(token: "t3")
+assert(list.purchases.isEmpty)
+var old = GuestPurchaseList()
+old.add(GuestPurchase(kind: .tip, id: "p2", claimToken: "t4", createdAt: .now.addingTimeInterval(-GuestPurchaseList.lifetime - 1)))
+old.prune(today: "2026-10-10")
+assert(old.purchases.isEmpty)
+let early = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 10, day: 10, hour: 3))!
+assert(GuestPurchaseList.today(now: early, calendar: Calendar(identifier: .gregorian)) == "2026-10-09", "before 6am it's still last night")
+print("App Clip guest purchase checks passed")

@@ -10,6 +10,7 @@ import SwiftUI
 final class ClipSession {
     let client: AudienceKitClient
     let api: ClipAPI
+    let guest: ClipGuestAPI
     let checkout: ClipCheckout
     let applePayMerchantID: String?
     private(set) var signedIn = false
@@ -20,6 +21,18 @@ final class ClipSession {
     /// card is public; prices, tiers and tip presets need a session.
     private(set) var details: ClipDetails?
     private(set) var detailsError: String?
+
+    /// The share card's `clip` block for the current link: prices and whether
+    /// the clip can take the payment before sign-in (guest checkout).
+    var offer: ClipOffer?
+    /// What the last sign-in's `claimGuestPurchases` did with this clip's
+    /// guest purchases.
+    private(set) var lastClaim: GuestPurchaseClaims.Outcome?
+    /// Bumped when the keychain's guest purchases change, so views that read
+    /// them (``guestPass``) update.
+    private(set) var guestRevision = 0
+
+    func guestPurchasesChanged() { guestRevision += 1 }
 
     init() {
         let info = Bundle.main
@@ -41,10 +54,11 @@ final class ClipSession {
         )
         self.client = client
         api = ClipAPI(client: client)
+        guest = ClipGuestAPI(client: client)
         let merchant = (info.object(forInfoDictionaryKey: "ApplePayMerchantID") as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
         applePayMerchantID = merchant
-        checkout = ClipCheckout(api: api, merchantID: merchant)
+        checkout = ClipCheckout(api: api, guest: guest, merchantID: merchant)
     }
 
     func observe() async {
@@ -58,6 +72,22 @@ final class ClipSession {
                 error = "Please sign in again."
             }
         }
+    }
+
+    /// Whether the sheet can take this flow with Apple Pay before sign-in.
+    func guestCheckout(for flow: ClipFlow) -> Bool {
+        guard !signedIn, let offer else { return false }
+        switch flow {
+        case .cover: return offer.guestCover != nil
+        case .tip: return offer.guestTipping != nil
+        }
+    }
+
+    /// A guest pass bought here for tonight's cover at the offer's venue.
+    var guestPass: GuestPurchase? {
+        _ = guestRevision
+        guard let offer, let venueID = offer.venueId, let night = offer.cover?.night else { return nil }
+        return GuestPurchaseStore.shared.load().cover(venueID: venueID.uuidString, night: night)
     }
 
     /// The venue, event or performer behind `link`, for a signed-in session.
@@ -107,6 +137,10 @@ final class ClipSession {
                 body: try JSONEncoder().encode(request), authenticated: false))
             try await client.adopt(credential: JSONDecoder().decode(Credential.self, from: data))
             _ = try await client.graphQL(Self.acceptTerms, as: TermsResponse.self)
+            // Anything paid here before signing in is theirs now. A failure
+            // leaves the tokens for the next sign-in, here or in the app.
+            lastClaim = await GuestPurchaseClaims.claim(client: client)
+            guestRevision += 1
             signedIn = true
         } catch {
             if (error as? ASAuthorizationError)?.code != .canceled {
