@@ -295,6 +295,7 @@ struct ClipTipPicker: View {
     @State private var typed = ""
     @State private var quote: ClipTipQuote?
     @State private var quoteError: String?
+    @State private var showFirstName = true
     @FocusState private var typing: Bool
 
     private var amounts: ClipTipAmounts { performer.tipping?.amounts ?? ClipTipAmounts(presetCents: [], minimumCents: 0, maximumCents: 0, currency: "usd") }
@@ -328,6 +329,8 @@ struct ClipTipPicker: View {
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(typing ? ClipTheme.accent : ClipTheme.borderStrong))
                 Text(amounts.boundsText).font(.system(size: 12)).foregroundStyle(ClipTheme.inkMuted)
             }
+            Toggle("Show \(performer.firstName) my first name", isOn: $showFirstName)
+                .font(.system(size: 15)).tint(ClipTheme.accent)
             if let quote {
                 Text(quote.fee.cents > 0 ? "\(quote.amount.formatted) tip + \(quote.fee.formatted) fee = \(quote.total.formatted)" : "\(quote.total.formatted) total")
                     .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
@@ -341,13 +344,13 @@ struct ClipTipPicker: View {
             } else if let amountCents, quote != nil {
                 ClipApplePayButton(label: .tip) {
                     typing = false
-                    Task { done(await session.checkout.payTip(performer: performer, amountCents: amountCents)) }
+                    Task { done(await session.checkout.payTip(performer: performer, amountCents: amountCents, showFirstName: showFirstName)) }
                 }
             } else {
                 Text("Pick an amount").font(.system(size: 17, weight: .semibold)).foregroundStyle(ClipTheme.inkMuted)
                     .frame(maxWidth: .infinity).frame(height: 50).background(ClipTheme.controlFill, in: Capsule())
             }
-            ClipFinePrint(text: Text("Paid to \(performer.firstName) through Hot Mess with your first name. Tips aren't refundable. [Terms](https://hotmess.social/terms/)"))
+            ClipFinePrint(text: Text("Paid to \(performer.firstName) through Hot Mess, \(showFirstName ? "with your first name" : "anonymously"). Tips aren't refundable. [Terms](https://hotmess.social/terms/)"))
         }
         .onAppear { selected = preselected.flatMap { amounts.isAllowed($0) ? $0 : nil } ?? amounts.suggested }
         .task(id: amountCents) { await loadQuote() }
