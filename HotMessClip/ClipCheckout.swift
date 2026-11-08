@@ -73,12 +73,12 @@ final class ClipCheckout {
         case failed(String)
     }
 
-    func payTip(performer: ClipPerformer, amountCents: Int) async -> TipResult {
+    func payTip(performer: ClipPerformer, amountCents: Int, showFirstName: Bool) async -> TipResult {
         guard !busy else { return .canceled }
         busy = true
         defer { busy = false }
         do {
-            let purchase = try await api.startTip(personID: performer.id, amountCents: amountCents)
+            let purchase = try await api.startTip(personID: performer.id, amountCents: amountCents, showFirstName: showFirstName)
             if purchase.tip.isPaid { return .paid(purchase.tip) }
             switch purchase.provider {
             case "STRIPE":

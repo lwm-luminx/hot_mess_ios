@@ -51,9 +51,10 @@ struct ClipAPI: Sendable {
         return quote
     }
 
-    func startTip(personID: UUID, amountCents: Int) async throws -> TipPurchase {
+    func startTip(personID: UUID, amountCents: Int, showFirstName: Bool) async throws -> TipPurchase {
         try await query(Documents.startTip,
-            variables: ["personId": .string(personID.uuidString), "amount": .int(amountCents)], as: StartTipResponse.self).startTip
+            variables: ["personId": .string(personID.uuidString), "amount": .int(amountCents), "showFirstName": .bool(showFirstName)],
+            as: StartTipResponse.self).startTip
     }
 
     func confirmTip(tipID: String) async throws -> ClipTip {
@@ -161,8 +162,8 @@ struct ClipAPI: Sendable {
         }
         """
         static let startTip = """
-        mutation ClipStartTip($personId: ID!, $amount: Int!) {
-          startTip(input: {personId: $personId, amountCents: $amount}) {
+        mutation ClipStartTip($personId: ID!, $amount: Int!, $showFirstName: Boolean) {
+          startTip(input: {personId: $personId, amountCents: $amount, showFirstName: $showFirstName}) {
             tip { \(tipFields) } provider paymentIntentClientSecret publishableKey stripeAccountId squareApplicationId
           }
         }
