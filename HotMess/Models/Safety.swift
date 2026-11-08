@@ -83,6 +83,8 @@ enum ChatReportReason: String, CaseIterable, Identifiable, Sendable {
     case spam = "Spam"
     case harassment = "Harassment or hate"
     case sexual = "Sexual content"
+    /// Goes to AudienceKit's child safety team too, which withholds the content and reports CSAM to NCMEC.
+    case childSafety = "Child safety"
     case danger = "Threats or danger"
     case other = "Something else"
 
@@ -93,6 +95,7 @@ enum ChatReportReason: String, CaseIterable, Identifiable, Sendable {
         case .spam: String(localized: "Spam")
         case .harassment: String(localized: "Harassment or hate")
         case .sexual: String(localized: "Sexual content")
+        case .childSafety: String(localized: "Child safety")
         case .danger: String(localized: "Threats or danger")
         case .other: String(localized: "Something else")
         }

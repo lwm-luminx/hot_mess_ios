@@ -17,11 +17,11 @@ struct ClipLandingView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     switch link.kind {
                     case "people":
-                        ClipTipPanel(session: session, pay: pay)
+                        ClipTipPanel(name: card.title, session: session, pay: pay, getApp: getApp)
                     case "pings":
                         if let invitation { ClipPingPanel(invitation: invitation, getApp: getApp) }
                     default:
-                        ClipCoverPanel(isEvent: link.kind == "events", session: session, pay: pay)
+                        ClipCoverPanel(isEvent: link.kind == "events", session: session, pay: pay, getApp: getApp)
                     }
                     if !card.description.isEmpty, link.kind != "pings" {
                         ClipPanel {
@@ -54,6 +54,9 @@ struct ClipLandingView: View {
             return []
         case "venues":
             if let charge = session.details?.coverCharge, charge.payable, let from = charge.from, let time = CoverFormat.time(from) {
+                return ["Doors \(time)"]
+            }
+            if session.details == nil, let from = session.offer?.cover?.coverFrom, let time = CoverFormat.time(from) {
                 return ["Doors \(time)"]
             }
             return []
@@ -124,12 +127,14 @@ struct ClipHero: View {
 
 // MARK: - Cover
 
-/// Tonight's cover. Price and tiers come with a session; before one, the
-/// button says what it does and the sheet signs in first.
+/// Tonight's cover. Before sign-in, price and tiers come from the share
+/// card's `clip` block and Apple Pay takes the guest checkout; a Square venue
+/// pays in the full app. With a session, the member's cover and pass.
 struct ClipCoverPanel: View {
     let isEvent: Bool
     @Bindable var session: ClipSession
     let pay: (ClipFlow) -> Void
+    let getApp: () -> Void
 
     var body: some View {
         ClipPanel {
@@ -150,6 +155,8 @@ struct ClipCoverPanel: View {
                         ? "Nothing to pay ahead at \(details.venue?.name ?? "the venue")."
                         : "Nothing to pay ahead. Come on in.")
                 }
+            } else if !session.signedIn, let offer = session.offer, !offer.signInRequired {
+                guestBody(offer)
             } else {
                 header("Cover tonight", subtitle: isEvent
                     ? "Skip the line at the door. Price and tiers show at checkout."
@@ -157,6 +164,37 @@ struct ClipCoverPanel: View {
                 ClipApplePayButton(label: .checkout) { pay(.cover) }
             }
         }
+    }
+
+    @ViewBuilder private func guestBody(_ offer: ClipOffer) -> some View {
+        if let pass = session.guestPass {
+            header("You're on the list", subtitle: "\(CoverFormat.night(pass.night ?? "")) · Your pass is on this phone")
+            Button("Show my pass") { pay(.cover) }.buttonStyle(ClipAccentButtonStyle())
+        } else if let cover = offer.cover {
+            HStack(alignment: .firstTextBaseline) {
+                header("Cover tonight", subtitle: guestSubtitle(cover))
+                Spacer()
+                Text(cover.total.formatted).font(.system(size: 24, weight: .heavy)).foregroundStyle(ClipTheme.ink)
+            }
+            if cover.payable, cover.guestCheckout {
+                ClipApplePayButton(label: .checkout) { pay(.cover) }
+                ClipFinePrint(text: Text("Includes fees. No account needed."))
+            } else if cover.payable {
+                // Square: its SDK doesn't fit the clip.
+                Button("Pay cover in Hot Mess") { getApp() }.buttonStyle(ClipAccentButtonStyle())
+                ClipFinePrint(text: Text("This venue takes cover in the Hot Mess app."))
+            } else {
+                ClipFinePrint(text: Text("Paid at the door."))
+            }
+        } else {
+            header("No cover tonight", subtitle: isEvent ? "Nothing to pay ahead." : "Nothing to pay ahead. Come on in.")
+        }
+    }
+
+    private func guestSubtitle(_ cover: ClipOffer.Cover) -> String {
+        var parts = [CoverFormat.night(cover.night)]
+        if !cover.tiers.isEmpty { parts.append("\(cover.tiers.count + 1) tiers") }
+        return parts.joined(separator: " · ")
     }
 
     private func subtitle(_ charge: CoverCharge, venue: ClipVenue?) -> String {
@@ -177,9 +215,18 @@ struct ClipCoverPanel: View {
 // MARK: - Tip
 
 struct ClipTipPanel: View {
+    /// The performer's name from the share card.
+    let name: String
     @Bindable var session: ClipSession
     let pay: (ClipFlow) -> Void
+    let getApp: () -> Void
     @State private var selected: Int?
+
+    /// The share card's tipping, before sign-in.
+    private var guestTipping: ClipOffer.Tipping? {
+        guard session.details == nil, !session.signedIn, let offer = session.offer, !offer.signInRequired else { return nil }
+        return offer.tipping
+    }
 
     private var performer: ClipPerformer? { session.details?.performer }
     private var tipping: ClipPerformer.Tipping? { performer?.tipping }
@@ -187,7 +234,7 @@ struct ClipTipPanel: View {
     var body: some View {
         ClipPanel {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Tip \(performer?.firstName ?? "the performer")").font(.system(size: 17, weight: .bold)).foregroundStyle(ClipTheme.ink)
+                Text(performer == nil && name.isEmpty ? "Tip the performer" : "Tip \(firstName)").font(.system(size: 17, weight: .bold)).foregroundStyle(ClipTheme.ink)
                 Text(subtitle).font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
             }
             if let tipping, tipping.acceptsInApp {
@@ -207,22 +254,41 @@ struct ClipTipPanel: View {
                         Link("Tip with \(option.name)", destination: url).buttonStyle(ClipQuietButtonStyle())
                     }
                 }
+            } else if let guest = guestTipping {
+                if guest.inApp, guest.guestCheckout {
+                    let amounts = guest.amounts
+                    let chips = Array(amounts.chips.prefix(3))
+                    HStack(spacing: 8) {
+                        ForEach(chips, id: \.self) { cents in
+                            ClipChip(title: ClipTipAmounts.whole(cents, amounts.currency), selected: selected == cents) { selected = cents }
+                        }
+                        ClipChip(title: "Other", selected: selected == nil && !chips.isEmpty) { selected = nil }
+                    }
+                    .onAppear { if selected == nil { selected = amounts.suggested } }
+                    ClipApplePayButton(label: .tip) { pay(.tip(preselectedCents: selected)) }
+                } else {
+                    Button(guest.inApp ? "Tip in Hot Mess" : "See how to tip in Hot Mess") { getApp() }
+                        .buttonStyle(ClipQuietButtonStyle())
+                }
             } else if session.details == nil {
                 ClipApplePayButton(label: .tip) { pay(.tip(preselectedCents: nil)) }
             }
         }
     }
 
+    private var firstName: String { performer?.firstName ?? (name.isEmpty ? "them" : name.firstNameForDisplay) }
+
     private var subtitle: String {
-        if let tipping, tipping.acceptsInApp {
-            "Goes to \(performer?.firstName ?? "them") through Hot Mess."
-        } else if tipping != nil {
-            "\(performer?.firstName ?? "They") takes tips outside Hot Mess."
-        } else if session.details != nil {
-            "\(performer?.firstName ?? "They") hasn't set up tips yet."
-        } else {
-            "Pick an amount at checkout. Goes to them through Hot Mess."
+        if let guest = guestTipping {
+            if !guest.inApp { return "\(firstName) takes tips outside Hot Mess." }
+            return guest.guestCheckout
+                ? "Goes to \(firstName) through Hot Mess. No account needed."
+                : "Tips for \(firstName) are in the Hot Mess app."
         }
+        if let tipping, tipping.acceptsInApp { return "Goes to \(firstName) through Hot Mess." }
+        if tipping != nil { return "\(firstName) takes tips outside Hot Mess." }
+        if session.details != nil { return "\(firstName) hasn't set up tips yet." }
+        return "Pick an amount at checkout. Goes to them through Hot Mess."
     }
 }
 

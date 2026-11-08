@@ -32,15 +32,27 @@ struct VenuePageTests {
         #expect(VenueOverview(venue: venue()).heroPhotos.isEmpty)
     }
 
-    @Test("The next event is on the hero, the two after it up top, and the rest below")
+    @Test("A later next event is on the hero and still listed: two up top, the rest below")
     func comingUp() {
         let events = (0..<5).map { day in
-            Event(id: UUID(), name: "Night \(day)", startDate: .now.addingTimeInterval(Double(day) * 86_400))
+            Event(id: UUID(), name: "Night \(day)", startDate: .now.addingTimeInterval(Double(day + 1) * 86_400))
         }
         let overview = VenueOverview(venue: venue(), events: events)
         #expect(overview.nextEvent?.id == events[0].id)
-        #expect(overview.comingUp.map(\.id) == events[1...2].map(\.id))
-        #expect(overview.laterEvents.map(\.id) == events.dropFirst(3).map(\.id))
+        #expect(overview.comingUp.map(\.id) == events[0...1].map(\.id))
+        #expect(overview.laterEvents.map(\.id) == events.dropFirst(2).map(\.id))
+    }
+
+    @Test("An event on now leads the hero and isn't listed again")
+    func onNowLeadsHero() {
+        let tonight = Event(id: UUID(), name: "On now", startDate: .now.addingTimeInterval(-3_600))
+        let later = (1..<4).map { day in
+            Event(id: UUID(), name: "Night \(day)", startDate: .now.addingTimeInterval(Double(day) * 86_400))
+        }
+        let overview = VenueOverview(venue: venue(), events: [tonight] + later)
+        #expect(overview.nextEvent?.id == tonight.id)
+        #expect(overview.comingUp.map(\.id) == later[0...1].map(\.id))
+        #expect(overview.laterEvents.map(\.id) == [later[2].id])
     }
 
     @Test("About lists every link once, Facebook first, then Instagram")

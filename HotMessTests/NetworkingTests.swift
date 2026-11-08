@@ -350,6 +350,8 @@ struct GraphQLTests {
         let listing = EventListing(upcoming: events.reversed())
 
         #expect(listing.sections.map(\.id) == ["recommended", "upcoming"])
+        // Featured cards are sized by the section, not each event's own featured flag.
+        #expect(listing.sections.map(\.isFeatured) == [true, false])
         #expect(listing.sections[0].events.map(\.name) == ["Event 0", "Event 1"])
         #expect(listing.sections[1].events.map(\.name) == ["Event 2", "Event 3"])
         #expect(listing.allEvents.count == 4)

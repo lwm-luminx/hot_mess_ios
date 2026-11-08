@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import PassKit
 import SwiftUI
 
@@ -8,7 +8,7 @@ import SwiftUI
 /// so the screen degrades to the rotating QR alone.
 struct ClipWalletPassButton: View {
     let admission: Admission
-    let client: AudienceKitClient
+    let client: AudienceSession
     @State private var pass: PKPass?
     @State private var added = false
 

@@ -1,10 +1,10 @@
-import AudienceKit
+import AudienceCore
 import Foundation
 
 /// Authenticated reads and the two payments the clip takes. Same audience
 /// endpoint and ban checks as Hot Mess; every call here needs a session.
 struct ClipAPI: Sendable {
-    let client: AudienceKitClient
+    let client: AudienceSession
 
     // MARK: Records
 
@@ -51,9 +51,10 @@ struct ClipAPI: Sendable {
         return quote
     }
 
-    func startTip(personID: UUID, amountCents: Int) async throws -> TipPurchase {
+    func startTip(personID: UUID, amountCents: Int, showFirstName: Bool) async throws -> TipPurchase {
         try await query(Documents.startTip,
-            variables: ["personId": .string(personID.uuidString), "amount": .int(amountCents)], as: StartTipResponse.self).startTip
+            variables: ["personId": .string(personID.uuidString), "amount": .int(amountCents), "showFirstName": .bool(showFirstName)],
+            as: StartTipResponse.self).startTip
     }
 
     func confirmTip(tipID: String) async throws -> ClipTip {
@@ -161,8 +162,8 @@ struct ClipAPI: Sendable {
         }
         """
         static let startTip = """
-        mutation ClipStartTip($personId: ID!, $amount: Int!) {
-          startTip(input: {personId: $personId, amountCents: $amount}) {
+        mutation ClipStartTip($personId: ID!, $amount: Int!, $showFirstName: Boolean) {
+          startTip(input: {personId: $personId, amountCents: $amount, showFirstName: $showFirstName}) {
             tip { \(tipFields) } provider paymentIntentClientSecret publishableKey stripeAccountId squareApplicationId
           }
         }
@@ -268,4 +269,137 @@ enum ClipError: LocalizedError {
         case .applePayUnavailable: "Apple Pay isn't set up on this device."
         }
     }
+}
+
+// MARK: - Guest checkout
+
+/// Cover and tips before sign-in (`POST /v1/clip/covers`, `/v1/clip/tips` and
+/// their `confirm`, audience_kit_api doc/APP_CLIP_CHECKOUT.md). No session:
+/// `host` picks the audience and the claim token is the key to the purchase.
+struct ClipGuestAPI: Sendable {
+    let client: AudienceSession
+
+    private var host: String? { client.configuration.host }
+
+    func startCover(venueID: UUID, tier: String?, quantity: Int = 1) async throws -> GuestStart<GuestAdmission> {
+        var body: [String: GraphQLValue] = ["venue_id": .string(venueID.uuidString.lowercased()), "quantity": .int(quantity)]
+        if let tier { body["tier"] = .string(tier) }
+        return try await post("/v1/clip/covers", body)
+    }
+
+    func confirmCover(id: String, claimToken: String) async throws -> GuestAdmission {
+        let response: AdmissionPayload = try await post("/v1/clip/covers/\(id)/confirm", ["claim_token": .string(claimToken)])
+        return response.admission
+    }
+
+    func startTip(personID: UUID, amountCents: Int, note: String?, showFirstName: Bool) async throws -> GuestStart<GuestTip> {
+        var body: [String: GraphQLValue] = [
+            "person_id": .string(personID.uuidString.lowercased()), "amount_cents": .int(amountCents),
+            "show_first_name": .bool(showFirstName)
+        ]
+        if let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty { body["note"] = .string(note) }
+        return try await post("/v1/clip/tips", body)
+    }
+
+    func confirmTip(id: String, claimToken: String) async throws -> GuestTip {
+        let response: TipPayload = try await post("/v1/clip/tips/\(id)/confirm", ["claim_token": .string(claimToken)])
+        return response.tip
+    }
+
+    private struct AdmissionPayload: Decodable, Sendable { let admission: GuestAdmission }
+    private struct TipPayload: Decodable, Sendable { let tip: GuestTip }
+
+    private func post<T: Decodable & Sendable>(_ path: String, _ body: [String: GraphQLValue]) async throws -> T {
+        var body = body
+        if let host { body["host"] = .string(host) }
+        let data = try await client.data(for: APIRequest(method: "POST", path: path,
+            body: try JSONEncoder().encode(body), authenticated: false))
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(T.self, from: data)
+    }
+}
+
+/// What starting a guest cover or tip answers: the pending record, its claim
+/// token (sent once) and the Stripe checkout on the connected account.
+struct GuestStart<Record: Decodable & Sendable>: Decodable, Sendable {
+    let claimToken: String
+    let provider: String?
+    let paymentIntentClientSecret: String?
+    let publishableKey: String?
+    let stripeAccountId: String?
+    let record: Record
+
+    private enum CodingKeys: String, CodingKey {
+        case claimToken, provider, paymentIntentClientSecret, publishableKey, stripeAccountId, admission, tip
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        claimToken = try container.decode(String.self, forKey: .claimToken)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider)
+        paymentIntentClientSecret = try container.decodeIfPresent(String.self, forKey: .paymentIntentClientSecret)
+        publishableKey = try container.decodeIfPresent(String.self, forKey: .publishableKey)
+        stripeAccountId = try container.decodeIfPresent(String.self, forKey: .stripeAccountId)
+        record = try container.decodeIfPresent(Record.self, forKey: .admission)
+            ?? container.decode(Record.self, forKey: .tip)
+    }
+}
+
+/// A guest's cover as the clip endpoints send it (cents and lower-case status).
+struct GuestAdmission: Decodable, Sendable {
+    struct Venue: Decodable, Sendable { let id: String?; let name: String? }
+    let id: String
+    let status: String
+    let night: String
+    let quantity: Int?
+    let tier: String?
+    let totalCents: Int
+    let currency: String?
+    let passSecret: String?
+    let venue: Venue?
+
+    /// The pass the clip shows. A guest's isn't refundable from the clip:
+    /// refunds go through the member API once it's claimed.
+    var admission: Admission {
+        Admission(id: id, status: AdmissionStatus(rawValue: status.uppercased()) ?? .unknown, night: night,
+                  total: Money(cents: totalCents, currency: currency ?? "usd"), isRefundable: false,
+                  passSecret: passSecret, venueID: venue?.id.flatMap(UUID.init(uuidString:)),
+                  venueName: venue?.name ?? "", quantity: quantity ?? 1, tier: tier, kind: .cover)
+    }
+}
+
+/// A guest's tip as the clip endpoints send it.
+struct GuestTip: Decodable, Sendable {
+    let id: String
+    let status: String
+    let amountCents: Int
+    let feeCents: Int?
+    let totalCents: Int
+    let currency: String?
+
+    var tip: ClipTip {
+        let currency = currency ?? "usd"
+        return ClipTip(id: id, status: status.uppercased(), amount: Money(cents: amountCents, currency: currency),
+                       fee: Money(cents: feeCents ?? (totalCents - amountCents), currency: currency),
+                       total: Money(cents: totalCents, currency: currency))
+    }
+}
+
+extension ClipOffer.Cover {
+    var total: Money { Money(cents: totalCents, currency: currency) }
+    var fee: Money { Money(cents: feeCents, currency: currency) }
+}
+
+extension ClipOffer.Tier {
+    func total(_ fallback: String) -> Money { Money(cents: totalCents, currency: currency ?? fallback) }
+    func fee(_ fallback: String) -> Money {
+        Money(cents: feeCents ?? (totalCents - amountCents), currency: currency ?? fallback)
+    }
+}
+
+extension ClipOffer.Tipping.Quote {
+    var amount: Money { Money(cents: amountCents, currency: currency) }
+    var fee: Money { Money(cents: feeCents, currency: currency) }
+    var total: Money { Money(cents: totalCents, currency: currency) }
 }

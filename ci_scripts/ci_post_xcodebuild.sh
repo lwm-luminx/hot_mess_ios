@@ -5,13 +5,14 @@
 # audience-kit).
 #
 #   1. POST {api}/v1/token/service { "service_token": $AUDIENCEKIT_RELEASE_TOKEN } -> { "token": "<service JWT>" }
-#   2. PUT  {api}/v1/app_release   { "app", "channel": "testflight", "latest_build", "latest_version", "available_at" }
+#   2. PUT  {api}/v1/app_release   { "app", "channel", "latest_build", "latest_version", "available_at" }
 #
-# `available_at` is half an hour out, roughly when TestFlight has processed the build. Only beta archives report
-# (next and feature branches, to the next API): main and next are one app now, and both APIs share a database, so a
-# main build reporting too would offer TestFlight testers a build their group doesn't get. Set
-# AUDIENCEKIT_RELEASE_TOKEN (a service token, `akst_…`) as a secret environment variable in the workflow; without it
-# this logs a line and does nothing. A reporting failure never fails the build.
+# `available_at` is half an hour out, roughly when TestFlight has processed the build. Build numbers only compare
+# within the branch that made them, so each branch reports on its own channel: main's archives (App Store candidates,
+# which external testers and App Review install from TestFlight) on `testflight`, betas (next and feature branches,
+# internal testers) on `testflight_beta`. Both go to the next API, which shares its database with production. Set
+# AUDIENCEKIT_RELEASE_TOKEN (a service token, `akst_…`) as a secret environment variable in each workflow; without
+# it this logs a line and does nothing. A reporting failure never fails the build.
 set -u
 
 log() { echo "ci_post_xcodebuild: $*"; }
@@ -26,10 +27,12 @@ if [ -z "${AUDIENCEKIT_RELEASE_TOKEN:-}" ]; then
     exit 0
 fi
 
+# The same test as ci_pre_xcodebuild.sh's: every archive but main's is a beta.
 branch="${CI_BRANCH:-${CI_PULL_REQUEST_TARGET_BRANCH:-}}"
 if [ "$branch" = "main" ]; then
-    log "main archives are App Store candidates; not reporting the build to TestFlight's channel"
-    exit 0
+    channel=testflight
+else
+    channel=testflight_beta
 fi
 api="https://api.next.audiencekit.com"
 api="${AUDIENCEKIT_API_URL:-$api}" # an override, for trying the script against a local API
@@ -95,15 +98,15 @@ fi
 # 2. The build, as the TestFlight channel's latest.
 latest_version=null
 [ -z "$version" ] || latest_version="\"$(json_escape "$version")\""
-body="$(printf '{"app":"%s","channel":"testflight","latest_build":%s,"latest_version":%s,"available_at":"%s"}' \
-    "$(json_escape "$app")" "$build" "$latest_version" "$available_at")"
+body="$(printf '{"app":"%s","channel":"%s","latest_build":%s,"latest_version":%s,"available_at":"%s"}' \
+    "$(json_escape "$app")" "$channel" "$build" "$latest_version" "$available_at")"
 printf 'Authorization: Bearer %s\n' "$jwt" >"$headers_file"
 result="$(printf '%s' "$body" |
     curl -sS --max-time 30 -X PUT "$api/v1/app_release" \
         -H 'Content-Type: application/json' -H 'Accept: application/json' -H "@$headers_file" --data-binary @- \
         -o /dev/null -w '%{http_code}' 2>&1)"
 case "$result" in
-2??) log "reported $app $version ($build) to $api as TestFlight's latest build, available at $available_at" ;;
-*) log "couldn't report $app $version ($build) to $api (HTTP $result)" ;;
+2??) log "reported $app $version ($build) to $api as $channel's latest build, available at $available_at" ;;
+*) log "couldn't report $app $version ($build) to $api's $channel (HTTP $result)" ;;
 esac
 exit 0

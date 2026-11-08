@@ -21,12 +21,17 @@ struct VenuesScreen: View {
     @State private var isMapExpanded = false
     /// The cards under the map, ranked by the server.
     @State private var cardLayout: ScreenLayout?
+    /// The Everywhere view's cards: a locale each, with some of its venues.
+    @State private var everywhereLayout: ScreenLayout?
 
     /// Under the map: every venue, then "help fill your city". The server can
     /// add what's on tonight, what's nearby, announcements and promoted cards.
     static let fallbackCards = [CardKind.venuesAll, CardKind.venuesThinCity]
     static let cardKinds = [CardKind.venuesTonight, CardKind.venuesNearby] + fallbackCards
         + [CardKind.web, CardKind.promoSlot]
+    /// Everywhere: a card per locale, which the server ranks with the viewer's
+    /// first. Without them the view lists every venue by city instead.
+    static let everywhereKinds = [CardKind.localesShowcase, CardKind.web, CardKind.promoSlot]
 
     private enum Scope: Hashable {
         case local
@@ -53,7 +58,13 @@ struct VenuesScreen: View {
                         .padding(.horizontal, 16)
 
                     if isEverywhere {
-                        everywhereSections(collection)
+                        if let served = everywhereLayout?.layout, served.card(CardKind.localesShowcase) != nil {
+                            ForEach(served.cards) { card in
+                                everywhereCard(card, collection: collection, layoutID: served.id)
+                            }
+                        } else {
+                            everywhereSections(collection)
+                        }
                     } else {
                         // The server sends no list for a city it doesn't know yet; the
                         // screen's own order stands in then.
@@ -85,7 +96,9 @@ struct VenuesScreen: View {
         .task {
             // The ranking moves with the night: ask again when it says to.
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(cardLayout?.layout.refreshAfter ?? 60))
+                // Whichever of the two layouts is due first.
+                let after = min(cardLayout?.layout.refreshAfter ?? 60, everywhereLayout?.layout.refreshAfter ?? 60)
+                try? await Task.sleep(for: .seconds(after))
                 await loadCards(force: false)
             }
         }
@@ -114,6 +127,24 @@ struct VenuesScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func everywhereCard(_ card: LayoutCard, collection: VenueCollection, layoutID: String?) -> some View {
+        switch card.kind {
+        case CardKind.localesShowcase:
+            if let localeID = card.localeID.flatMap(UUID.init(uuidString:)) {
+                let venues = ordered(collection.venues, by: card.venueIDs, isFallback: false)
+                LocaleShowcaseCard(localeID: localeID, name: card.title ?? String(localized: "Venues"), venues: venues)
+                    .padding(.horizontal, 16)
+            }
+        case CardKind.web:
+            if let content = card.web { WebCardView(content: content) }
+        case CardKind.promoSlot:
+            PromoSlotView(card: card, layoutID: layoutID)
+        default:
+            EmptyView()
         }
     }
 
@@ -156,8 +187,10 @@ struct VenuesScreen: View {
     }
 
     private func loadCards(force: Bool) async {
-        await cardLayout?.load(coordinates: model.location.coordinates, localeID: model.location.locale?.id,
-                               force: force)
+        let coordinates = model.location.coordinates, localeID = model.location.locale?.id
+        async let everywhere: Void? = everywhereLayout?.load(coordinates: coordinates, localeID: localeID, force: force)
+        await cardLayout?.load(coordinates: coordinates, localeID: localeID, force: force)
+        _ = await everywhere
     }
 
     private var emptyMessage: String {
@@ -216,6 +249,11 @@ struct VenuesScreen: View {
         if cardLayout == nil {
             cardLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .venues, kinds: Self.cardKinds,
                                       fallback: Self.fallbackCards, appVersion: model.configuration.version)
+        }
+        if everywhereLayout == nil {
+            everywhereLayout = ScreenLayout(audienceKit: model.audienceKit, screen: .everywhere,
+                                            kinds: Self.everywhereKinds, fallback: [],
+                                            appVersion: model.configuration.version)
         }
     }
 

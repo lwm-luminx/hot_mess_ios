@@ -381,6 +381,14 @@ extension Event {
         startDate <= date && date < (endDate ?? startDate.addingTimeInterval(4 * 3600))
     }
 
+    /// A list under a hero that names `events.first`: the first is left out
+    /// only while it's on, since the hero then leads with it. One that hasn't
+    /// started yet stays listed, so it still shows with the others.
+    static func listedAfterHero(_ events: [Event], at date: Date = .now) -> ArraySlice<Event> {
+        if let first = events.first, first.isOn(at: date) { return events.dropFirst() }
+        return events[...]
+    }
+
     /// A venue row's line: "Bear Night · until 2 AM" while it's on, else the
     /// next-up line ("Tonight · Drag Bingo at 9 PM").
     func venueRowLine(at date: Date = .now) -> String {
@@ -418,15 +426,20 @@ struct EventCard: View {
     let event: Event
     var description: String?
     var photoURL: URL?
+    /// Whether it's shown as featured (taller, larger title), e.g. in the Events
+    /// tab's Featured section; nil goes by the event's own featured flag.
+    var featured: Bool?
+
+    private var isTall: Bool { featured ?? event.isFeatured }
 
     var body: some View {
         RecordCard(
             title: event.name,
             description: description ?? event.subtitle,
             photoURL: photoURL ?? event.bannerURL,
-            minHeight: event.isFeatured ? CardMetrics.featuredHeight : CardMetrics.photoHeight,
+            minHeight: isTall ? CardMetrics.featuredHeight : CardMetrics.photoHeight,
             topClearance: 68,
-            titleStyle: event.isFeatured ? .title2 : .title3,
+            titleStyle: isTall ? .title2 : .title3,
             descriptionLines: 1
         ) {
             GlassPill(padding: EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8), shape: AnyShape(RoundedRectangle(cornerRadius: HotMessRadius.md))) {
@@ -460,10 +473,11 @@ struct EventCardLink: View {
     let event: Event
     var description: String?
     var photoURL: URL?
+    var featured: Bool?
 
     var body: some View {
         NavigationLink(value: AppRoute.event(event.id)) {
-            EventCard(event: event, description: description, photoURL: photoURL)
+            EventCard(event: event, description: description, photoURL: photoURL, featured: featured)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("card.event.\(event.id)")

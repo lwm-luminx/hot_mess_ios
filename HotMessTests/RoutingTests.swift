@@ -144,6 +144,7 @@ struct DeepLinkTests {
     func tabForRoute() {
         #expect(AppRoute.karaokeList(id).tab == .venues)
         #expect(AppRoute.venue(id).tab == .venues)
+        #expect(AppRoute.locale(id, name: "Seattle").tab == .venues)
         #expect(AppRoute.event(id).tab == .events)
         #expect(AppRoute.person(id).tab == .people)
     }

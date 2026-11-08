@@ -27,7 +27,9 @@
 		ACCB00000000000000000073 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000006; };
 		ACCB00000000000000000074 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000007; };
 		ACCB00000000000000000075 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000008; };
-		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = AC0000000000000000000093; };
+		ACCB00000000000000000076 = { isa = PBXBuildFile; fileRef = ACCB00000000000000000009; };
+		ACCB00000000000000000077 = { isa = PBXBuildFile; fileRef = ACCB0000000000000000000A; };
+		ACCB000000000000000000D2 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F1; };
 		ACCB000000000000000000D3 = { isa = PBXBuildFile; productRef = ACCB000000000000000000F0; };
 		ACCC0000000000000000000A = {isa = PBXBuildFile; fileRef = ACCC00000000000000000001; };
 /* End PBXBuildFile section */
@@ -73,6 +75,8 @@
 		ACCB00000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/User.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/DisplayText.swift"; sourceTree = SOURCE_ROOT; };
 		ACCB00000000000000000008 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/Decoding.swift"; sourceTree = SOURCE_ROOT; };
+		ACCB00000000000000000009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/GuestPurchases.swift"; sourceTree = SOURCE_ROOT; };
+		ACCB0000000000000000000A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Services/GuestPurchaseClaims.swift"; sourceTree = SOURCE_ROOT; };
 		ACCC00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotMess/Models/ShareInvitation.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -165,6 +169,8 @@
 				ACCB00000000000000000006,
 				ACCB00000000000000000007,
 				ACCB00000000000000000008,
+				ACCB00000000000000000009,
+				ACCB0000000000000000000A,
 				ACCC00000000000000000001,
 				ACCA00000000000000000001,
 				AC0000000000000000000004 /* Configurations */,
@@ -297,7 +303,7 @@
 			productReference = AC0000000000000000000024 /* HotMessScreenshots.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; packageProductDependencies = (AC0000000000000000000093, ACCB000000000000000000F0,); productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
+		ACCA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACCA0000000000000000000F; buildPhases = (ACCA0000000000000000000C, ACCA0000000000000000000D, ACCA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACCA00000000000000000001,); name = HotMessClip; packageProductDependencies = (ACCB000000000000000000F1, ACCB000000000000000000F0,); productName = HotMessClip; productReference = ACCA0000000000000000000B; productType = "com.apple.product-type.application.on-demand-install-capable"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -445,7 +451,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
+		ACCA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACCC0000000000000000000A,ACCB00000000000000000077,ACCB00000000000000000076,ACCB00000000000000000075,ACCB00000000000000000074,ACCB00000000000000000073,ACCB00000000000000000072,ACCB00000000000000000071,ACCB00000000000000000070,ACCB0000000000000000006E,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -672,7 +678,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -695,7 +701,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -718,7 +724,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -913,7 +919,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.5;
+    MARKETING_VERSION = 2.6;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -935,7 +941,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.5;
+    MARKETING_VERSION = 2.6;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -957,7 +963,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.5;
+    MARKETING_VERSION = 2.6;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1051,7 +1057,7 @@
 			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
-				revision = 27fe9b9bed21c6101f1a7e579b53cd0abfcbb886;
+				revision = 1b939841f60a5e79a29b15e21b663b82ed6daf49;
 			};
 		};
 		AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {
@@ -1107,6 +1113,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AC0000000000000000000084 /* XCRemoteSwiftPackageReference "in-app-payments-ios" */;
 			productName = SquareInAppPaymentsSDK;
+		};
+		ACCB000000000000000000F1 /* AudienceCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AC0000000000000000000082 /* XCRemoteSwiftPackageReference "audience-kit-sdk" */;
+			productName = AudienceCore;
 		};
 		ACCB000000000000000000F0 /* StripeApplePay */ = {
 			isa = XCSwiftPackageProductDependency;

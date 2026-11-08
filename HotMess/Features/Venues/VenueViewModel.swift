@@ -44,10 +44,14 @@ struct VenueOverview: Sendable, Equatable {
 
     /// The next event, on the hero.
     var nextEvent: Event? { events.first }
-    /// The two after it, shown near the top of the page.
-    var comingUp: ArraySlice<Event> { events.dropFirst().prefix(2) }
+    /// The events the page lists: all of them, except that one that's on
+    /// right now leads the hero and isn't listed again. A later one stays in
+    /// the list, though the hero names it too.
+    var listedEvents: ArraySlice<Event> { Event.listedAfterHero(events) }
+    /// The first two listed, shown near the top of the page.
+    var comingUp: ArraySlice<Event> { listedEvents.prefix(2) }
     /// The events after those, at the bottom.
-    var laterEvents: ArraySlice<Event> { events.dropFirst(3) }
+    var laterEvents: ArraySlice<Event> { listedEvents.dropFirst(2) }
 }
 
 @MainActor

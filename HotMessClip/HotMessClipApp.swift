@@ -1,4 +1,4 @@
-import AudienceKit
+import AudienceCore
 import StoreKit
 import SwiftUI
 
@@ -75,10 +75,16 @@ struct ClipRootView: View {
             if let link { await session.loadDetails(for: link) }
         }
         .sheet(item: $flow) { flow in
-            if let link { ClipCheckoutSheet(flow: flow, link: link, session: session, getApp: getApp) }
+            if let link { ClipCheckoutSheet(flow: flow, link: link, title: cardTitle, session: session, getApp: getApp) }
         }
         .appStoreOverlay(isPresented: $showStore) { SKOverlay.AppClipConfiguration(position: .bottom) }
         .onChange(of: link) { _, _ in flow = nil }
+    }
+
+    /// The record's name from its share card: the venue, event or performer.
+    private var cardTitle: String {
+        if case let .ready(card, _) = phase { return card.title }
+        return ""
     }
 
     private struct LoadID: Equatable { let link: ClipLink?; let attempt: Int }
@@ -93,6 +99,7 @@ struct ClipRootView: View {
 
     @MainActor private func load() async {
         phase = .loading
+        session.offer = nil
         guard let link else { return }
         do {
             if link.kind == "pings" {
@@ -105,12 +112,16 @@ struct ClipRootView: View {
                                     image: nil)
                 phase = .ready(card, invitation)
             } else {
+                // `view=clip` adds what the clip can sell before sign-in.
                 let data = try await session.client.data(for: APIRequest(path: "/v1/share", queryItems: [
                     URLQueryItem(name: "host", value: session.client.configuration.host),
-                    URLQueryItem(name: "path", value: link.path)
+                    URLQueryItem(name: "path", value: link.path),
+                    URLQueryItem(name: "view", value: "clip")
                 ] + (link.expiry.map { [URLQueryItem(name: "e", value: $0)] } ?? []), authenticated: false))
                 try Task.checkCancellation()
-                phase = .ready(try JSONDecoder().decode(ClipCard.self, from: data), nil)
+                let card = try ClipOffer.decoder().decode(ClipCard.self, from: data)
+                session.offer = card.clip
+                phase = .ready(card, nil)
             }
         } catch {
             guard !Task.isCancelled else { return }
