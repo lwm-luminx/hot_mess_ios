@@ -3,12 +3,15 @@ import PassKit
 import SwiftUI
 
 /// "Add to Apple Wallet" on the door pass. The API signs the pass
-/// (`GET /v1/admissions/{id}/pass.pkpass`, authenticated); the clip only adds
-/// it. Until that endpoint exists the request 404s and the button stays hidden,
-/// so the screen degrades to the rotating QR alone.
+/// (`GET /v1/admissions/{id}/pass.pkpass`): with the session, or for a guest
+/// with their claim token instead. The clip only adds it. While the API has no
+/// Wallet certificate the request 404s and the button stays hidden, so the
+/// screen degrades to the rotating QR alone.
 struct ClipWalletPassButton: View {
     let admission: Admission
     let client: AudienceSession
+    /// A guest purchase's claim token, which reads the pass before sign-in.
+    var claimToken: String?
     @State private var pass: PKPass?
     @State private var added = false
 
@@ -28,7 +31,13 @@ struct ClipWalletPassButton: View {
     @MainActor private func load() async {
         guard pass == nil, admission.isPaid, PKPassLibrary.isPassLibraryAvailable() else { return }
         do {
-            let data = try await client.data(for: APIRequest(path: "/v1/admissions/\(admission.id)/pass.pkpass", authenticated: true))
+            let path = "/v1/admissions/\(admission.id)/pass.pkpass"
+            let request = if let claimToken {
+                APIRequest(path: path, queryItems: [URLQueryItem(name: "claim_token", value: claimToken)], authenticated: false)
+            } else {
+                APIRequest(path: path, authenticated: true)
+            }
+            let data = try await client.data(for: request)
             let loaded = try PKPass(data: data)
             refreshAdded(loaded)
             pass = loaded
