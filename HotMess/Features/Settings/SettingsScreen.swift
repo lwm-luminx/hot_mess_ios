@@ -80,7 +80,7 @@ struct SettingsScreen: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
-            Text("This permanently deletes your Hot Mess account, your messages, RSVPs, Pings and friends list, and signs you out. Cover passes you bought stay with the venue. It can't be undone.")
+            Text("This permanently deletes your account in every app built on AudienceKit, including Hot Mess and Hack Different, along with any staff or admin roles you have. Your messages, RSVPs, Pings and friends list go too, and you're signed out. Cover passes you bought stay with the venue. It can't be undone.")
         }
         .alert(String(localized: "Couldn't delete your account"), isPresented: $deleteFailed) {
             Button(String(localized: "OK"), role: .cancel) {}
