@@ -418,8 +418,8 @@ struct ClipPassView: View {
                 }
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 if let error { Text(error).font(.system(size: 13)).foregroundStyle(Color(hex: 0xFFC9A3)) }
-                if admission.isPaid, guestPurchase == nil, session.signedIn {
-                    ClipWalletPassButton(admission: admission, client: session.client)
+                if admission.isPaid, guestPurchase != nil || session.signedIn {
+                    ClipWalletPassButton(admission: admission, client: session.client, claimToken: guestPurchase?.claimToken)
                 }
                 if !admission.isPaid, let guestPurchase, admission.status == .pending {
                     Button(checking ? "Checking…" : "Check again") { Task { await check(guestPurchase) } }
