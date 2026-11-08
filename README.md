@@ -397,5 +397,5 @@ Copyright © 2026 Love Wins Media. All rights reserved. This code is public so i
 can be read, **not** so it can be reused. You may not copy, redistribute, or
 build on any of it without written permission. Copying it without permission,
 or removing the attribution, is copyright infringement, and doing it willfully
-for commercial gain is a federal crime (17 U.S.C. §§ 506, 1202, 1204). See
+for commercial gain is a federal crime (17 U.S.C. §§ 506, 1202, 1204). Publishing an app built from it also breaks [App Store Review Guideline 5.2.1](https://developer.apple.com/app-store/review/guidelines/#intellectual-property) (Intellectual Property), and we report infringing apps to the store. See
 [LICENSE](LICENSE) for the full terms.
