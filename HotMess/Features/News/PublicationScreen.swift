@@ -59,10 +59,7 @@ struct PublicationScreen: View {
                     } else {
                         VStack(spacing: 12) {
                             ForEach(articles) { article in
-                                NavigationLink(value: AppRoute.article(article.id)) {
-                                    ArticleRow(article: article)
-                                }
-                                .buttonStyle(.plain)
+                                ArticleLink(article: article)
                             }
                         }
                     }

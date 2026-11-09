@@ -28,10 +28,7 @@ struct NewsSection: View {
 
                     VStack(spacing: 12) {
                         ForEach(articles) { article in
-                            NavigationLink(value: AppRoute.article(article.id)) {
-                                ArticleRow(article: article)
-                            }
-                            .buttonStyle(.plain)
+                            ArticleLink(article: article)
                         }
                     }
                 }
@@ -57,7 +54,27 @@ extension NewsSection {
     }
 }
 
-/// An article in a list: its photo, title, publication and when, with "Op-ed" on readers' pieces.
+/// An article row that opens it: the reader, or for a teaser (a publication not on Soapbox yet links out) the piece on
+/// the publication's own site, where its ads and traffic are.
+struct ArticleLink: View {
+    let article: Article
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        if article.teaser, let url = article.canonicalUrl.flatMap(URL.init(string:)) {
+            Button { openURL(url) } label: { ArticleRow(article: article) }
+                .buttonStyle(.plain)
+                .accessibilityHint(Text("Opens \(ArticleRow.host(url)) in your browser"))
+        } else {
+            NavigationLink(value: AppRoute.article(article.id)) { ArticleRow(article: article) }
+                .buttonStyle(.plain)
+        }
+    }
+}
+
+/// An article in a list: its photo, title, publication and when, with "Op-ed" on readers' pieces and the site a
+/// teaser opens.
 struct ArticleRow: View {
     let article: Article
 
@@ -89,7 +106,7 @@ struct ArticleRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
-                Text(ArticleRow.dateline(article))
+                Text(caption)
                     .font(.hotMess(.caption))
                     .foregroundStyle(.secondary)
             }
@@ -99,6 +116,20 @@ struct ArticleRow: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// Its dateline, and for a teaser the site it opens: "QSaltLake · Jun 1 · qsaltlake.com ↗".
+    private var caption: String {
+        guard article.teaser, let url = article.canonicalUrl.flatMap(URL.init(string:)) else {
+            return ArticleRow.dateline(article)
+        }
+        return "\(ArticleRow.dateline(article)) · \(ArticleRow.host(url)) ↗"
+    }
+
+    /// "qsaltlake.com" for https://www.qsaltlake.com/news/….
+    static func host(_ url: URL) -> String {
+        let host = url.host() ?? url.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     /// "QSaltLake · Jun 1", or the byline alone before it's published.
