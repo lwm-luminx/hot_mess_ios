@@ -145,6 +145,10 @@ struct RouteDestination: View {
             UpdatesScreen(locale: locale)
         case let .locale(id, name):
             LocaleScreen(localeID: id, name: name)
+        case let .article(id):
+            ArticleScreen(articleID: id)
+        case let .publication(id):
+            PublicationScreen(publicationID: id)
         }
     }
 }

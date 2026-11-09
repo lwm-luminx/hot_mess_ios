@@ -149,6 +149,7 @@ struct VenueScreen: View {
                         PhotosSection(subject: .venue(venue.id), cameraVenueID: overview.chatOpen ? venue.id : nil)
 
                         PostsSection(title: String(localized: "Posts"), subject: .venue(venue.id))
+                        NewsSection.inTheNews(.venue(venue.id.uuidString.lowercased()))
 
                         aboutSection(venue, links: SocialLink.aboutLinks(overview.socialLinks, facebookURL: venue.facebookURL))
 
