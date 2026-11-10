@@ -822,11 +822,19 @@ struct ReviewSignInStatus: Decodable, Sendable {
     }
 }
 
-/// `POST /v1/token/review`: the code App Review was given in the review notes.
+/// `POST /v1/token/review`: the code App Review was given in the review notes,
+/// with the install's signed AppTransaction so the API refuses the code in a
+/// copy from the App Store (403, reason `store_install`).
 struct ReviewSignInRequest: Encodable, Sendable {
     let code: String
     let host: String?
     let device: DeviceDescription
+    var appTransaction: String? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case code, host, device
+        case appTransaction = "app_transaction"
+    }
 }
 
 /// `POST /v1/token` with `connect`, for an account that signed in with Apple.
