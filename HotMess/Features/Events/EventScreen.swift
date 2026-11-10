@@ -92,6 +92,7 @@ struct EventScreen: View {
                         }
 
                         PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
+                        NewsSection.inTheNews(.event(event.id.uuidString.lowercased()))
 
                         PhotosSection(subject: .event(event.id))
 
