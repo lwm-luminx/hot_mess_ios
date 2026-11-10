@@ -99,12 +99,15 @@ struct LoginScreen: View {
             withAnimation(.easeOut(duration: 0.5)) { hasAppeared = true }
         }
         // The audience's sign-in methods, with App Review sign-in only while
-        // the API has it on. An API without the methods list still answers
-        // whether App Review sign-in is on.
+        // the API has it on, and never in a copy from the App Store. An API
+        // without the methods list still answers whether App Review sign-in
+        // is on.
         .task {
             if let methods = await model.session.signInMethods() {
                 signInMethods = methods
-                isReviewSignInEnabled = methods.reviewCode
+                var offersCode = methods.reviewCode
+                if offersCode { offersCode = await model.session.installOffersReviewCode() }
+                isReviewSignInEnabled = offersCode
             } else {
                 isReviewSignInEnabled = await model.session.isReviewSignInEnabled()
             }

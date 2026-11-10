@@ -10,6 +10,7 @@ import FacebookLogin
 import Foundation
 import Observation
 import os
+import StoreKit
 import UIKit
 
 enum AuthenticationState: Equatable, Sendable {
@@ -253,7 +254,25 @@ final class SessionStore {
     /// Whether the login screen offers "Have an App Review code?": only while
     /// the API says App Review sign-in is on. Unreachable reads as off.
     func isReviewSignInEnabled() async -> Bool {
-        (try? await api.isReviewSignInEnabled(host: audienceKit.configuration.host)) ?? false
+        guard await installOffersReviewCode() else { return false }
+        return (try? await api.isReviewSignInEnabled(host: audienceKit.configuration.host)) ?? false
+    }
+
+    /// Whether this copy may offer App Review sign-in at all: never one
+    /// installed from the App Store. App Review runs the build in StoreKit's
+    /// sandbox, like TestFlight, so reviewers still get it; when StoreKit
+    /// can't say (`unknown`), it stays, so App Review is never locked out.
+    /// The API refuses the code itself when the AppTransaction sent with it
+    /// proves an App Store install.
+    func installOffersReviewCode() async -> Bool {
+        await InstallSource.current != .appStore
+    }
+
+    /// This install's AppTransaction as Apple signed it, for the API to check
+    /// where the app came from; nil when StoreKit has none.
+    nonisolated static func signedAppTransaction() async -> String? {
+        guard let result = try? await AppTransaction.shared else { return nil }
+        return result.jwsRepresentation
     }
 
     /// Signs in the designated App Review account with the code from the
@@ -265,9 +284,11 @@ final class SessionStore {
         let host = audienceKit.configuration.host
 
         state = .signingIn
+        let appTransaction = await Self.signedAppTransaction()
         await exchange { device in
             do {
-                let request = ReviewSignInRequest(code: code, host: host, device: device)
+                let request = ReviewSignInRequest(code: code, host: host, device: device,
+                                                  appTransaction: appTransaction)
                 return try await self.adopting(self.api.signInWithReviewCode(request))
             } catch APIError.unauthorized {
                 throw SessionError.invalidReviewCode
