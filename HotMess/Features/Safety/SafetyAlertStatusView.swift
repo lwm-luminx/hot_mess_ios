@@ -98,7 +98,7 @@ struct SafetyAlertStatusView: View {
             Text(alert.state == .acknowledged ? String(localized: "Someone's on the way") : String(localized: "Staff have your alert"))
         } footer: {
             if alert.state == .open {
-                Text("Stay where you feel safest. You'll feel a buzz, with no sound, when someone picks it up. If nobody does in 2 minutes, we'll help you reach a friend, a ride or 911.")
+                Text("Stay where you feel safest. You'll feel a buzz, with no sound, when someone picks it up. If nobody does in 2 minutes, we'll help you reach a friend, a ride or \(EmergencyNumber.current).")
             }
         }
     }

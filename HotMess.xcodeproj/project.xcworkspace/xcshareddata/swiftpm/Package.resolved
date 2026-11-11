@@ -6,7 +6,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/lwm-luminx/audience-kit-sdk.git",
       "state" : {
-        "revision" : "5fdd327f73cad1d2c75e08f4f059fa209dd55b73"
+        "revision" : "d217e54bb822433ba240ecd008a956c51e84d9cd"
       }
     },
     {
