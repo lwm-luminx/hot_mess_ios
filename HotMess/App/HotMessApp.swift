@@ -37,6 +37,11 @@ struct HotMessApp: App {
                 .task(id: model.session.isSignedIn) {
                     if model.session.isSignedIn { await GuestPurchaseClaims.claim(client: model.audienceKit) }
                 }
+                // The pages they manage, so venue and person pages offer
+                // "Open in Velvet" and "Open in Backstage" (and Me, Your pages).
+                .task(id: model.session.isSignedIn) {
+                    if model.session.isSignedIn { await model.listings.load() }
+                }
                 .onOpenURL(perform: handle)
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                     guard let url = activity.webpageURL else { return }
