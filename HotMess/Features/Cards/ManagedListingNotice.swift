@@ -10,6 +10,7 @@ import SwiftUI
 /// manages, and the same with Backstage on their person page. Hot Mess
 /// doesn't edit pages; the staff app does. On a phone without the app the
 /// button gets it instead ("Join the Velvet beta", "Get Backstage").
+/// On an event at a venue they manage it opens Velvet on that event.
 /// Shows nothing on anyone else's page.
 struct ManagedListingNotice: View {
     enum Kind {
@@ -18,6 +19,8 @@ struct ManagedListingNotice: View {
 
     let kind: Kind
     let id: UUID
+    /// The event at venue `id` this is on, for Velvet to open on.
+    var eventID: UUID?
 
     @Environment(AppModel.self) private var model
 
@@ -27,7 +30,7 @@ struct ManagedListingNotice: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.hotMess(.subheadline, semibold: true))
-                    Text("Post and manage it in \(app.name).")
+                    Text(subtitle)
                         .font(.hotMess(.footnote))
                         .foregroundStyle(.secondary)
                 }
@@ -37,7 +40,7 @@ struct ManagedListingNotice: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
-                .accessibilityIdentifier("\(kind == .venue ? "venue" : "person").openInStaffApp")
+                .accessibilityIdentifier("\(eventID != nil ? "event" : kind == .venue ? "venue" : "person").openInStaffApp")
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,14 +57,21 @@ struct ManagedListingNotice: View {
     private var app: StaffApp { kind == .venue ? .velvet : .backstage }
 
     private var title: String {
-        kind == .venue ? String(localized: "You manage this venue") : String(localized: "You manage this page")
+        if eventID != nil { return String(localized: "This is at a venue you manage") }
+        return kind == .venue ? String(localized: "You manage this venue") : String(localized: "You manage this page")
+    }
+
+    private var subtitle: String {
+        eventID != nil
+            ? String(localized: "Edit it in \(app.name).")
+            : String(localized: "Post and manage it in \(app.name).")
     }
 
     private var url: URL {
         let id = id.uuidString.lowercased()
         let audienceID = model.configuration.audienceID
         return kind == .venue
-            ? StaffApp.velvet(venueID: id, audienceID: audienceID)
+            ? StaffApp.velvet(venueID: id, audienceID: audienceID, eventID: eventID?.uuidString.lowercased())
             : StaffApp.backstage(personID: id, audienceID: audienceID)
     }
 }
