@@ -528,7 +528,7 @@ struct APIErrorTests {
 @Suite("Chat subscription")
 struct ChatIdentifierTests {
     /// The `execute` command's data the cable sends for the room.
-    private func executeData(for room: ChatRoom) -> String {
+    private func executeData(for room: HotMess.ChatRoom) -> String {
         AudienceCable.executeData(
             query: VenueChatConnection.subscriptionDocument(for: room),
             variables: VenueChatConnection.variables(for: room),
