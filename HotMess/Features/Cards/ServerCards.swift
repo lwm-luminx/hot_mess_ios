@@ -4,6 +4,7 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import Foundation
 import Observation
 
@@ -74,7 +75,12 @@ final class CardSettings {
         }
     }
 
-    var filter: CardFilter { CardFilter(hidden: hidden, categories: categories) }
+    /// AudienceKit's cards about getting Velvet or Backstage are skipped on a
+    /// phone that has the app (checked here; the server never learns).
+    var filter: CardFilter {
+        CardFilter(hidden: hidden, categories: categories,
+                   installedStaffApps: Set(StaffApp.allCases.filter(\.isInstalled)))
+    }
 
     func category(_ key: String) -> CardCategory? {
         categories?.first { $0.key == key }

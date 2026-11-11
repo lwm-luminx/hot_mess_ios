@@ -30,6 +30,8 @@ struct PersonScreen: View {
                             heroText(detail)
                         }
 
+                        ManagedListingNotice(kind: .person, id: personID)
+
                         DetailSection(String(localized: "Elsewhere")) {
                             ForEach(detail.profileLinks) { link in
                                 SocialLinkRow(link: link)

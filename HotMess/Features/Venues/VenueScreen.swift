@@ -51,6 +51,8 @@ struct VenueScreen: View {
                             heroText(overview)
                         }
 
+                        ManagedListingNotice(kind: .venue, id: venue.id)
+
                         if suggestionState?.reportedClosed == true {
                             ReportedClosedNotice(venueID: venue.id) { stillReported in
                                 suggestionState?.reportedClosed = stillReported
