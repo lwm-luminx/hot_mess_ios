@@ -17,6 +17,8 @@ final class AppModel {
     let configuration: AppConfiguration
     let api: HotMessAPI
     let audienceKit: AudienceKitClient
+    /// The last GraphQL operations and their errors, for Me › Check the app.
+    let operations: GraphQLOperationLog
     let session: SessionStore
     /// The audience's look, from AudienceKit branding.
     let brand: BrandStore
@@ -109,10 +111,13 @@ final class AppModel {
         self.configuration = configuration
         serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
 
+        let operations = GraphQLOperationLog(subsystem: "social.hotmess.HotMess")
+        self.operations = operations
         let audienceKit = AudienceKitClient(
             configuration: configuration.audienceKit,
             credentialStore: SessionStore.credentialStore,
-            session: .hotMess
+            session: .hotMess,
+            monitor: operations
         )
         self.audienceKit = audienceKit
 

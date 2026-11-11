@@ -61,23 +61,40 @@ final class PeopleViewModel {
 @Observable
 final class PersonViewModel {
     private(set) var state: LoadState<PersonDetail> = .idle
+    /// Their crowns and reigns (Miss Gay Utah, Empress of the Royal Court), reigning first. Empty
+    /// until loaded, when they have none, or when the API can't say; never holds up the page.
+    private(set) var titles: [PersonOffice] = []
 
     private let api: HotMessAPI
+    private let audienceKit: AudienceKitClient
     private let personID: UUID
 
-    init(api: HotMessAPI, personID: UUID) {
+    init(api: HotMessAPI, audienceKit: AudienceKitClient, personID: UUID) {
         self.api = api
+        self.audienceKit = audienceKit
         self.personID = personID
     }
 
     func load() async {
         if state.value == nil { state = .loading }
 
+        async let titles = Self.titles(of: personID, from: audienceKit)
         do {
             state = .loaded(try await api.person(personID))
         } catch is CancellationError {
         } catch {
             state = LoadState(catching: error)
+        }
+        self.titles = await titles
+    }
+
+    /// Reigning before former, newest reign first within each.
+    private static func titles(of personID: UUID, from audienceKit: AudienceKitClient) async -> [PersonOffice] {
+        let titles = (try? await audienceKit.titles(personID: personID.uuidString.lowercased())) ?? []
+        return titles.sorted {
+            let reigning = ($0.status != .former, $0.termStart ?? "")
+            let other = ($1.status != .former, $1.termStart ?? "")
+            return reigning.0 != other.0 ? reigning.0 : reigning.1 > other.1
         }
     }
 }

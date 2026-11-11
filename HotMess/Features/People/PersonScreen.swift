@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import SwiftUI
 
 /// Person detail, replacing `PersonViewController`.
@@ -31,6 +32,14 @@ struct PersonScreen: View {
                         }
 
                         ManagedListingNotice(kind: .person, id: personID)
+
+                        if let titles = viewModel?.titles, !titles.isEmpty {
+                            DetailSection(String(localized: "Titles")) {
+                                ForEach(titles) { title in
+                                    titleRow(title)
+                                }
+                            }
+                        }
 
                         DetailSection(String(localized: "Elsewhere")) {
                             ForEach(detail.profileLinks) { link in
@@ -230,9 +239,38 @@ struct PersonScreen: View {
         }
     }
 
+    /// "Empress XL" over "Royal Court of Utah · 2025–2026", the crown filled while they reign.
+    private func titleRow(_ title: PersonOffice) -> some View {
+        let reigning = title.status != .former
+        let place = title.locale.name ?? title.locale.label
+        let years = [title.termStart, title.termEnd].compactMap { $0?.prefix(4) }.map(String.init)
+        let detail = [place, years.isEmpty ? nil : years.joined(separator: "–")]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+
+        return HStack(spacing: 12) {
+            Image(systemName: reigning ? "crown.fill" : "crown")
+                .foregroundStyle(reigning ? Color.accentColor : .secondary)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.title)
+                    .font(.hotMess(.body, semibold: true))
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(.hotMess(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(reigning ? String(localized: "Reigning") : String(localized: "Former"))
+    }
+
     private func ensureViewModel() {
         if viewModel == nil {
-            viewModel = PersonViewModel(api: model.api, personID: personID)
+            viewModel = PersonViewModel(api: model.api, audienceKit: model.audienceKit, personID: personID)
         }
     }
 

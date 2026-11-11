@@ -370,6 +370,11 @@ struct SettingsScreen: View {
             // Installed from, Beta updates / Updates, Last checked, Check
             // for updates and Open in TestFlight / on the App Store.
             AboutUpdateRows(updates: model.updates)
+            // Runs what the app loads and says what failed, for a bug report.
+            NavigationLink(String(localized: "Check the App")) {
+                CheckTheAppScreen()
+            }
+            .accessibilityIdentifier("me.checkTheApp")
             // Which Facebook app and API a build talks to matters only to
             // testers and super admins; App Store builds leave it out for
             // everyone else.
