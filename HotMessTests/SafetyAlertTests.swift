@@ -71,4 +71,16 @@ struct SafetyAlertTests {
             "https://m.uber.com/ul/?action=setPickup&pickup%5Blatitude%5D=47.613700&pickup%5Blongitude%5D=-122.319700&pickup%5Bnickname%5D=The%20Wildrose%20%26%20Co")
         #expect(ride.link(pickup: nil)?.absoluteString == "https://m.uber.com/ul/")
     }
+
+    @Test("The emergency number follows the phone's region")
+    func emergencyNumberByRegion() {
+        #expect(EmergencyNumber.forRegion("US") == "911")
+        #expect(EmergencyNumber.forRegion("CA") == "911")
+        #expect(EmergencyNumber.forRegion("MX") == "911")
+        #expect(EmergencyNumber.forRegion("GB") == "999")
+        #expect(EmergencyNumber.forRegion("gb-sct") == "999")
+        #expect(EmergencyNumber.forRegion("AU") == "000")
+        #expect(EmergencyNumber.forRegion("FR") == "112")
+        #expect(EmergencyNumber.forRegion(nil) == "911")
+    }
 }
