@@ -32,7 +32,8 @@ struct PromoSlotView: View {
     var body: some View {
         if let promo = card.promo(model.cards.filter) {
             let category = model.cards.category(promo.category)
-            CardBody(content: promo.content, badge: promo.label, menu: AnyView(Group {
+            // AudienceKit's own cards are part of the app: no menu to hide or explain them.
+            CardBody(content: promo.content, badge: promo.label, menu: promo.category == "audiencekit" ? nil : AnyView(Group {
                 if category?.hideable != false {
                     Button(String(localized: "Don't show me \(category?.label ?? promo.category)"),
                            systemImage: "eye.slash") {
