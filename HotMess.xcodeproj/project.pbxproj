@@ -1057,7 +1057,7 @@
 			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
-				revision = 1313ac7500e684242e1bb49ed7c3bb2fd71bf5d3;
+				revision = 009ae02b4f74ee2b1876795bbf97fbf37c61a087;
 			};
 		};
 		AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {
