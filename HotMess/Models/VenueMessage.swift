@@ -68,6 +68,9 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// Whether a persona's listing has a People page for its badge to open.
     /// `nil` when the server didn't say.
     var personHasPage: Bool? = nil
+    /// Only the reader sees it: a private nudge from the AI host, drawn with
+    /// "Only you can see this". Nobody else in the room gets it.
+    var isPrivate = false
 
     init(
         id: UUID = UUID(),
@@ -346,6 +349,7 @@ extension VenueMessage {
         let sharedTribes: [SharedTribe]?
         let senderKind: ChatSenderKind?
         let personHasPage: Bool?
+        let isPrivate: Bool
 
         enum CodingKeys: String, CodingKey {
             case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt, sender
@@ -363,6 +367,8 @@ extension VenueMessage {
             case postedAsPerson = "posted_as_person"
             case personID = "person_id"
             case person
+            case isPrivate = "is_private"
+            case recipientID = "recipient_id"
         }
 
         private enum SenderKeys: String, CodingKey {
@@ -455,6 +461,10 @@ extension VenueMessage {
                 request = nil
             }
 
+            // GraphQL says `isPrivate`; a room frame names its `recipient_id`.
+            isPrivate = ((try? container.decodeIfPresent(Bool.self, forKey: .isPrivate)) ?? nil)
+                ?? (((try? container.decodeIfPresent(String.self, forKey: .recipientID)) ?? nil) != nil)
+
             // The room sends `prompt_id`, GraphQL `promptId` aliased to it.
             promptID = Self.identifier(in: container, forKey: .promptID)
             postedAsAudience = (try? container.decodeIfPresent(Bool.self, forKey: .postedAsAudience)) ?? false
@@ -530,6 +540,7 @@ extension VenueMessage {
         sharedTribes = payload.sharedTribes
         senderKind = payload.senderKind
         personHasPage = payload.personHasPage
+        isPrivate = payload.isPrivate
     }
 }
 

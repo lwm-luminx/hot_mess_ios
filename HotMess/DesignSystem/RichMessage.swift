@@ -287,8 +287,9 @@ extension VenueMessage {
             id: id.uuidString,
             // A post as the venue, a listing, a bot or the audience groups
             // apart from the same person's own lines, and from each other.
+            // A private line groups on its own, so it keeps its name and note.
             authorID: personID.map { "person:\($0.uuidString)" }
-                ?? (isBot ? "bot:\(userID.uuidString)" : nil)
+                ?? (isBot ? "\(isPrivate ? "private:" : "")bot:\(userID.uuidString)" : nil)
                 ?? (isFromPlace ? "place:\(userID.uuidString)" : nil)
                 ?? (isFromAudience ? "audience:\(userID.uuidString)" : userID.uuidString),
             authorName: isFromListing ? name : (friends[userID]?.name ?? name),
@@ -309,6 +310,7 @@ extension VenueMessage {
         line.sender = sender
         line.personID = personID
         line.personHasPage = personHasPage ?? true
+        line.isPrivate = isPrivate
         return line
     }
 }
