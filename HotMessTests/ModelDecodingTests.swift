@@ -584,6 +584,24 @@ struct VenueMessageTests {
         #expect(message.richContent == nil)
     }
 
+    @Test("Reads a private line from GraphQL's isPrivate or a frame's recipient_id")
+    func privateLine() throws {
+        func decode(_ extra: String) throws -> VenueMessage {
+            try VenueMessage(payload: JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""
+            {
+              "message": "Easy there.",
+              "user_id": "6c4d2e80-3a19-4b7f-9e5c-1d0a8b2f3e44",
+              "sent_at": "2026-10-06T22:10:00Z"\(extra)
+            }
+            """.utf8)))
+        }
+
+        #expect(try decode(#", "is_private": true"#).isPrivate)
+        #expect(try decode(#", "recipient_id": "9e1d2c3b-4a5f-4607-8899-aabbccddeeff""#).isPrivate)
+        #expect(try decode(#", "recipient_id": null"#).isPrivate == false)
+        #expect(try decode("").isPrivate == false)
+    }
+
     @Test("Decodes a rich message from someone with a role")
     func richFrame() throws {
         let payload = try JSONDecoder().decode(VenueMessage.Payload.self, from: Data("""

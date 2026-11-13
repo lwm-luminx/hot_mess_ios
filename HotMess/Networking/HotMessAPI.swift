@@ -904,7 +904,7 @@ extension HotMessAPI {
         static let messageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
-        posted_as_person: postedAsPerson person { id } \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
@@ -1293,7 +1293,7 @@ extension HotMessAPI {
         static let roomMessageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
-        posted_as_person: postedAsPerson person { id } \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
