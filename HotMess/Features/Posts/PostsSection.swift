@@ -19,7 +19,8 @@ struct PostsSection: View {
 
     var body: some View {
         let posts = postsModel?.posts ?? []
-        Group {
+        // A stack, not a Group, so the task has a view to run on before there are posts (see NewsSection).
+        VStack(alignment: .leading, spacing: 0) {
             if !posts.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {

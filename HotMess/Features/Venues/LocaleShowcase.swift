@@ -93,7 +93,7 @@ struct LocaleScreen: View {
     var body: some View {
         LoadStateView(state: venues, retry: { Task { await load() } }) { local in
             ScrollView {
-                VStack(spacing: 24) {
+                SectionStack {
                     // A layout without the locale's venues (a city the server doesn't know) gets the built-in order.
                     let served = cardLayout?.layout
                     let layout = served?.card(CardKind.venuesAll) != nil ? served! : .fallback(Self.fallbackCards)

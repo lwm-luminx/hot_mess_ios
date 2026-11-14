@@ -31,7 +31,8 @@ struct PhotosSection: View {
     @State private var blockTarget: BlockedUser?
 
     var body: some View {
-        Group {
+        // A stack, not a Group, so the task has a view to run on before there are photos (see NewsSection).
+        VStack(alignment: .leading, spacing: 0) {
             if !photos.isEmpty || cameraVenueID != nil {
                 VStack(alignment: .leading, spacing: 8) {
                     header

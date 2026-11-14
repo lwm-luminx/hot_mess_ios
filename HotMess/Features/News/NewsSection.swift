@@ -18,7 +18,9 @@ struct NewsSection: View {
     @State private var articles: [Article] = []
 
     var body: some View {
-        Group {
+        // A stack, not a Group: a Group's modifiers go on its children, so with no articles yet there was nothing to
+        // run the task on, and it never loaded (QSaltLake's page showed no news). Empty, it draws nothing.
+        VStack(alignment: .leading, spacing: 0) {
             if !articles.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
@@ -34,6 +36,7 @@ struct NewsSection: View {
                     }
                 }
                 .padding(.horizontal, 16)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("news.section")
             }
         }
