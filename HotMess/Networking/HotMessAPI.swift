@@ -629,6 +629,25 @@ struct HotMessAPI: CoverPaymentAPI {
         ).setRecentChatPush.recentChatPush
     }
 
+    /// Whether Quickie pushes the user: paired, revealed, met, and invites to
+    /// join when someone where they are wants a Quickie. On until they turn it
+    /// off. Throws on an API without the setting, which hides the toggle.
+    func pairUpPush() async throws -> Bool {
+        guard let enabled = try await query(Documents.pairUpPush, variables: [:], as: PairUpPushResponse.self).me?.pairUpPush else {
+            throw URLError(.cannotParseResponse)
+        }
+        return enabled
+    }
+
+    /// Turns Quickie pushes on or off, and returns the setting after the change.
+    func setPairUpPush(_ enabled: Bool) async throws -> Bool {
+        try await query(
+            Documents.setPairUpPush,
+            variables: ["enabled": .bool(enabled)],
+            as: SetPairUpPushResponse.self
+        ).setPairUpPush.pairUpPush
+    }
+
     /// Whether chat rooms show the user's initials instead of their photo.
     /// Off until they turn it on.
     func chatInitials() async throws -> Bool {
@@ -1357,6 +1376,19 @@ extension HotMessAPI {
         """
 
         /// Its own query too, like `recentChatPush`.
+        static let pairUpPush = """
+        query PairUpPush {
+          me { pair_up_push: pairUpPush }
+        }
+        """
+
+        static let setPairUpPush = """
+        mutation SetPairUpPush($enabled: Boolean!) {
+          setPairUpPush(input: { enabled: $enabled }) { pair_up_push: pairUpPush }
+        }
+        """
+
+        /// Its own query too, like `recentChatPush`.
         static let chatInitials = """
         query ChatInitials {
           me { chat_initials: chatInitials }
@@ -1756,6 +1788,23 @@ struct RecentChatPushResponse: Decodable, Sendable {
 
 struct SetRecentChatPushResponse: Decodable, Sendable {
     let setRecentChatPush: RecentChatPushResponse.Payload
+}
+
+/// `me { pairUpPush }`, and `setPairUpPush`'s payload.
+struct PairUpPushResponse: Decodable, Sendable {
+    struct Payload: Decodable, Sendable {
+        let pairUpPush: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case pairUpPush = "pair_up_push"
+        }
+    }
+
+    let me: Payload?
+}
+
+struct SetPairUpPushResponse: Decodable, Sendable {
+    let setPairUpPush: PairUpPushResponse.Payload
 }
 
 /// `me { chatInitials }`, and `setChatInitials`'s payload.
