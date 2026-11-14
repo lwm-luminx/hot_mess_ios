@@ -14,7 +14,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 : "${HOTMESS_E2E_API_URL:?Set HOTMESS_E2E_API_URL to the local fixture API, e.g. http://127.0.0.1:3917}"
-: "${HOTMESS_E2E_REVIEW_CODE:?Set HOTMESS_E2E_REVIEW_CODE to the local API's AK_REVIEW_CODE}"
+: "${HOTMESS_E2E_REVIEW_CODE:?Set HOTMESS_E2E_REVIEW_CODE to the AK_REVIEW_CODE the local API was set up with}"
 case "$HOTMESS_E2E_API_URL" in
   http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*) ;;
   *) echo "HOTMESS_E2E_API_URL must be a local API, not $HOTMESS_E2E_API_URL" >&2; exit 1 ;;
