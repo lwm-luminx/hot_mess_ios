@@ -795,16 +795,44 @@ extension HotMessAPI {
 /// App Review codes work, `review_code`, with the warning to show (with
 /// Cancel and Continue) before each method that has one.
 struct SignInMethods: Decodable, Sendable, Equatable {
+    /// Whether the audience checks that sign-ins come from the real app on
+    /// a genuine device, and what to tell a device that can't prove it.
+    struct DeviceAttestation: Decodable, Sendable, Equatable {
+        /// `off`, `report` or `enforce`.
+        let mode: String
+        /// Whether a sign-in without a good device check is refused.
+        let required: Bool
+        let warning: String?
+
+        init(mode: String, required: Bool, warning: String? = nil) {
+            self.mode = mode
+            self.required = required
+            self.warning = warning
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            mode = try container.decode(String.self, forKey: .mode)
+            required = try container.decodeIfPresent(Bool.self, forKey: .required) ?? (mode == "enforce")
+            warning = try container.decodeIfPresent(String.self, forKey: .warning)
+        }
+
+        private enum CodingKeys: String, CodingKey { case mode, required, warning }
+    }
+
     let methods: [String]
     let warnings: [String: String]
+    /// nil from an API that doesn't say.
+    let deviceAttestation: DeviceAttestation?
 
     var facebook: Bool { methods.contains("facebook") }
     var apple: Bool { methods.contains("apple") }
     var reviewCode: Bool { methods.contains("review_code") }
 
-    init(methods: [String], warnings: [String: String] = [:]) {
+    init(methods: [String], warnings: [String: String] = [:], deviceAttestation: DeviceAttestation? = nil) {
         self.methods = methods
         self.warnings = warnings
+        self.deviceAttestation = deviceAttestation
     }
 
     init(from decoder: any Decoder) throws {
@@ -812,6 +840,20 @@ struct SignInMethods: Decodable, Sendable, Equatable {
         methods = try container.decode([String].self, forKey: .methods)
         // An API from before warnings sends none.
         warnings = try container.decodeIfPresent([String: String].self, forKey: .warnings) ?? [:]
+        deviceAttestation = try? container.decodeIfPresent(DeviceAttestation.self, forKey: .deviceAttestation)
+    }
+
+    /// What the login screen says when this device can't pass the device
+    /// check (`unsupportedReason` from the SDK's attestor: a simulator, no
+    /// App Attest), and whether signing in will be refused; nil when the
+    /// device can, or the audience doesn't check.
+    func deviceCheckWarning(unsupportedReason: String?) -> (message: String, blocksSignIn: Bool)? {
+        guard unsupportedReason != nil, let policy = deviceAttestation, policy.mode != "off" else { return nil }
+        let fallback = policy.required
+            ? String(localized: "This device can't prove it's a genuine phone running the real app, so sign-in is blocked here. Try another phone.")
+            : String(localized: "This device can't prove it's a genuine phone running the real app. You can still sign in for now.")
+        let sent = policy.warning?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ((sent?.isEmpty == false ? sent : nil) ?? fallback, policy.required)
     }
 
     /// What to say before signing in with `method`, such as "Facebook login
@@ -822,7 +864,7 @@ struct SignInMethods: Decodable, Sendable, Equatable {
         return warning
     }
 
-    private enum CodingKeys: String, CodingKey { case methods, warnings }
+    private enum CodingKeys: String, CodingKey { case methods, warnings, deviceAttestation }
 }
 
 /// `GET /v1/token/review`.
