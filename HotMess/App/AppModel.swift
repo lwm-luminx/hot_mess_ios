@@ -111,7 +111,17 @@ final class AppModel {
 
     static let shared = AppModel()
 
-    init(configuration: AppConfiguration = AppConfiguration()) {
+    /// `credentialStore`, `urlSession`, `deviceAttestor` and `openSocket` are
+    /// the app's real ones by default; unit tests pass an in-memory store, a
+    /// stubbed session and a socket that never connects, so a screen can be
+    /// hosted without the keychain or the network.
+    init(
+        configuration: AppConfiguration = AppConfiguration(),
+        credentialStore: any CredentialStore = SessionStore.credentialStore,
+        urlSession: URLSession = .hotMess,
+        deviceAttestor: (any DeviceAttestor)? = AppAttestAttestor.platformDefault,
+        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil
+    ) {
         self.configuration = configuration
         serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
 
@@ -119,9 +129,10 @@ final class AppModel {
         self.operations = operations
         let audienceKit = AudienceKitClient(
             configuration: configuration.audienceKit,
-            credentialStore: SessionStore.credentialStore,
-            session: .hotMess,
-            monitor: operations
+            credentialStore: credentialStore,
+            session: urlSession,
+            monitor: operations,
+            deviceAttestor: deviceAttestor
         )
         self.audienceKit = audienceKit
 
@@ -145,7 +156,6 @@ final class AppModel {
         // HTTP 401 does. The cable reads the credential from the SDK's store
         // whenever it (re)opens, so a new sign-in is picked up, and signs the
         // handshake the way every call is signed (Bearer, API version).
-        let credentialStore = SessionStore.credentialStore
         let cable = AudienceCable(
             configuration: configuration.audienceKit,
             url: GraphQLCable.url(for: configuration),
@@ -154,7 +164,7 @@ final class AppModel {
                 guard let token else { return }
                 Task { @MainActor in await session.sessionRejected(token: token) }
             },
-            openSocket: { request in
+            openSocket: openSocket ?? { request in
                 WebSocketTaskSocket(URLSession.realtime.webSocketTask(with: request))
             }
         )

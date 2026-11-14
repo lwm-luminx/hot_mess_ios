@@ -180,6 +180,18 @@ with any scheme, or:
 xcodebuild test -scheme "HotMess Debug" -destination "platform=iOS Simulator,name=iPhone 17"
 ```
 
+The screen tests (`HotMessTests/Screens`) host the real SwiftUI screens (Now,
+a venue, an event, Quickie, Ping, Me, the venues and events tabs, a chat room,
+cover) in a window and read back what they show through accessibility. Their
+API is a stub (`HotMessTests/Support/ScreenTestSupport.swift`) that answers
+GraphQL by operation name from inline fixtures and fails the test on any
+request it wasn't given, so they never sign in or reach a real server.
+
+`Scripts/unit-tests.sh` runs the unit bundle with code coverage and prints the
+app's line coverage per file (`Scripts/unit-tests.sh Features/Now` narrows it;
+`SIMULATOR=` or `SIMULATOR_ID=` picks the simulator). It never runs the UI or
+screenshot tests.
+
 The previous suite authenticated against Facebook with a token committed to the
 repository and then called the live API, so it could not run offline and could
 not distinguish a regression from an outage.
