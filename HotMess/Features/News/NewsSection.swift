@@ -56,7 +56,8 @@ extension NewsSection {
 
 /// An article row that opens it: the reader, or for a teaser (a publication not on Soapbox yet links out) the piece on
 /// the publication's own site, where its ads and traffic are. The first time, the reader acknowledges that the
-/// publisher runs its own ads (``PublisherAdsNote``) before either opens.
+/// publisher runs its own ads (``PublisherAdsNote``) before either opens, unless they tipped the publication to read it
+/// without ads.
 struct ArticleLink: View {
     let article: Article
 
@@ -66,7 +67,7 @@ struct ArticleLink: View {
 
     var body: some View {
         Button {
-            if model.hasAcknowledgedPublisherAds { open() } else { pending = open }
+            if model.hasAcknowledgedPublisherAds || article.showsWithoutAds { open() } else { pending = open }
         } label: {
             ArticleRow(article: article)
         }
