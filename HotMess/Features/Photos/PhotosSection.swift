@@ -19,6 +19,7 @@ struct PhotosSection: View {
     var title = String(localized: "Photos")
 
     @Environment(AppModel.self) private var model
+    @Environment(\.detailRefreshes) private var refreshes
     @State private var photos: [EventPhoto] = []
     @State private var capturing = false
     @State private var noCamera = false
@@ -46,7 +47,7 @@ struct PhotosSection: View {
                 .padding(.horizontal, 16)
             }
         }
-        .task(id: subject) { await load() }
+        .task(id: SectionLoadKey(subject: subject, refreshes: refreshes)) { await load() }
         .fullScreenCover(isPresented: $capturing) {
             CameraCapture { image in
                 capturing = false

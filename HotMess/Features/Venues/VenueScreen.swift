@@ -15,6 +15,8 @@ struct VenueScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @State private var viewModel: VenueViewModel?
+    /// Pull-to-refresh count, so the sections that load on their own reload too.
+    @State private var refreshes = 0
     @State private var lineupModel: VenueLineupModel?
     @State private var pairUpModel: PairUpModel?
     @State private var isPairingUp = false
@@ -174,6 +176,12 @@ struct VenueScreen: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
+                // Reloads the page, then (through the count) its news, posts and photos.
+                .refreshable {
+                    await viewModel?.load()
+                    refreshes += 1
+                }
+                .environment(\.detailRefreshes, refreshes)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
