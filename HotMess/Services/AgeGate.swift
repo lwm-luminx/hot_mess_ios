@@ -29,6 +29,14 @@ enum AgeGate {
     nonisolated static let minimumAge = 18
 
     private nonisolated static let confirmedKey = "HotMessConfirmedAdult"
+    private nonisolated static let sourceKey = "HotMessConfirmedAdultSource"
+
+    /// How the 18+ confirmation on this device was made, in the API's `AgeSource` words: `APP_STORE` when iOS
+    /// shared a declared age range of 18 or more, `SELF_DECLARED` when the person confirmed it themselves. The
+    /// app sends it with `acceptTerms`, so the account keeps the check as well as the device.
+    nonisolated static var source: String {
+        UserDefaults.standard.string(forKey: sourceKey) ?? "SELF_DECLARED"
+    }
 
     /// Whether this device already has an 18+ confirmation.
     nonisolated static var isConfirmed: Bool {
@@ -51,7 +59,10 @@ enum AgeGate {
             do {
                 let response = try await AgeRangeService.shared.requestAgeRange(ageGates: minimumAge, in: presenter)
                 let verdict = verdict(for: response)
-                if verdict == .adult { confirm() }
+                if verdict == .adult {
+                    UserDefaults.standard.set("APP_STORE", forKey: sourceKey)
+                    confirm()
+                }
                 return verdict
             } catch {
                 // Not available here (no Apple Account age, an MDM policy) or
