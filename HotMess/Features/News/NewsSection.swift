@@ -14,6 +14,7 @@ struct NewsSection: View {
     var limit = 3
 
     @Environment(AppModel.self) private var model
+    @Environment(\.detailRefreshes) private var refreshes
     @State private var articles: [Article] = []
 
     var body: some View {
@@ -36,7 +37,7 @@ struct NewsSection: View {
                 .accessibilityIdentifier("news.section")
             }
         }
-        .task(id: topic) {
+        .task(id: SectionLoadKey(subject: topic, refreshes: refreshes)) {
             articles = (try? await model.audienceKit.articles(about: topic, first: limit)) ?? []
         }
     }
