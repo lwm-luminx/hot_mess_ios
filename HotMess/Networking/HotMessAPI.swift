@@ -594,8 +594,18 @@ struct HotMessAPI: CoverPaymentAPI {
         }
     }
 
+    /// Records the terms, and with them this device's 18+ confirmation (`AgeGate`) so the account keeps it.
+    /// An API from before it took `adult` and `ageSource` refuses that document, so the plain one is the fallback.
     func acceptTerms() async throws -> Date? {
-        try await query(Documents.acceptTerms, variables: [:], as: AcceptTermsResponse.self)
+        if AgeGate.isConfirmed,
+           let response = try? await query(
+               Documents.acceptTermsAsAdult,
+               variables: ["ageSource": .string(AgeGate.source)],
+               as: AcceptTermsResponse.self
+           ) {
+            return response.acceptTerms.termsAcceptedAt
+        }
+        return try await query(Documents.acceptTerms, variables: [:], as: AcceptTermsResponse.self)
             .acceptTerms.termsAcceptedAt
     }
 
@@ -1346,6 +1356,12 @@ extension HotMessAPI {
         static let acceptTerms = """
         mutation AcceptTerms {
           acceptTerms(input: {}) { terms_accepted_at: termsAcceptedAt }
+        }
+        """
+
+        static let acceptTermsAsAdult = """
+        mutation AcceptTermsAsAdult($ageSource: AgeSource) {
+          acceptTerms(input: { adult: true, ageSource: $ageSource }) { terms_accepted_at: termsAcceptedAt }
         }
         """
 
