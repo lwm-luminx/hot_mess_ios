@@ -99,6 +99,9 @@ struct SafetyAlertStatusView: View {
         } footer: {
             if alert.state == .open {
                 Text("Stay where you feel safest. You'll feel a buzz, with no sound, when someone picks it up. If nobody does in 2 minutes, we'll help you reach a friend, a ride or \(EmergencyNumber.current).")
+            } else if alert.state == .acknowledged {
+                // Staff work for the venue: the app only passes on that one of them tapped "I'm on it".
+                Text("A staff member at the venue told us they're coming. Hot Mess can't confirm that or how long it will take. If you're in danger, call \(EmergencyNumber.current).")
             }
         }
     }
