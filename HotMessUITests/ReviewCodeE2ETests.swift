@@ -57,7 +57,12 @@ final class ReviewCodeE2ETests: XCTestCase {
         app.launch()
         enterCode(code)
         XCTAssertTrue(tabs.waitForExistence(timeout: 30), "The review code didn't sign in")
-        app.tap() // lets the interruption monitor answer a location or notification prompt
+        // Lets the interruption monitor answer a location or notification prompt. The tap goes on the status bar's
+        // strip: the middle of Now has "Connect Facebook", which would open Facebook's sign-in page.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.01)).tap()
+
+        // Nothing opened Facebook (the e2e run must stay on the local API).
+        XCTAssertFalse(app.webViews.firstMatch.exists, "A web page opened over the app")
 
         // Now loads: its Ping button and no error.
         open(tab: "Now")
@@ -132,8 +137,9 @@ final class ReviewCodeE2ETests: XCTestCase {
     }
 
     private func open(tab name: String) {
+        // The tab bar's button, waited for: Now has an "Events" section header of the same name further down.
         let phoneTab = app.tabBars.buttons[name]
-        let button = phoneTab.exists ? phoneTab
+        let button = phoneTab.waitForExistence(timeout: 10) ? phoneTab
             : app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", name)).firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 10), "The \(name) tab didn't appear")
         button.tap()
