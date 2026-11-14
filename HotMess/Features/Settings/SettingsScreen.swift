@@ -25,6 +25,11 @@ struct SettingsScreen: View {
     /// the API can't say, which hides the toggle.
     @State private var recentChatPush: Bool?
     @State private var isSavingRecentChatPush = false
+    /// Quickie pushes (paired, revealed, met, and invites to join someone's
+    /// Quickie where you are): `nil` until it loads, and while the API can't
+    /// say, which hides the toggle.
+    @State private var pairUpPush: Bool?
+    @State private var isSavingPairUpPush = false
     /// The API a tester picked, waiting on the confirmation.
     @State private var pendingServer: AppConfiguration.APIServer?
 
@@ -55,6 +60,7 @@ struct SettingsScreen: View {
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.tribes.load() } }
         .task(id: model.session.isSignedIn) { if model.session.isSignedIn { await model.listings.load() } }
         .task(id: model.session.isSignedIn) { await loadRecentChatPush() }
+        .task(id: model.session.isSignedIn) { await loadPairUpPush() }
         .confirmationDialog(
             String(localized: "Sign out of Hot Mess?"),
             isPresented: $isConfirmingSignOut,
@@ -266,20 +272,32 @@ struct SettingsScreen: View {
     /// Only for someone signed in: the setting is on their account.
     @ViewBuilder
     private var notificationsSection: some View {
-        if model.session.isSignedIn, let recentChatPush {
+        if model.session.isSignedIn, recentChatPush != nil || pairUpPush != nil {
             Section {
-                Toggle(isOn: Binding(
-                    get: { recentChatPush },
-                    set: { enabled in Task { await setRecentChatPush(enabled) } }
-                )) {
-                    Label(String(localized: "Rooms You Just Left"), systemImage: "bubble.left.and.bubble.right")
+                if let recentChatPush {
+                    Toggle(isOn: Binding(
+                        get: { recentChatPush },
+                        set: { enabled in Task { await setRecentChatPush(enabled) } }
+                    )) {
+                        Label(String(localized: "Rooms You Just Left"), systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .disabled(isSavingRecentChatPush)
+                    .accessibilityIdentifier("me.recentChatPush")
                 }
-                .disabled(isSavingRecentChatPush)
-                .accessibilityIdentifier("me.recentChatPush")
+                if let pairUpPush {
+                    Toggle(isOn: Binding(
+                        get: { pairUpPush },
+                        set: { enabled in Task { await setPairUpPush(enabled) } }
+                    )) {
+                        Label(String(localized: "Quickie"), systemImage: "person.2.wave.2")
+                    }
+                    .disabled(isSavingPairUpPush)
+                    .accessibilityIdentifier("me.pairUpPush")
+                }
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("Get a push when people keep talking in a chat room you left in the last 30 minutes.")
+                Text("Rooms You Just Left: a push when people keep talking in a chat room you left in the last 30 minutes. Quickie: pushes when you're paired, and when someone where you are wants a Quickie.")
             }
         }
     }
@@ -487,6 +505,28 @@ struct SettingsScreen: View {
             recentChatPush = try await model.api.setRecentChatPush(enabled)
         } catch {
             recentChatPush = previous
+        }
+    }
+
+    private func loadPairUpPush() async {
+        guard model.session.isSignedIn else {
+            pairUpPush = nil
+            return
+        }
+        pairUpPush = try? await model.api.pairUpPush()
+    }
+
+    /// Shows the change at once, and puts it back if the API refuses it.
+    private func setPairUpPush(_ enabled: Bool) async {
+        let previous = pairUpPush
+        pairUpPush = enabled
+        isSavingPairUpPush = true
+        defer { isSavingPairUpPush = false }
+
+        do {
+            pairUpPush = try await model.api.setPairUpPush(enabled)
+        } catch {
+            pairUpPush = previous
         }
     }
 
