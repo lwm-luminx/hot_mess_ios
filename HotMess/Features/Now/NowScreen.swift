@@ -226,6 +226,11 @@ struct NowScreen: View {
             guard let tonightVenueID else { safety = nil; return }
             safety = (try? await model.api.venueSafety(tonightVenueID)) ?? nil
         }
+        // The open Ping (theirs, or one they joined) on the Lock Screen.
+        .onChange(of: openPings, initial: true) { _, pings in
+            guard let pings else { return }
+            LiveActivities.sync(myPing: pings.mine, friendPings: pings.joined)
+        }
         .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
             if let pairUpModel {
                 PairUpSheet(model: pairUpModel, venueName: viewModel?.state.value.flatMap { $0.venue?.name ?? $0.event?.venue?.name } ?? "")
@@ -870,5 +875,19 @@ struct FriendStrip: View {
             .padding(.horizontal, 20)
         }
         .scrollIndicators(.hidden)
+    }
+}
+
+/// The Pings a Live Activity can show, so Now updates it only when they change.
+private struct OpenPings: Equatable {
+    let mine: Ping?
+    let joined: [Ping]
+}
+
+private extension NowScreen {
+    /// Nil until Now has loaded, so the activity isn't ended before it knows.
+    var openPings: OpenPings? {
+        guard let now = viewModel?.state.value else { return nil }
+        return OpenPings(mine: now.myPing, joined: now.friendPings.filter(\.joined))
     }
 }

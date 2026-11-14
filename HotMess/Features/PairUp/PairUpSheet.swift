@@ -65,7 +65,10 @@ struct PairUpSheet: View {
                 }
             }
         }
-        .task { await model.poll() }
+        .task {
+            if !venueName.isEmpty { model.venueName = venueName }
+            await model.poll()
+        }
         .task {
             await app.safety.load()
             isCheckingTerms = false

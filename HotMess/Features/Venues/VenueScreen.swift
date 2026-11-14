@@ -217,6 +217,7 @@ struct VenueScreen: View {
         }
         .task {
             ensureViewModel()
+            pairUpModel?.venueName = viewModel?.state.value?.venue.name
             await pairUpModel?.load()
         }
         // Its own request, so an API without suggestions still shows the venue.
