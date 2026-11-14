@@ -214,6 +214,7 @@ final class AppModel {
 
     /// Signs out and forgets what was loaded for the user.
     func signOut() {
+        LiveActivities.endAll()
         forgetUser()
         session.signOut()
     }
