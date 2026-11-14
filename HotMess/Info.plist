@@ -80,6 +80,9 @@
 		<string>fbshareextension</string>
 		<string>itms-beta</string>
 		<string>itms-apps</string>
+		<string>audiencekit-velvet</string>
+		<string>audiencekit-backstage</string>
+		<string>audiencekit-focus</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

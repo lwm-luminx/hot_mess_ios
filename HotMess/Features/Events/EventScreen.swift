@@ -41,6 +41,10 @@ struct EventScreen: View {
                             heroText(detail)
                         }
 
+                        if let venueID = event.venue?.id {
+                            ManagedListingNotice(kind: .venue, id: venueID, eventID: event.id)
+                        }
+
                         if viewModel?.isTonight == true || viewModel?.activePings.isEmpty == false {
                             PingPlaceStrip(
                                 pings: (viewModel?.activePings ?? []).filter { !model.safety.isBlocked($0.user.id) },
@@ -92,6 +96,7 @@ struct EventScreen: View {
                         }
 
                         PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
+                        NewsSection.inTheNews(.event(event.id.uuidString.lowercased()))
 
                         PhotosSection(subject: .event(event.id))
 

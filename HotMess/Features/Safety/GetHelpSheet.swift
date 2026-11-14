@@ -205,9 +205,28 @@ struct RideRows: View {
     }
 }
 
-/// "In danger right now? Call 911": the one red thing, always last.
+/// The emergency number for the phone's region, for when the app hasn't
+/// loaded `supportResources` (or can't): 999 in the UK, 000 in Australia,
+/// 911 across North America, and 112 elsewhere, which GSM phones route to
+/// the local service almost everywhere.
+enum EmergencyNumber {
+    static func forRegion(_ code: String?) -> String {
+        switch code?.uppercased().split(separator: "-").first.map(String.init) {
+        case "GB", "IM", "JE", "GG": "999"
+        case "AU": "000"
+        case "NZ": "111"
+        case "US", "CA", "MX", "PR", "GU", "VI", "AS", "MP", nil: "911"
+        default: "112"
+        }
+    }
+
+    static var current: String { forRegion(Locale.current.region?.identifier) }
+}
+
+/// "In danger right now? Call 911" (or the local number): the one red thing,
+/// always last.
 struct EmergencySection: View {
-    var number = "911"
+    var number = EmergencyNumber.current
 
     var body: some View {
         Section {

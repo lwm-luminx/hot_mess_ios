@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKitUI
 import Kingfisher
 import SwiftUI
 import UIKit
@@ -44,6 +45,7 @@ struct SettingsScreen: View {
             aboutSection
             dangerSection
             deleteSection
+            creditSection
         }
         .listStyle(.insetGrouped)
         .navigationTitle(String(localized: "Me"))
@@ -188,19 +190,26 @@ struct SettingsScreen: View {
         }
     }
 
+    /// Opens the page itself when there's one, the app's home for several;
+    /// its download page (Velvet's beta) when the phone doesn't have it.
     private func staffAppRow(_ app: StaffApp, listings: [ManagedListings.Listing]) -> some View {
-        Button {
-            openURL(app.appURL) { opened in
-                if !opened { openURL(app.webURL) }
-            }
-        } label: {
+        StaffAppLink(app, url: Self.staffAppURL(app, listings: listings, audienceID: model.configuration.audienceID)) { title, systemImage in
             LabeledContent {
                 Text(Self.listingNames(listings))
             } label: {
-                Label(String(localized: "Open \(app.title)"), systemImage: app.systemImage)
+                Label(title, systemImage: systemImage)
             }
         }
         .accessibilityIdentifier("me.staffApp.\(app.rawValue)")
+    }
+
+    static func staffAppURL(_ app: StaffApp, listings: [ManagedListings.Listing], audienceID: String?) -> URL? {
+        guard listings.count == 1, let id = listings.first?.id.uuidString.lowercased() else { return nil }
+        switch app {
+        case .velvet: return StaffApp.velvet(venueID: id, audienceID: audienceID)
+        case .backstage: return StaffApp.backstage(personID: id, audienceID: audienceID)
+        case .focus: return nil
+        }
     }
 
     /// "The Wildrose", or "The Wildrose +2" for someone managing more than one.
@@ -361,6 +370,11 @@ struct SettingsScreen: View {
             // Installed from, Beta updates / Updates, Last checked, Check
             // for updates and Open in TestFlight / on the App Store.
             AboutUpdateRows(updates: model.updates)
+            // Runs what the app loads and says what failed, for a bug report.
+            NavigationLink(String(localized: "Check the App")) {
+                CheckTheAppScreen()
+            }
+            .accessibilityIdentifier("me.checkTheApp")
             // Which Facebook app and API a build talks to matters only to
             // testers and super admins; App Store builds leave it out for
             // everyone else.
@@ -499,34 +513,22 @@ struct SettingsScreen: View {
         return components.url
     }
 
+    /// "Powered by AudienceKit · A Love Wins Media product", AudienceKit's
+    /// policies and "Bring AudienceKit to your venue", at the foot of Me.
+    private var creditSection: some View {
+        Section {
+        } footer: {
+            PlatformCreditFooter()
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .accessibilityIdentifier("me.platformCredit")
+        }
+    }
+
     private func resetLocalData() {
         model.session.resetLocalData()
         ImageCache.default.clearMemoryCache()
         ImageCache.default.clearDiskCache()
         didReset = true
     }
-}
-
-/// The staff apps Me sends managers to: Velvet for a venue's, Backstage for
-/// talent's. Each opens by its URL scheme when installed, its page on
-/// audiencekit.com (with the store links) otherwise.
-enum StaffApp: String {
-    case velvet, backstage
-
-    var title: String {
-        switch self {
-        case .velvet: "Velvet"
-        case .backstage: "Backstage"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .velvet: "building.2"
-        case .backstage: "music.mic"
-        }
-    }
-
-    var appURL: URL { URL(string: "audiencekit-\(rawValue)://")! }
-    var webURL: URL { URL(string: "https://audiencekit.com/apps/\(rawValue)")! }
 }

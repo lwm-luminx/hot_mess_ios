@@ -263,8 +263,8 @@ struct PingSendingTests {
         ISO8601DateFormatter().date(from: iso8601)!
     }
 
-    private func event(_ name: String, _ start: String) -> Event {
-        Event(id: UUID(), name: name, startDate: date(start))
+    private func event(_ name: String, _ start: String) -> HotMess.Event {
+        HotMess.Event(id: UUID(), name: name, startDate: date(start))
     }
 
     @Test("Offers tonight's events, small hours included, earliest first")

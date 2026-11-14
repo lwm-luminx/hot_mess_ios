@@ -131,6 +131,16 @@ struct EndpointTests {
         let json = try #require(JSONSerialization.jsonObject(with: try encode(JSONEncoder())) as? [String: Any])
         #expect(json["code"] as? String == "1234")
         #expect((json["device"] as? [String: Any])?["identifier"] as? String == "d")
+        #expect(json["app_transaction"] == nil)
+
+        let fromStore = HotMessAPI.Endpoints.reviewSignIn(
+            ReviewSignInRequest(code: "1234", host: nil, device: device, appTransaction: "signed.jws")
+        )
+        let storeEncode = try #require(fromStore.body?.encode)
+        let storeJSON = try #require(
+            JSONSerialization.jsonObject(with: try storeEncode(JSONEncoder())) as? [String: Any]
+        )
+        #expect(storeJSON["app_transaction"] as? String == "signed.jws")
 
         let enabled = try JSONDecoder().decode(ReviewSignInStatus.self, from: Data(#"{"enabled": true}"#.utf8))
         #expect(enabled.enabled)
@@ -518,7 +528,7 @@ struct APIErrorTests {
 @Suite("Chat subscription")
 struct ChatIdentifierTests {
     /// The `execute` command's data the cable sends for the room.
-    private func executeData(for room: ChatRoom) -> String {
+    private func executeData(for room: HotMess.ChatRoom) -> String {
         AudienceCable.executeData(
             query: VenueChatConnection.subscriptionDocument(for: room),
             variables: VenueChatConnection.variables(for: room),

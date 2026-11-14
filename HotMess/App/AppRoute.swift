@@ -27,6 +27,10 @@ enum AppRoute: Hashable, Sendable {
     /// A locale's own page from the Venues tab's Everywhere view: some of
     /// its events and its venues, as the server lays them out.
     case locale(UUID, name: String)
+    /// A Soapbox article, by its id.
+    case article(String)
+    /// A Soapbox publication's page: its articles and "Write an op-ed".
+    case publication(String)
 
     /// Which tab the route belongs in.
     var tab: AppTab {
@@ -34,7 +38,7 @@ enum AppRoute: Hashable, Sendable {
         case .venue, .venueChat, .karaokeList, .locale: .venues
         case .event: .events
         case .person: .people
-        case .localeChat, .eventChat, .ping, .updates: .now
+        case .localeChat, .eventChat, .ping, .updates, .article, .publication: .now
         case let .posts(subject, _):
             switch subject {
             case .venue: .venues

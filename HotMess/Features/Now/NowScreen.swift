@@ -40,12 +40,13 @@ struct NowScreen: View {
     @State private var cardLayout: ScreenLayout?
 
     /// Every card Now can draw, in its built-in order: the lineup or karaoke,
-    /// the room's chat, tonight's posts, small talk, the next events, the
-    /// locale's updates, venues nearby, where your friends are, then pings.
+    /// the room's chat, tonight's posts, small talk, the next events, a few
+    /// articles from the locale's publishers, the locale's updates, venues
+    /// nearby, where your friends are, then pings.
     /// Announcements and promoted cards come only from the server.
     static let fallbackCards = [
         CardKind.nowStage, CardKind.nowChat, CardKind.postsTonight, CardKind.nowSmallTalk, CardKind.eventsUpcoming,
-        CardKind.postsLocale, CardKind.venuesNearby, CardKind.venuesFriends, CardKind.pings,
+        CardKind.articlesLocale, CardKind.postsLocale, CardKind.venuesNearby, CardKind.venuesFriends, CardKind.pings,
     ]
     static let cardKinds = fallbackCards + [CardKind.web, CardKind.promoSlot]
 
@@ -417,6 +418,8 @@ struct NowScreen: View {
             }
         case CardKind.eventsUpcoming:
             eventsSection(now)
+        case CardKind.articlesLocale:
+            localNewsSection(now, card: card)
         case CardKind.postsLocale:
             localePostsSection(now)
         case CardKind.venuesNearby:
@@ -757,6 +760,20 @@ struct NowScreen: View {
                 subject: subject,
                 withinHours: 24,
                 seeAll: .posts(subject, title: title)
+            )
+        }
+    }
+
+    /// A few articles from the publishers covering the locale, newest first.
+    /// A teaser opens the publisher's own site. Draws nothing when there are
+    /// none, so the built-in order can always list it.
+    @ViewBuilder
+    private func localNewsSection(_ now: Now, card: LayoutCard) -> some View {
+        if let localeID = card.localeID ?? now.locale?.id.uuidString.lowercased() {
+            NewsSection(
+                title: now.locale.map { String(localized: "News in \($0.name)") } ?? SoapboxCopy.news,
+                topic: .locale(localeID),
+                limit: 3
             )
         }
     }

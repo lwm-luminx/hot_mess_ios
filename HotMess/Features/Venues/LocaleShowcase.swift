@@ -100,6 +100,7 @@ struct LocaleScreen: View {
                     ForEach(layout.cards) { card in
                         localeCard(card, local: local, layoutID: layout.id)
                     }
+                    NewsSection.news(localeID: localeID)
                 }
                 .padding(.vertical, 16)
             }

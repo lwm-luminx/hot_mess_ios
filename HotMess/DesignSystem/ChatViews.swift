@@ -207,6 +207,9 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     /// Whether that listing has a page. Without one (a guest host) the
     /// persona draws a host glyph and links nowhere.
     var personHasPage = true
+    /// Only the reader sees it (a private nudge from the AI host): "Only you
+    /// can see this" under it.
+    var isPrivate = false
 
     /// Someone the reader can tap for their profile sheet: another person
     /// posting as themself. Not the venue, talent posting as their listing,
@@ -706,6 +709,12 @@ private struct ChatThreadRowView: View {
                     }
                 }
 
+                if message.isPrivate {
+                    PrivateLineNote()
+                        .padding(.leading, message.sender == .bot ? 12 : 4)
+                        .accessibilityHidden(true)
+                }
+
                 deliveryStatus
             }
             .frame(
@@ -812,7 +821,10 @@ private struct ChatThreadRowView: View {
 
     private var accessibilityLabel: String {
         // "Prompt answer: …" says what the label on the bubble does.
-        let text = message.promptLabel.map { String(localized: "\($0) answer: \(message.text)") } ?? message.text
+        var text = message.promptLabel.map { String(localized: "\($0) answer: \(message.text)") } ?? message.text
+        if message.isPrivate {
+            text = String(localized: "\(text). Only you can see this.")
+        }
         if message.isOwn {
             if let name = message.authorName, !name.isEmpty, let role = message.role {
                 return String(localized: "You, as \(name), \(role.title): \(text)")
@@ -827,6 +839,18 @@ private struct ChatThreadRowView: View {
             return "\(name), \(role.title): \(text)"
         }
         return "\(name): \(text)"
+    }
+}
+
+/// Under a line only the reader sees (a private nudge from the AI host): an
+/// eye with a slash and "Only you can see this", small and secondary.
+struct PrivateLineNote: View {
+    var body: some View {
+        Label(String(localized: "Only you can see this"), systemImage: "eye.slash")
+            .font(.hotMess(fixedSize: 12, semibold: true))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .accessibilityIdentifier("chat.privateNote")
     }
 }
 
