@@ -22,7 +22,7 @@ extension AppModel {
 
 /// The one-time note before a reader's first Soapbox story: the publisher chooses and answers for the ads in its
 /// stories so it can keep paying writers, Hot Mess takes no cut, its own sponsored spots are separate and marked
-/// Promoted, and no data goes to a publisher's advertisers. Shown while `pending` is set; "I understand" records it
+/// Sponsored, and no data goes to a publisher's advertisers. Shown while `pending` is set; "I understand" records it
 /// for this person and runs `pending`, "Not now" drops it and calls `onDecline`.
 struct PublisherAdsNote: ViewModifier {
     @Binding var pending: (() -> Void)?
