@@ -27,6 +27,10 @@ final class AppModel {
     let checkout: CoverCheckout
     /// Friends seen so far, so chat can show them by their full name.
     let friends = FriendDirectory()
+    /// Who on this device has acknowledged that publishers run their own ads, asked before their first Soapbox story.
+    let publisherAds = PublisherAdsAcknowledgement()
+    /// A guest's acknowledgement, kept only until the app quits since there's no one to record it for.
+    @ObservationIgnored var publisherAdsAcknowledgedAsGuest = false
     /// Who the user blocked, and whether they've agreed to the terms.
     let safety: SafetyStore
     /// The venues and talent the user manages, so Me offers Velvet or Backstage.
