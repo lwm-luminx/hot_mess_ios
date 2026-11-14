@@ -14,6 +14,7 @@ struct PostsSection: View {
     var limit = 2
 
     @Environment(AppModel.self) private var model
+    @Environment(\.detailRefreshes) private var refreshes
     @State private var postsModel: PostsModel?
 
     var body: some View {
@@ -42,7 +43,7 @@ struct PostsSection: View {
                 .padding(.horizontal, 16)
             }
         }
-        .task {
+        .task(id: refreshes) {
             if postsModel == nil { postsModel = PostsModel(api: model.api, subject: subject) }
             await postsModel?.load()
         }

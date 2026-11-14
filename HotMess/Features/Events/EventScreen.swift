@@ -16,6 +16,8 @@ struct EventScreen: View {
 
     @Environment(AppModel.self) private var model
     @State private var viewModel: EventViewModel?
+    /// Pull-to-refresh count, so the sections that load on their own reload too.
+    @State private var refreshes = 0
     @State private var heroTone = HeroTone.placeholder
     @State private var heroCollapsed = false
     @State private var pingSeed: PingSeed?
@@ -124,6 +126,12 @@ struct EventScreen: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .trackingHeroCollapse($heroCollapsed, bodyHeight: HeroMetrics.detailHeight)
+                // Reloads the page, then (through the count) its news, posts and photos.
+                .refreshable {
+                    await viewModel?.load()
+                    refreshes += 1
+                }
+                .environment(\.detailRefreshes, refreshes)
             }
             // Ignoring the top here too is what makes the proxy report the bars' height.
             .ignoresSafeArea(edges: .top)
