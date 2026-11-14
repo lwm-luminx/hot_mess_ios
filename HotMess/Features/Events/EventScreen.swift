@@ -32,7 +32,7 @@ struct EventScreen: View {
 
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 24) {
+                    SectionStack {
                         // When, where, who and your RSVP all ride on the photo.
                         HeroHeader(
                             url: event.bannerURL,

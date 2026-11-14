@@ -39,7 +39,7 @@ struct VenueScreen: View {
 
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 24) {
+                    SectionStack {
                         // Its photos in turn, over a firmer scrim than a still
                         // hero so the name reads the same on each.
                         HeroHeader(

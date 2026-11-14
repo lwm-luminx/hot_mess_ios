@@ -23,6 +23,9 @@ final class ReviewCodeE2ETests: XCTestCase {
     /// Where the fixture's The Test Bar is (AppReviewVenue::DEMO_POINT), so the venue and its events are nearby.
     static let fixturePoint = CLLocation(latitude: 37.7793, longitude: -122.4194)
     static let venue = "The Test Bar"
+    /// The fixture's publisher on People and its live teaser (UiTestsHotMess::PUBLISHER and TEASER_TITLE).
+    static let publisher = "Review City Gazette"
+    static let teaser = "Review City Gazette opens its newsroom"
 
     private var app: XCUIApplication!
 
@@ -116,6 +119,42 @@ final class ReviewCodeE2ETests: XCTestCase {
         XCTAssertFalse(tabs.exists)
     }
 
+    /// A person who runs a publication has its articles under "In the news" on their page (QSaltLake on People), and
+    /// pulling the page down reloads them. The fixture's Review City Gazette runs a trusted publication with one live
+    /// teaser (audience_kit_api `ui_tests:setup`, UiTestsHotMess.publication!).
+    func testPublishersPageShowsItsNews() throws {
+        let code = try Self.code()
+        app.launch()
+        enterCode(code)
+        XCTAssertTrue(tabs.waitForExistence(timeout: 30), "The review code didn't sign in")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.01)).tap()
+
+        open(tab: "People")
+        // The Gazette is based nowhere, so it's under Everyone, not the local groups.
+        let everyone = app.buttons["Everyone"]
+        if everyone.waitForExistence(timeout: 10) { everyone.tap() }
+        let publisher = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS[c] %@",
+                                                         "card.person.", Self.publisher)).firstMatch
+        XCTAssertTrue(scroll(to: publisher), "\(Self.publisher) isn't on People")
+        publisher.tap()
+
+        let news = app.otherElements["news.section"]
+        let teaser = news.buttons.matching(NSPredicate(format: "label CONTAINS %@", Self.teaser)).firstMatch
+        XCTAssertTrue(scroll(to: news), "\(Self.publisher)'s page has no \"In the news\"")
+        XCTAssertTrue(teaser.exists, "\"In the news\" doesn't list \(Self.teaser)")
+        let page = XCTAttachment(screenshot: app.screenshot())
+        page.name = "\(Self.publisher) with its news"
+        page.lifetime = .keepAlways
+        add(page)
+
+        // Pull to refresh: the page reloads and the news is still there.
+        pullToRefresh()
+        settle()
+        XCTAssertFalse(app.staticTexts["Something went wrong"].exists, "Refreshing the page failed")
+        XCTAssertTrue(scroll(to: news), "\"In the news\" went away after pulling to refresh")
+        XCTAssertTrue(teaser.waitForExistence(timeout: 10), "\(Self.teaser) went away after pulling to refresh")
+    }
+
     // MARK: - Steps
 
     private var tabs: XCUIElement { app.descendants(matching: .any)["main.tabs"] }
@@ -150,6 +189,14 @@ final class ReviewCodeE2ETests: XCTestCase {
         let back = app.navigationBars.buttons.firstMatch
         if back.exists { back.tap() }
         settle()
+    }
+
+    /// Back to the top of the page, then a slow drag down past it, held long enough to start a refresh.
+    private func pullToRefresh() {
+        for _ in 0..<4 { app.swipeDown(velocity: .fast) }
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        top.press(forDuration: 0.2, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)),
+                  withVelocity: .slow, thenHoldForDuration: 1)
     }
 
     private func wait(for element: XCUIElement, selected: Bool, timeout: TimeInterval = 15) -> Bool {
