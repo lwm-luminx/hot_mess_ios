@@ -41,6 +41,14 @@ struct ArticleScreen: View {
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                             .accessibilityIdentifier("article.disclosure")
                     }
+                    if article.showsWithoutAds {
+                        AdFreeThanks(publicationName: article.publication.name)
+                    } else if !article.teaser {
+                        AdFreeTipButton(publicationID: article.publication.id, publicationName: article.publication.name,
+                                        offered: article.publication.adFreeOffered) {
+                            await load()
+                        }
+                    }
                     if let body = article.body, !body.isEmpty {
                         Text(ArticleScreen.markdown(body))
                             .font(.hotMess(.body))
@@ -66,9 +74,6 @@ struct ArticleScreen: View {
         .navigationTitle(state.value?.publication.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .onAppear {
-            if !model.hasAcknowledgedPublisherAds { needsPublisherAdsNote = {} }
-        }
         .modifier(PublisherAdsNote(pending: $needsPublisherAdsNote, onDecline: { dismiss() }))
         .refreshable { await load() }
     }
@@ -132,7 +137,12 @@ struct ArticleScreen: View {
         if state.value == nil { state = .loading }
         do {
             if let article = try await model.audienceKit.article(id: articleID) {
+                let firstLoad = state.value == nil
                 state = .loaded(article)
+                // A reader who tipped the publication to read it without ads has nothing to acknowledge.
+                if firstLoad && !model.hasAcknowledgedPublisherAds && !article.showsWithoutAds {
+                    needsPublisherAdsNote = {}
+                }
             } else {
                 state = LoadState(catching: APIError.notFound)
             }

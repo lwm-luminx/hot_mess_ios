@@ -23,6 +23,14 @@ struct PublicationScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header(publication)
+                    if publication.viewerAdFree == true {
+                        AdFreeThanks(publicationName: publication.name, until: publication.viewerAdFreeUntil)
+                    } else {
+                        AdFreeTipButton(publicationID: publication.id, publicationName: publication.name,
+                                        offered: publication.adFreeOffered) {
+                            await load()
+                        }
+                    }
                     if publication.acceptsOpEds {
                         Button {
                             isWriting = true
