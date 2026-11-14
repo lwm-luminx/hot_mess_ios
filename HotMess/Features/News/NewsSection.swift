@@ -55,20 +55,35 @@ extension NewsSection {
 }
 
 /// An article row that opens it: the reader, or for a teaser (a publication not on Soapbox yet links out) the piece on
-/// the publication's own site, where its ads and traffic are.
+/// the publication's own site, where its ads and traffic are. The first time, the reader acknowledges that the
+/// publisher runs its own ads (``PublisherAdsNote``) before either opens.
 struct ArticleLink: View {
     let article: Article
 
+    @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @State private var pending: (() -> Void)?
 
     var body: some View {
-        if article.teaser, let url = article.canonicalUrl.flatMap(URL.init(string:)) {
-            Button { openURL(url) } label: { ArticleRow(article: article) }
-                .buttonStyle(.plain)
-                .accessibilityHint(Text("Opens \(ArticleRow.host(url)) in your browser"))
+        Button {
+            if model.hasAcknowledgedPublisherAds { open() } else { pending = open }
+        } label: {
+            ArticleRow(article: article)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(teaserURL.map { Text("Opens \(ArticleRow.host($0)) in your browser") } ?? Text(""))
+        .modifier(PublisherAdsNote(pending: $pending))
+    }
+
+    private var teaserURL: URL? {
+        article.teaser ? article.canonicalUrl.flatMap(URL.init(string:)) : nil
+    }
+
+    private func open() {
+        if let url = teaserURL {
+            openURL(url)
         } else {
-            NavigationLink(value: AppRoute.article(article.id)) { ArticleRow(article: article) }
-                .buttonStyle(.plain)
+            model.push(.article(article.id))
         }
     }
 }

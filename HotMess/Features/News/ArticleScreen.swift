@@ -13,7 +13,11 @@ struct ArticleScreen: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
     @State private var state: LoadState<Article> = .idle
+    /// Set when the reader reached the story without acknowledging that publishers run their own ads (a push or a
+    /// link), so the note shows over it first.
+    @State private var needsPublisherAdsNote: (() -> Void)?
 
     var body: some View {
         LoadStateView(state: state, retry: { Task { await load() } }) { article in
@@ -62,6 +66,10 @@ struct ArticleScreen: View {
         .navigationTitle(state.value?.publication.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .onAppear {
+            if !model.hasAcknowledgedPublisherAds { needsPublisherAdsNote = {} }
+        }
+        .modifier(PublisherAdsNote(pending: $needsPublisherAdsNote, onDecline: { dismiss() }))
         .refreshable { await load() }
     }
 
