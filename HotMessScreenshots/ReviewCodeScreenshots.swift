@@ -239,6 +239,85 @@ final class ReviewCodeScreenshots: XCTestCase {
         settle()
     }
 
+    // MARK: - The Velvet review lifecycle
+
+    /// Hot Mess's part of Velvet's App Review lifecycle, all at the demo venue (The Review Room): its page, tonight's
+    /// event, its chat and the Report / Block menu (cancelled), then "Tell staff I feel unsafe". The alert goes to the
+    /// demo venue's staff only; Velvet's VelvetTourTests/testSafetyAlertClaimAndClose claims and closes it. Runs only
+    /// with HOTMESS_UITEST_SEND_SAFETY_ALERT=1 for the alert; without it, it stops at the Get help sheet.
+    func testVelvetLifecycleScreens() throws {
+        let code = try Self.required("HOTMESS_UITEST_REVIEW_CODE", or: "APP_REVIEW_CODE")
+        // The review aids ("Pretend I'm here") the API turns on for the review account, forced on in a test-hooks build
+        // in case the next API hasn't picked up App Review's switch yet.
+        app.launchArguments.append("-HotMessReviewMode")
+        try signIn(code: code, captureLogin: false)
+
+        // The demo venue is hidden from Venues (it lives in Demo City), so open it by its link, as Velvet's App Clip
+        // card and the venue's QR code do. HOTMESS_UITEST_VENUE_ID overrides the production demo venue's ID.
+        let venueID = Self.value("HOTMESS_UITEST_VENUE_ID") ?? "6dfd4536-5042-45da-955a-b63694f6d0b2"
+        // Through the system, so the running (signed-in) app takes the link; app.open would relaunch it signed out.
+        openLink("hotmess://venues/\(venueID)")
+        XCTAssertTrue(app.staticTexts["The Review Room"].firstMatch.waitForExistence(timeout: 20), "The Review Room's page didn't open")
+        settle()
+        capture("lifecycle-venue")
+
+        scrollToTop()
+        pretendToBeHere()
+        // Tonight at the venue, as a guest who is there sees it: the cover and the venue chat. (The Hot Mess Review
+        // Room has no events: an event at a hidden venue would list.)
+        scrollToTop()
+        capture("lifecycle-tonight")
+        openChat()
+        capture("lifecycle-chat")
+        showReportMenuOnly()
+        back()
+
+        scrollToTop()
+        let getHelp = app.buttons["venue.getHelp"]
+        XCTAssertTrue(scroll(to: getHelp), "The venue's Get help button didn't show")
+        getHelp.tap()
+        settle()
+        let tellStaff = app.buttons["help.tellStaff"]
+        XCTAssertTrue(tellStaff.waitForExistence(timeout: 20), "Tell staff didn't show: is a Velvet device on shift at The Review Room?")
+        guard Self.value("HOTMESS_UITEST_SEND_SAFETY_ALERT") == "1" else {
+            capture("lifecycle-get-help")
+            return
+        }
+        tellStaff.tap()
+        let send = app.buttons["help.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 10), "The Tell staff form didn't open")
+        send.tap()
+        let status = app.staticTexts.matching(NSPredicate(format: "label IN %@", ["Staff have your alert", "Someone's on the way"])).firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "The alert's status didn't show")
+        settle()
+        capture("lifecycle-unsafe")
+    }
+
+    /// Opens a hotmess:// link through the system, so the running, signed-in app takes it (app.open relaunches it).
+    private func openLink(_ link: String) {
+        XCUIDevice.shared.system.open(URL(string: link)!)
+        let openPrompt = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        if openPrompt.waitForExistence(timeout: 3) { openPrompt.tap() }
+    }
+
+    /// Long-presses a demo guest's message for the Report… / Block menu, captures it and dismisses it: nothing is sent.
+    private func showReportMenuOnly() {
+        let report = app.buttons["Report…"]
+        let all = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label MATCHES %@ AND NOT label BEGINSWITH %@", "^[^:]{1,60}: .+", "You"))
+            .allElementsBoundByIndex.reversed()
+        let messages = all.filter { !$0.label.contains(", ") } + all.filter { $0.label.contains(", ") }
+        for message in messages.prefix(12) where message.isHittable {
+            message.press(forDuration: 1.2)
+            if report.waitForExistence(timeout: 2) { break }
+            app.tap()
+        }
+        guard report.exists else { return XCTFail("No message offered Report…") }
+        capture("lifecycle-report-menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.06)).tap()
+        settle()
+    }
+
     // MARK: - Helpers
 
     private func card(kind: String, containing label: String) -> XCUIElement {
