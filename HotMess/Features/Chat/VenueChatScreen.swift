@@ -349,6 +349,7 @@ struct VenueChatScreen: View {
         ChatProfileSheet(
             profile: profile,
             isOnline: viewModel?.onlineUserIDs.contains(profile.id) == true,
+            sharedTribes: sharedTribes(with: profile),
             friendState: friendState(of: profile.id),
             isSendingFriendRequest: sendingFriendRequestTo == profile.id,
             isMuted: mutedIDs.contains(profile.id),
@@ -375,6 +376,14 @@ struct VenueChatScreen: View {
     private func openProfile(_ message: ChatThreadMessage) {
         guard message.opensProfile, let id = UUID(uuidString: message.authorID) else { return }
         profileTarget = ChatProfile(id: id, name: message.authorName, avatarURL: message.avatarURL, message: message)
+    }
+
+    /// What the reader and they both picked: what the room learned about them
+    /// (roster, arrivals, their lines), else what the line the sheet opened
+    /// from carried.
+    private func sharedTribes(with profile: ChatProfile) -> [SharedTribe] {
+        let known = viewModel?.sharedTribes(with: profile.id) ?? []
+        return known.isEmpty ? profile.message?.sharedTribes ?? [] : known
     }
 
     private func friendState(of id: UUID) -> ChatFriendState {

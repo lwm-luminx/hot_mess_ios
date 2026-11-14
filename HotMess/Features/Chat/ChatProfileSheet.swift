@@ -32,13 +32,16 @@ enum ChatFriendState: Hashable, Sendable {
 
 /// The sheet that opens from someone's avatar or name in chat (design system
 /// "Tapping someone"): the same 24 TinyAvatar the room shows, their name and
-/// whether they're in chat now, a note on why photos stay small, then Ping,
-/// Add friend, and quieter Mute in this chat, Report and Block. There's no
-/// bigger photo, here or anywhere in chat.
+/// whether they're in chat now, the tribes the two of them both picked, a note
+/// on why photos stay small, then Ping, Add friend, and quieter Mute in this
+/// chat, Report and Block. There's no bigger photo, here or anywhere in chat.
 struct ChatProfileSheet: View {
     let profile: ChatProfile
     /// In the room now: the green dot and "In chat now".
     let isOnline: Bool
+    /// The tribes the reader and they both picked ("You're both bears"),
+    /// which only the two of them see. Empty hides the card.
+    var sharedTribes: [SharedTribe] = []
     let friendState: ChatFriendState
     var isSendingFriendRequest = false
     let isMuted: Bool
@@ -49,18 +52,26 @@ struct ChatProfileSheet: View {
     let onBlock: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-            note
-            mainButtons
-            quietButtons
+        // Scrolls only when the You both card makes it taller than medium,
+        // which can then also be pulled up to large.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                if !sharedTribes.isEmpty {
+                    YouBothCard(tribes: sharedTribes)
+                }
+                note
+                mainButtons
+                quietButtons
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 12)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
+        .scrollBounceBehavior(.basedOnSize)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(.systemBackground))
-        .presentationDetents([.medium])
+        .presentationDetents(sharedTribes.isEmpty ? [.medium] : [.medium, .large])
         .presentationDragIndicator(.visible)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(profile.displayName)
@@ -187,6 +198,38 @@ struct ChatProfileSheet: View {
     }
 }
 
+/// What the reader and they both picked, each by its phrase ("You're both
+/// bears"), on accent-soft. The list stays private, so it says who sees it.
+private struct YouBothCard: View {
+    let tribes: [SharedTribe]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                BothGlyph(size: 14, color: .hotMessAccentInk)
+                Text("You both")
+                    .font(.hotMess(.footnote, semibold: true))
+                    .foregroundStyle(Color.hotMessAccentInk)
+            }
+            ForEach(tribes) { tribe in
+                Text(tribe.bothPhrase)
+                    .font(.hotMess(.subheadline))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Only the two of you see this.")
+                .font(.hotMess(.caption))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.hotMessAccentSoft, in: .rect(cornerRadius: HotMessRadius.md, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chat.profile.youBoth")
+    }
+}
+
 /// The TinyAvatar at the chat size, with the green dot while they're in the
 /// room, and a friend's accent ring as the Here now strip draws it.
 private struct ProfileAvatar: View {
@@ -271,6 +314,10 @@ private struct QuietSheetButton: View {
             ChatProfileSheet(
                 profile: ChatProfile(id: UUID(), name: "Sam K.", avatarURL: nil),
                 isOnline: true,
+                sharedTribes: [
+                    SharedTribe(id: "1", name: "Bear", bothPhrase: "You're both bears"),
+                    SharedTribe(id: "2", name: "Sober", bothPhrase: "You're both sober")
+                ],
                 friendState: .notFriends,
                 isMuted: false,
                 onPing: {},
