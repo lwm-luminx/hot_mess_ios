@@ -51,6 +51,8 @@ final class AppModel {
     /// Which promoted cards the viewer turned off (on the device only), and
     /// the reports of the ones they saw.
     let cards: CardSettings
+    /// Digital flyers hidden on this phone, and the city's resource directory (doc/DIGITAL_FLYERS.md in the API).
+    let flyers: FlyerSettings
 
     var selectedTab: AppTab = .now
 
@@ -146,6 +148,7 @@ final class AppModel {
 
         brand = BrandStore(audienceKit: audienceKit)
         cards = CardSettings(audienceKit: audienceKit)
+        flyers = FlyerSettings(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))

@@ -193,6 +193,8 @@ struct CardsYouSeeScreen: View {
                     Text("Promoted cards you turn off stay hidden on your devices. Your choices are never sent to Hot Mess, so they can't be shared or sold.")
                 }
 
+                FlyerCategoriesSection()
+
                 let fixed = categories.filter { !$0.hideable }
                 if !fixed.isEmpty {
                     Section {
