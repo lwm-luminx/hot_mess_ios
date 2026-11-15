@@ -23,7 +23,7 @@ struct PersonScreen: View {
         LoadStateView(state: viewModel?.state ?? .loading, retry: reload) { detail in
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 24) {
+                    SectionStack {
                         HeroHeader(
                             url: detail.person.bannerURL,
                             topInset: proxy.safeAreaInsets.top,
