@@ -444,6 +444,8 @@ struct NowScreen: View {
             if let content = card.web { WebCardView(content: content) }
         case CardKind.promoSlot:
             PromoSlotView(card: card, layoutID: layoutID)
+        case CardKind.flyers:
+            if let content = card.flyers { FlyersCardView(content: content) }
         default:
             EmptyView()
         }
@@ -452,6 +454,8 @@ struct NowScreen: View {
     private func loadCards(force: Bool = false) async {
         await cardLayout?.load(coordinates: model.location.coordinates, localeID: model.location.locale?.id,
                                force: force)
+        // The city's resources come whole, without the session token, so "I need…" never asks for anything.
+        model.flyers.prefetchDirectory(localeID: model.location.locale?.id)
     }
 
     // MARK: - Sections
