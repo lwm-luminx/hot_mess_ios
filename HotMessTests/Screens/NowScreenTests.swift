@@ -28,7 +28,7 @@ struct NowScreenTests {
         stub.on("VenuePairUp", .data(#"{"venues":{"venue":{"pairUp":null}}}"#))
         stub.on("VenuePhotos", .data(#"{"venues":{"venue":{"posts":{"photos":{"nodes":[]}}}}}"#))
         stub.tolerate("ClosestLocale", "Lineup", "VenueLineup", "Show", "VenueShow", "Locale", "LocalePosts",
-                      "Posts", "Articles", "LocaleArticles", "Admissions", "SchemaFields", "IntrospectType")
+                      "Posts", "Articles", "LocaleArticles", "ArticlesAbout", "Admissions", "SchemaFields", "IntrospectType")
         return stub
     }
 

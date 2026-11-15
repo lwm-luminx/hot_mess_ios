@@ -32,7 +32,7 @@ enum VenueEventStubs {
         stub.on("VenuePairUp", .data(#"{"venues":{"venue":{"pairUp":null}}}"#))
         stub.on("VenuePhotos", .data(#"{"venues":{"venue":{"posts":{"photos":{"nodes":[]}}}}}"#))
         stub.on("VenueSuggestionState", .data(#"{"venues":{"venue":{"id":"\#(ScreenFixtures.venueID)","name":"Nyne","description":null,"reportedClosed":false,"profile":{"website":null,"phone":null}}}}"#))
-        stub.tolerate("Lineup", "VenueLineup", "Show", "VenueShow", "Posts", "VenuePosts", "Photos", "VenuePhotos")
+        stub.tolerate("Lineup", "VenueLineup", "Show", "VenueShow", "Posts", "VenuePosts", "Photos", "VenuePhotos", "ArticlesAbout")
         return stub
     }
 }
@@ -120,7 +120,7 @@ struct EventScreenTests {
     private func stub() -> StubAPI {
         let stub = StubAPI()
         stub.stubSignedInBasics()
-        stub.tolerate("Lineup", "VenueLineup", "Show", "VenueShow", "Posts", "EventPosts")
+        stub.tolerate("Lineup", "VenueLineup", "Show", "VenueShow", "Posts", "EventPosts", "EventPhotos", "ArticlesAbout")
         return stub
     }
 
