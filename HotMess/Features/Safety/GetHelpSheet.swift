@@ -52,7 +52,11 @@ struct GetHelpSheet: View {
                 Text(model.errorMessage ?? "")
             }
         }
-        .task { await model.load() }
+        .task {
+            await model.load()
+            // Scanning a safety poster is the ask: open on the form.
+            if model.venue?.posterCode != nil, model.alert == nil { isTellingStaff = true }
+        }
         .task { await model.loadRides(near: app.location.coordinates) }
         .task { await model.keepFresh() }
         .onChange(of: scenePhase) { _, phase in
@@ -69,7 +73,7 @@ struct GetHelpSheet: View {
     private var options: some View {
         List {
             Section {
-                if model.venue != nil, model.staffOnShift {
+                if model.venue != nil, model.staffOnShift || model.venue?.posterCode != nil {
                     Button {
                         isTellingStaff = true
                     } label: {

@@ -104,6 +104,10 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// follows that redirect (``ShortLink``), since one within the site never
     /// opens the app. `url` is the link on hotmess.social.
     case shortLink(URL)
+    /// A venue's safety poster (`/help/<code>`, what its QR code carries):
+    /// the venue's Get help sheet, opening on "Tell staff quietly", which can
+    /// send before the app places the user there (``SafetyPosterLink``).
+    case safetyPoster(String)
 }
 
 /// Parses the app's deep links.
@@ -126,6 +130,9 @@ enum DeepLink {
         }
         if segments.count >= 2, segments[0] == "safety-alerts", let id = UUID(uuidString: segments[1]) {
             return .safetyAlert(id)
+        }
+        if segments.count == 2, segments[0] == "help", SafetyPosterLink.isCode(segments[1]) {
+            return .safetyPoster(segments[1])
         }
         if segments.count == 2, segments[0] == "v", ShortLink.isCode(segments[1]),
            let link = URL(string: "https://hotmess.social/v/\(segments[1])") {
@@ -192,6 +199,14 @@ enum ShareLinkToken {
     static func hasExpired(_ token: String, at date: Date = .now) -> Bool {
         guard let expiry = expiry(of: token) else { return false }
         return expiry <= date
+    }
+}
+
+/// A venue's safety poster code (`/help/<code>`, audience_kit_api
+/// doc/SAFETY_ALERTS.md "Safety posters"): ten base62 characters, random.
+enum SafetyPosterLink {
+    static func isCode(_ code: String) -> Bool {
+        code.count == 10 && code.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
 }
 
