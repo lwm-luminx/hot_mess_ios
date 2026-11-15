@@ -23,7 +23,8 @@ struct AdFreeTipButton: View {
     @State private var isTipping = false
 
     var body: some View {
-        Group {
+        // A stack, not a Group, so the storefront task runs before the button shows (see NewsSection).
+        VStack(spacing: 0) {
             if AdFreeTips.isOffered(adFreeOffered: offered, storefrontCountryCode: storefront) {
                 Button {
                     isTipping = true
