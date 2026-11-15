@@ -45,6 +45,15 @@ struct SafetyAlertTests {
         #expect(DeepLink.destination(for: url) == .safetyAlert(id))
     }
 
+    @Test("Opens a venue's safety poster to its Tell staff form, and nothing that isn't a poster code")
+    func posterLink() {
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/help/Ab3dE6gH9k")) == .safetyPoster("Ab3dE6gH9k"))
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/help/short")) != .safetyPoster("short"))
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/help/Ab3dE6gH9k/x")) != .safetyPoster("Ab3dE6gH9k"))
+        #expect(!SafetyPosterLink.isCode("Ab3dE6gH9-"))
+        #expect(!SafetyPosterLink.isCode("Äb3dE6gH9k"))
+    }
+
     @Test("Writes support numbers out so they can be read aloud")
     func numbers() throws {
         let json = """

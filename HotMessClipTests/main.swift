@@ -102,3 +102,32 @@ assert(old.purchases.isEmpty)
 let early = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 10, day: 10, hour: 3))!
 assert(GuestPurchaseList.today(now: early, calendar: Calendar(identifier: .gregorian)) == "2026-10-09", "before 6am it's still last night")
 print("App Clip guest purchase checks passed")
+
+// A venue's safety poster (/help/<code>): no expiry, its code is the id; anything else under /help isn't a clip link.
+let poster = link("https://hotmess.social/help/Ab3dE6gH9k")!
+assert(poster.kind == "help" && poster.id == "Ab3dE6gH9k" && poster.expiry == nil)
+assert(link("https://hotmess.social/help/Ab3dE6gH9k?e=1")?.expiry == nil)
+for invalid in ["https://hotmess.social/help/short", "https://hotmess.social/help/Ab3dE6gH9-", "https://hotmess.social/help/Ab3dE6gH9k/x"] {
+    assert(link(invalid) == nil, invalid)
+}
+// The guest's alert, as GET /v1/safety/alerts/<id> answers it (audience_kit_api SafetyPostersController#alert_json).
+let guestAlert = try ClipSafetyCoding.decoder().decode(ClipSafetyAlertResponse.self, from: Data("""
+{"alert":{"id":"a1","state":"acknowledged","place":"restrooms","concerns":["following"],"description":null,
+"summary":"Restrooms · following","seen":true,"acknowledged_by_name":"Dee","support_note":null,
+"venue":{"id":"\(venueID)","name":"Purr"},"staff_on_shift":true,
+"messages":[{"id":"m1","body":"Near the back door","from_staff":false,"sender_name":"Guest (no app)","created_at":"2026-11-15T03:00:00Z"}],
+"created_at":"2026-11-15T02:59:00Z","escalates_at":"2026-11-15T03:01:00Z","escalated_at":null,"acknowledged_at":"2026-11-15T03:00:30Z",
+"reminded_at":null,"closed_at":null,"support_shared_at":null},"guest_token":"tok"}
+""".utf8))
+assert(guestAlert.guestToken == "tok" && guestAlert.alert.isActive)
+assert(guestAlert.alert.step == .onIt && !guestAlert.alert.needsOtherHelp)
+assert(guestAlert.alert.messages.first?.fromStaff == false)
+let fields = ClipSafetyCoding.details(place: "bar", concerns: ["unwell", "bothering"], description: "  ")
+assert(fields["place"] as? String == "bar" && fields["concerns"] as? [String] == ["bothering", "unwell"] && fields["description"] == nil)
+let safetyDefaults = UserDefaults(suiteName: "clip-safety-tests")!
+let safetyStore = ClipSafetyStore(defaults: safetyDefaults)
+safetyStore.save(.init(alertID: "a1", token: "tok"), for: "Ab3dE6gH9k")
+assert(safetyStore.entry(for: "Ab3dE6gH9k")?.token == "tok")
+safetyStore.forget("Ab3dE6gH9k")
+assert(safetyStore.entry(for: "Ab3dE6gH9k") == nil)
+print("App Clip safety poster checks passed")

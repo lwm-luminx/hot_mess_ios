@@ -454,6 +454,20 @@ final class AppModel {
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
             return true
+        case let .safetyPoster(code):
+            // The poster's venue, then its Get help sheet; a code no longer in
+            // use (or no network) still opens Get help, without a venue.
+            shareLinkTask = Task {
+                let venue = try? await api.safetyPoster(code)
+                guard !Task.isCancelled else { return }
+                if let venue {
+                    helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: nil, posterCode: code))
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
+            return true
         case let .shortLink(url):
             // Where the site redirects it, opened as that link would be; a
             // code it doesn't know (or no network) leaves the user on Venues.

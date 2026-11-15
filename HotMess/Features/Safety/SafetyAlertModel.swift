@@ -29,6 +29,9 @@ struct HelpVenue: Hashable, Sendable {
     let address: String?
     /// Where it is, for a ride's pickup.
     var coordinates: Coordinates?
+    /// The code of the venue's safety poster the user scanned, which lets
+    /// them send before the app places them there.
+    var posterCode: String?
 
     /// "I'm at The Wildrose, 1001 E Pike St." for a friend or a ride.
     var whereIAm: String {
@@ -124,7 +127,7 @@ final class SafetyAlertModel {
 
     func send() async {
         guard let venue else { return }
-        await run { try await self.api.sendSafetyAlert(venueID: venue.id, self.draft) }
+        await run { try await self.api.sendSafetyAlert(venueID: venue.id, self.draft, posterCode: venue.posterCode) }
         if alert != nil { draft = SafetyAlertDraft() }
     }
 

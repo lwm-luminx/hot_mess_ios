@@ -52,7 +52,10 @@ struct ClipRootView: View {
 
     var body: some View {
         Group {
-            if let link {
+            if let link, link.kind == "help" {
+                // A venue's safety poster: tell its staff, no sign-in.
+                ClipSafetyView(code: link.id, client: session.client, getApp: getApp)
+            } else if let link {
                 switch phase {
                 case .loading:
                     ClipLoadingView(kind: link.kind)
@@ -100,7 +103,7 @@ struct ClipRootView: View {
     @MainActor private func load() async {
         phase = .loading
         session.offer = nil
-        guard let link else { return }
+        guard let link, link.kind != "help" else { return }
         do {
             if link.kind == "pings" {
                 guard let token = link.expiry, !token.isEmpty else { throw ClipError.unavailable }

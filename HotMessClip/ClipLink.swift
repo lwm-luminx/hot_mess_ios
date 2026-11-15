@@ -1,6 +1,7 @@
 import Foundation
 
-/// Only public venue/event links are valid Clip invocations. Preserve signed expiry.
+/// Only public venue/event links, and a venue's safety poster (`/help/<code>`),
+/// are valid Clip invocations. Preserve signed expiry.
 struct ClipLink: Equatable, Sendable {
     let path: String
     let expiry: String?
@@ -12,6 +13,13 @@ struct ClipLink: Equatable, Sendable {
               ["hotmess.social", "www.hotmess.social"].contains(parts.host?.lowercased() ?? "")
         else { return nil }
         let segments = parts.path.split(separator: "/")
+        // A venue's safety poster: /help/<ten base62 characters>, no expiry.
+        if segments.count == 2, segments[0] == "help", segments[1].count == 10,
+           segments[1].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) {
+            path = "/help/\(segments[1])"
+            expiry = nil
+            return
+        }
         guard segments.count == 2, ["venues", "events", "people", "pings"].contains(String(segments[0])),
               let id = UUID(uuidString: String(segments[1])) else { return nil }
         let expiries = (parts.queryItems ?? []).filter { $0.name == "e" }
