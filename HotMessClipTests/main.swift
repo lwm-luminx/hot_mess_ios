@@ -131,3 +131,28 @@ assert(safetyStore.entry(for: "Ab3dE6gH9k")?.token == "tok")
 safetyStore.forget("Ab3dE6gH9k")
 assert(safetyStore.entry(for: "Ab3dE6gH9k") == nil)
 print("App Clip safety poster checks passed")
+
+// A venue's lobby cover poster (/cover/<venue short code>): no expiry; the API names its venue and night.
+let coverPosterLink = link("https://hotmess.social/cover/3XyZ0abC")!
+assert(coverPosterLink.kind == "cover" && coverPosterLink.id == "3XyZ0abC" && coverPosterLink.expiry == nil)
+for invalid in ["https://hotmess.social/cover/short", "https://hotmess.social/cover/3XyZ0ab-", "https://hotmess.social/cover/3XyZ0abC/x"] {
+    assert(link(invalid) == nil, invalid)
+}
+let tonightPoster = try ClipCoverPoster.decoder().decode(ClipCoverPoster.self, from: Data("""
+{"code":"3XyZ0abC","audience":{"name":"Hot Mess"},"venue":{"id":"\(venueID)","name":"Purr","path":"/venues/\(venueID)"},
+"tonight":{"night":"2026-11-15","tonight":true,"event":null,"cover":{"night":"2026-11-15","event_id":null,"amount_cents":1000,
+"fee_cents":50,"total_cents":1112,"currency":"usd","cover_from":"21:00","cover_until":null,"tiers":[],"payable":true,
+"provider":"stripe","guest_checkout":true,"max_quantity":10}},"next":null}
+""".utf8))
+assert(tonightPoster.opensCheckout && tonightPoster.nextNightNotice == nil)
+assert(tonightPoster.venueLink?.path == "/venues/\(venueID.lowercased())")
+let nextPoster = try ClipCoverPoster.decoder().decode(ClipCoverPoster.self, from: Data("""
+{"code":"3XyZ0abC","audience":{"name":"Hot Mess"},"venue":{"id":"\(venueID)","name":"Purr","path":"/venues/\(venueID)"},
+"tonight":{"night":"2026-11-17","tonight":true,"event":null,"cover":null},
+"next":{"night":"2026-11-20","tonight":false,"event":{"id":"e1","name":"Drag Bingo","start_at":null,"public":true},
+"cover":{"night":"2026-11-20","event_id":null,"amount_cents":1000,"fee_cents":0,"total_cents":1000,"currency":"usd",
+"cover_from":null,"cover_until":null,"tiers":[],"payable":false,"provider":null,"guest_checkout":false,"max_quantity":10}}}
+""".utf8))
+assert(!nextPoster.opensCheckout)
+assert(nextPoster.nextNightNotice == "Nothing's on tonight. Next: Fri, Nov 20 · Drag Bingo · $10 cover", nextPoster.nextNightNotice ?? "nil")
+print("App Clip cover poster checks passed")

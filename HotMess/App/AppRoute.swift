@@ -108,6 +108,9 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// the venue's Get help sheet, opening on "Tell staff quietly", which can
     /// send before the app places the user there (``SafetyPosterLink``).
     case safetyPoster(String)
+    /// A venue's lobby cover poster (`/cover/<code>`, the venue's short code):
+    /// the venue, whose Cover section pays tonight's cover.
+    case coverPoster(String)
 }
 
 /// Parses the app's deep links.
@@ -133,6 +136,9 @@ enum DeepLink {
         }
         if segments.count == 2, segments[0] == "help", SafetyPosterLink.isCode(segments[1]) {
             return .safetyPoster(segments[1])
+        }
+        if segments.count == 2, segments[0] == "cover", ShortLink.isCode(segments[1]) {
+            return .coverPoster(segments[1])
         }
         if segments.count == 2, segments[0] == "v", ShortLink.isCode(segments[1]),
            let link = URL(string: "https://hotmess.social/v/\(segments[1])") {

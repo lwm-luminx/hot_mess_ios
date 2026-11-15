@@ -468,6 +468,20 @@ final class AppModel {
                 }
             }
             return true
+        case let .coverPoster(code):
+            // The poster's venue, where Cover pays tonight's; a code the API
+            // doesn't know (or no network) leaves the user on Venues.
+            shareLinkTask = Task {
+                let venueID = try? await api.coverPosterVenue(code)
+                guard !Task.isCancelled else { return }
+                if let venueID {
+                    open(.venue(venueID))
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
+            return true
         case let .shortLink(url):
             // Where the site redirects it, opened as that link would be; a
             // code it doesn't know (or no network) leaves the user on Venues.
