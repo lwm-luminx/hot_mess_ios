@@ -42,6 +42,12 @@ struct ClipRootView: View {
     @State private var attempt = 0
     @State private var flow: ClipFlow?
     @State private var showStore = false
+    /// A lobby cover poster's answer, and the venue link it resolved to.
+    @State private var poster: ClipCoverPoster?
+    @State private var resolved: ClipLink?
+
+    /// The link the landing shows: a cover poster's venue once it's known.
+    private var shown: ClipLink? { resolved ?? link }
 
     enum Phase {
         case loading
@@ -55,13 +61,13 @@ struct ClipRootView: View {
             if let link, link.kind == "help" {
                 // A venue's safety poster: tell its staff, no sign-in.
                 ClipSafetyView(code: link.id, client: session.client, getApp: getApp)
-            } else if let link {
+            } else if let link = shown {
                 switch phase {
                 case .loading:
                     ClipLoadingView(kind: link.kind)
                 case let .ready(card, invitation):
                     ClipLandingView(link: link, card: card, invitation: invitation, session: session,
-                                    pay: { flow = $0 }, getApp: getApp)
+                                    pay: { flow = $0 }, getApp: getApp, notice: poster?.nextNightNotice)
                 case .expired:
                     ClipExpiredView(link: link, getApp: getApp)
                 case let .failed(message):
@@ -73,12 +79,12 @@ struct ClipRootView: View {
         }
         .background(ClipTheme.surface.ignoresSafeArea())
         .task(id: LoadID(link: link, attempt: attempt)) { await load() }
-        .task(id: DetailsID(link: link, signedIn: session.signedIn)) {
+        .task(id: DetailsID(link: shown, signedIn: session.signedIn)) {
             session.clearDetails()
-            if let link { await session.loadDetails(for: link) }
+            if let link = shown, link.kind != "cover" { await session.loadDetails(for: link) }
         }
         .sheet(item: $flow) { flow in
-            if let link { ClipCheckoutSheet(flow: flow, link: link, title: cardTitle, session: session, getApp: getApp) }
+            if let link = shown { ClipCheckoutSheet(flow: flow, link: link, title: cardTitle, session: session, getApp: getApp) }
         }
         .appStoreOverlay(isPresented: $showStore) { SKOverlay.AppClipConfiguration(position: .bottom) }
         .onChange(of: link) { _, _ in flow = nil }
@@ -103,8 +109,28 @@ struct ClipRootView: View {
     @MainActor private func load() async {
         phase = .loading
         session.offer = nil
-        guard let link, link.kind != "help" else { return }
+        poster = nil
+        resolved = nil
+        guard var link, link.kind != "help" else { return }
         do {
+            if link.kind == "cover" {
+                // A lobby cover poster: which venue, and what night it sells now.
+                let data: Data
+                do {
+                    data = try await session.client.data(for: APIRequest(path: "/v1/cover/\(link.id)", queryItems: [
+                        URLQueryItem(name: "host", value: session.client.configuration.host)
+                    ], authenticated: false))
+                } catch let error as AudienceKitError where error.status == 404 {
+                    phase = .failed("This poster's code isn't in use. Ask at the door.")
+                    return
+                }
+                try Task.checkCancellation()
+                let answer = try ClipCoverPoster.decoder().decode(ClipCoverPoster.self, from: data)
+                guard let venueLink = answer.venueLink else { throw ClipError.unavailable }
+                poster = answer
+                resolved = venueLink
+                link = venueLink
+            }
             if link.kind == "pings" {
                 guard let token = link.expiry, !token.isEmpty else { throw ClipError.unavailable }
                 let invitation = try await ShareInvitation.load(path: link.path, token: token, client: session.client)
@@ -125,6 +151,8 @@ struct ClipRootView: View {
                 let card = try ClipOffer.decoder().decode(ClipCard.self, from: data)
                 session.offer = card.clip
                 phase = .ready(card, nil)
+                // A cover poster goes straight to paying tonight's cover.
+                if poster?.opensCheckout == true, card.clip?.cover?.payable == true { flow = .cover }
             }
         } catch {
             guard !Task.isCancelled else { return }

@@ -9,12 +9,19 @@ struct ClipLandingView: View {
     @Bindable var session: ClipSession
     let pay: (ClipFlow) -> Void
     let getApp: () -> Void
+    /// A lobby cover poster's "Nothing's on tonight" and the next night.
+    var notice: String? = nil
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ClipHero(card: card, tags: heroTags)
                 VStack(alignment: .leading, spacing: 16) {
+                    if let notice {
+                        ClipPanel {
+                            Text(notice).font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.ink)
+                        }
+                    }
                     switch link.kind {
                     case "people":
                         ClipTipPanel(name: card.title, session: session, pay: pay, getApp: getApp)
