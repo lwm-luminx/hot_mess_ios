@@ -109,7 +109,7 @@ struct VenueScreenTests {
         defer { screen.tearDown() }
 
         #expect(await screen.waitFor("Alex is here"))
-        #expect(screen.contains("No upcoming events."))
+        #expect(await screen.waitFor("No upcoming events."))
         stub.expectEverythingStubbed()
     }
 }
