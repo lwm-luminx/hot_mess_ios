@@ -116,6 +116,15 @@ struct MainTabView: View {
             }
             .audiencePreset(model.brand.preset)
         }
+        .sheet(item: $model.privateChat) { link in
+            Group {
+                switch link {
+                case let .ping(id): PingChatSheet(pingID: id.uuidString.lowercased())
+                case let .quickie(venueID): QuickieChatSheet(venueID: venueID)
+                }
+            }
+            .environment(model)
+        }
         .notificationBannerHost()
     }
 }

@@ -69,6 +69,10 @@ final class AppModel {
     /// Now's card, Me › Contacts, and the pushes about a new match.
     var findingFriends = false
 
+    /// A Ping or Quickie chat over every tab, opened from the push about a new
+    /// line in it.
+    var privateChat: PrivateChatLink?
+
     /// One navigation path per tab, so a deep link can push onto the right
     /// stack without disturbing the others.
     var nowPath: [AppRoute] = []
@@ -312,6 +316,7 @@ final class AppModel {
         friends.forget()
         contactFriends.forget()
         findingFriends = false
+        privateChat = nil
         safety.forget()
         listings.forget()
         tribes.forget()
@@ -486,6 +491,16 @@ final class AppModel {
             } else {
                 openNow()
             }
+            return true
+        case let .pingChat(id):
+            // "Sam sent a message": the Ping on Now, with its chat on top.
+            openNow()
+            privateChat = session.isSignedIn ? .ping(id) : nil
+            return true
+        case let .quickieChat(venueID):
+            // "Your Quickie sent you a message": the venue, with the chat on top.
+            open(.venue(venueID))
+            privateChat = session.isSignedIn ? .quickie(venueID: venueID) : nil
             return true
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())

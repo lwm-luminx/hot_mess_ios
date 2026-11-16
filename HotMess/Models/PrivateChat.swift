@@ -97,3 +97,11 @@ extension Ping {
     /// and someone besides the sender is in.
     var canChat: Bool { (isMine || joined) && circle.count > 1 }
 }
+
+/// Which chat a push opens: a Ping's, or the Quickie at a venue.
+enum PrivateChatLink: Hashable, Identifiable, Sendable {
+    case ping(UUID)
+    case quickie(venueID: UUID)
+
+    var id: Self { self }
+}
