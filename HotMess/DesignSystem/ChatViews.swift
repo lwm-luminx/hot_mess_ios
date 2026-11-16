@@ -210,6 +210,10 @@ struct ChatThreadMessage: Identifiable, Hashable, Sendable {
     /// Only the reader sees it (a private nudge from the AI host): "Only you
     /// can see this" under it.
     var isPrivate = false
+    /// A moderation test line (a test phrase, or the host's answer to one):
+    /// a Test tag under it, and it can be reported (as a test) even when it's
+    /// the reader's own.
+    var isTest = false
 
     /// Someone the reader can tap for their profile sheet: another person
     /// posting as themself. Not the venue, talent posting as their listing,
@@ -578,13 +582,13 @@ private struct ChatThreadRowView: View {
     /// Someone else's message that reached the room, including a post as the
     /// venue (or a person), which can be reported too.
     private var canReport: Bool {
-        !message.isOwn && message.delivery == .sent && onReport != nil
+        (!message.isOwn || message.isTest) && message.delivery == .sent && onReport != nil
     }
 
     /// A post as the venue is the venue's own, and a prompt the audience's,
     /// so neither has a sender to block.
     private var canBlock: Bool {
-        canReport && !message.isFromPlace && !message.isFromAudience && onBlock != nil
+        canReport && !message.isOwn && !message.isFromPlace && !message.isFromAudience && onBlock != nil
     }
 
     var body: some View {
@@ -709,10 +713,17 @@ private struct ChatThreadRowView: View {
                     }
                 }
 
-                if message.isPrivate {
-                    PrivateLineNote()
-                        .padding(.leading, message.sender == .bot ? 12 : 4)
-                        .accessibilityHidden(true)
+                if message.isPrivate || message.isTest {
+                    HStack(spacing: 8) {
+                        if message.isTest {
+                            TestLineTag()
+                        }
+                        if message.isPrivate {
+                            PrivateLineNote()
+                        }
+                    }
+                    .padding(.leading, message.sender == .bot ? 12 : 4)
+                    .accessibilityHidden(true)
                 }
 
                 deliveryStatus
@@ -825,6 +836,9 @@ private struct ChatThreadRowView: View {
         if message.isPrivate {
             text = String(localized: "\(text). Only you can see this.")
         }
+        if message.isTest {
+            text = String(localized: "\(text). Moderation test.")
+        }
         if message.isOwn {
             if let name = message.authorName, !name.isEmpty, let role = message.role {
                 return String(localized: "You, as \(name), \(role.title): \(text)")
@@ -851,6 +865,21 @@ struct PrivateLineNote: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .accessibilityIdentifier("chat.privateNote")
+    }
+}
+
+/// Under a moderation test line: it tripped a test path, and nothing went
+/// to the moderators' queue.
+struct TestLineTag: View {
+    var body: some View {
+        Label(String(localized: "Test"), systemImage: "testtube.2")
+            .font(.hotMess(fixedSize: 12, semibold: true))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.orange.opacity(0.15), in: Capsule())
+            .lineLimit(1)
+            .accessibilityIdentifier("chat.testTag")
     }
 }
 

@@ -311,6 +311,7 @@ extension VenueMessage {
         line.personID = personID
         line.personHasPage = personHasPage ?? true
         line.isPrivate = isPrivate
+        line.isTest = isTest
         return line
     }
 }
