@@ -527,6 +527,19 @@ struct HotMessAPI: CoverPaymentAPI {
         )
     }
 
+    /// Sends a test report on a chat message: nothing is filed, nobody is
+    /// blocked, and the moderators' queue never sees it.
+    func reportTestChatMessage(_ id: UUID, reason: String?) async throws {
+        _ = try await query(
+            Documents.reportTestChatMessage,
+            variables: [
+                "messageId": .string(id.uuidString.lowercased()),
+                "reason": reason.map(GraphQLValue.string) ?? .null,
+            ],
+            as: ReportChatMessageResponse.self
+        )
+    }
+
     /// Reports a person, venue, Ping, photo or message to the audience's
     /// moderators (the same queue as chat reports), and blocks whoever is
     /// behind it too when asked. Returns whether they're now blocked.
@@ -975,7 +988,7 @@ extension HotMessAPI {
         static let messageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
-        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate is_test: isTest \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
@@ -1364,7 +1377,7 @@ extension HotMessAPI {
         static let roomMessageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
-        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate is_test: isTest \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
@@ -1380,6 +1393,14 @@ extension HotMessAPI {
         static let reportChatMessage = """
         mutation ReportChatMessage($messageId: ID!, $reason: String, $block: Boolean) {
           reportChatMessage(input: { messageId: $messageId, reason: $reason, block: $block }) { reported blocked }
+        }
+        """
+
+        /// A test report (`test: true`): checked like a real one, but the API
+        /// files nothing and blocks nobody, so it never reaches the queue.
+        static let reportTestChatMessage = """
+        mutation ReportTestChatMessage($messageId: ID!, $reason: String) {
+          reportChatMessage(input: { messageId: $messageId, reason: $reason, test: true }) { reported test }
         }
         """
 

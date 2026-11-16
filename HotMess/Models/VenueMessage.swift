@@ -71,6 +71,9 @@ struct VenueMessage: Hashable, Sendable, Identifiable {
     /// Only the reader sees it: a private nudge from the AI host, drawn with
     /// "Only you can see this". Nobody else in the room gets it.
     var isPrivate = false
+    /// A moderation test: a test phrase someone typed, or the AI host's
+    /// answer to one. Drawn with a Test tag; reporting it files nothing.
+    var isTest = false
 
     init(
         id: UUID = UUID(),
@@ -350,6 +353,7 @@ extension VenueMessage {
         let senderKind: ChatSenderKind?
         let personHasPage: Bool?
         let isPrivate: Bool
+        let isTest: Bool
 
         enum CodingKeys: String, CodingKey {
             case id, message, name, role, kind, title, body, event, pinned, presence, request, prompt, sender
@@ -368,6 +372,7 @@ extension VenueMessage {
             case personID = "person_id"
             case person
             case isPrivate = "is_private"
+            case isTest = "is_test"
             case recipientID = "recipient_id"
         }
 
@@ -464,6 +469,8 @@ extension VenueMessage {
             // GraphQL says `isPrivate`; a room frame names its `recipient_id`.
             isPrivate = ((try? container.decodeIfPresent(Bool.self, forKey: .isPrivate)) ?? nil)
                 ?? (((try? container.decodeIfPresent(String.self, forKey: .recipientID)) ?? nil) != nil)
+            // GraphQL's `isTest` aliased, or the room frame's own key.
+            isTest = ((try? container.decodeIfPresent(Bool.self, forKey: .isTest)) ?? nil) ?? false
 
             // The room sends `prompt_id`, GraphQL `promptId` aliased to it.
             promptID = Self.identifier(in: container, forKey: .promptID)
@@ -541,6 +548,7 @@ extension VenueMessage {
         senderKind = payload.senderKind
         personHasPage = payload.personHasPage
         isPrivate = payload.isPrivate
+        isTest = payload.isTest
     }
 }
 
