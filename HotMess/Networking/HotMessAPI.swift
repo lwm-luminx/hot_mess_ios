@@ -450,6 +450,45 @@ struct HotMessAPI: CoverPaymentAPI {
         ]
     }
 
+    // MARK: - Ping and Quickie chats
+
+    /// A ping's chat, when the user is in its circle and someone's in; nil otherwise.
+    func pingChat(pingID: String) async throws -> PrivateChat? {
+        struct Response: Decodable, Sendable {
+            struct Node: Decodable, Sendable { let chat: PrivateChat? }
+            let node: Node?
+        }
+        return try await query(Documents.pingChat, variables: ["id": .string(pingID)], as: Response.self).node?.chat
+    }
+
+    /// The chat with the user's Quickie match at a venue, once both said yes; nil otherwise.
+    func quickieChat(venueID: UUID) async throws -> PrivateChat? {
+        struct Response: Decodable, Sendable {
+            struct Venues: Decodable, Sendable { let venue: Venue? }
+            struct Venue: Decodable, Sendable { let pairUp: PairUp? }
+            struct PairUp: Decodable, Sendable { let mine: Mine? }
+            struct Mine: Decodable, Sendable { let match: Match? }
+            struct Match: Decodable, Sendable { let chat: PrivateChat? }
+            let venues: Venues?
+        }
+        return try await query(Documents.quickieChat, variables: ["id": Self.graphQLID(venueID)], as: Response.self)
+            .venues?.venue?.pairUp?.mine?.match?.chat
+    }
+
+    /// Says something in a Ping or Quickie chat. Throws when it has ended, the
+    /// word list refuses it, or the user is sending too fast.
+    func sendPrivateChatMessage(chatID: String, body: String) async throws -> PrivateChatMessage {
+        struct Response: Decodable, Sendable {
+            struct Payload: Decodable, Sendable { let message: PrivateChatMessage }
+            let sendPrivateChatMessage: Payload
+        }
+        return try await query(
+            Documents.sendPrivateChatMessage,
+            variables: ["chatId": .string(chatID), "body": .string(body)],
+            as: Response.self
+        ).sendPrivateChatMessage.message
+    }
+
     // MARK: - Pair me up
 
     /// Pair me up at a venue: nil where the venue doesn't have it.
@@ -1459,6 +1498,36 @@ extension HotMessAPI {
         static let reportTestChatMessage = """
         mutation ReportTestChatMessage($messageId: ID!, $reason: String) {
           reportChatMessage(input: { messageId: $messageId, reason: $reason, test: true }) { reported test }
+        }
+        """
+
+        // Ping and Quickie chats: fetched on their own, so the Ping and
+        // Quickie queries don't need an API with chats.
+        static let privateChatMessageFields = "id chatId body isMine sentAt sender { id name }"
+
+        static let privateChatFields = "id closesAt messages { \(privateChatMessageFields) }"
+
+        static let pingChat = """
+        query PingChat($id: ID!) {
+          node(id: $id) { ... on Ping { id chat { \(privateChatFields) } } }
+        }
+        """
+
+        static let quickieChat = """
+        query QuickieChat($id: ID!) {
+          venues { venue(id: $id) { pairUp { mine { match { id chat { \(privateChatFields) } } } } } }
+        }
+        """
+
+        static let sendPrivateChatMessage = """
+        mutation SendPrivateChatMessage($chatId: ID!, $body: String!) {
+          sendPrivateChatMessage(input: { chatId: $chatId, body: $body }) { message { \(privateChatMessageFields) } }
+        }
+        """
+
+        static let privateChatSubscription = """
+        subscription PrivateChat {
+          privateChat { chatId closed message { \(privateChatMessageFields) } }
         }
         """
 

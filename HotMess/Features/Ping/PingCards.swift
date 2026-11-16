@@ -13,6 +13,7 @@ struct MyPingCard: View {
     let end: () -> Void
 
     @State private var confirmingEnd = false
+    @State private var isChatting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -65,6 +66,18 @@ struct MyPingCard: View {
                 }
                 .buttonStyle(.bordered)
 
+                if ping.canChat {
+                    Button {
+                        isChatting = true
+                    } label: {
+                        Text("Chat")
+                            .font(.hotMess(.subheadline, semibold: true))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("ping.chat")
+                }
+
                 Button(role: .destructive) {
                     confirmingEnd = true
                 } label: {
@@ -90,6 +103,7 @@ struct MyPingCard: View {
         } message: {
             Text("Your friends won't see it any more.")
         }
+        .sheet(isPresented: $isChatting) { PingChatSheet(pingID: ping.id) }
     }
 }
 
@@ -106,6 +120,8 @@ struct FriendPingCard: View {
     /// Blocks the sender, which hides their Pings at once.
     var block: (() -> Void)? = nil
 
+    @State private var isChatting = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -118,6 +134,17 @@ struct FriendPingCard: View {
                         .font(.hotMess(.footnote))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                }
+
+                if ping.canChat {
+                    Spacer(minLength: 8)
+                    Button(String(localized: "Chat"), systemImage: "bubble.left.and.bubble.right") {
+                        isChatting = true
+                    }
+                    .font(.hotMess(.footnote, semibold: true))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("ping.chat")
                 }
             }
 
@@ -132,6 +159,7 @@ struct FriendPingCard: View {
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: CardMetrics.cornerRadius))
         .disabled(isBusy)
+        .sheet(isPresented: $isChatting) { PingChatSheet(pingID: ping.id) }
     }
 
     private var header: some View {
