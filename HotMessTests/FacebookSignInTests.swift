@@ -30,6 +30,16 @@ struct FacebookSignInTests {
         #expect(items.contains(URLQueryItem(name: "scope", value: "public_profile,email")))
     }
 
+    @Test("Asks for the approved permissions, plus email and friends only in debug or the simulator")
+    func requestedPermissions() {
+        #expect(Array(SessionStore.requestedPermissions.prefix(2)) == ["public_profile", "openid"])
+        #if DEBUG || targetEnvironment(simulator)
+        #expect(SessionStore.requestedPermissions == ["public_profile", "openid", "email", "user_friends"])
+        #else
+        #expect(SessionStore.requestedPermissions == ["public_profile", "openid"])
+        #endif
+    }
+
     @Test("Reads the code from the redirect")
     func readsCode() throws {
         let callback = try #require(URL(string: "fb1://authorize/?code=abc&state=s-1#_=_"))
