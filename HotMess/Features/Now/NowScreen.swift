@@ -152,25 +152,26 @@ struct NowScreen: View {
             collapsed: heroCollapsed || viewModel?.state.value == nil
         )
         .toolbar {
-            // At a venue, Safety sits by Ping, big and labelled, so it's in
-            // reach as you scroll. Only where the app places the user, as
-            // staff can only help people who are there.
-            if let venue = helpVenue {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        model.helpPresentation = .venue(venue)
-                    } label: {
-                        Label(String(localized: "Safety"), systemImage: "shield.fill")
-                            .labelStyle(.titleAndIcon)
-                            .font(.hotMess(.headline, semibold: true))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.hotMessAccent)
-                    // The light accent carries white text in either mode.
-                    .environment(\.colorScheme, .light)
-                    .accessibilityHint(String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
-                    .accessibilityIdentifier("now.toolbarGetHelp")
+            // Safety sits by Ping, big and labelled, so it's in reach as you
+            // scroll. At a venue the app places the user at, it can tell
+            // staff; anywhere else it still reaches a friend, a ride,
+            // support and 911.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    model.helpPresentation = helpVenue.map { .venue($0) } ?? .anywhere
+                } label: {
+                    Label(String(localized: "Safety"), systemImage: "shield.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.hotMess(.headline, semibold: true))
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.hotMessAccent)
+                // The light accent carries white text in either mode.
+                .environment(\.colorScheme, .light)
+                .accessibilityHint(helpVenue == nil
+                    ? String(localized: "Reach a friend or a ride, or find support")
+                    : String(localized: "Tell staff quietly, reach a friend or a ride, or find support"))
+                .accessibilityIdentifier("now.toolbarGetHelp")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
