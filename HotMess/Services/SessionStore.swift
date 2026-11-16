@@ -64,15 +64,27 @@ enum SessionError: Error, LocalizedError {
 @MainActor
 @Observable
 final class SessionStore {
-    /// Whether sign-in asks for `email` and `user_friends` (friends who also use
-    /// the app at the same venue). Off while Meta's App Review has both pending
-    /// on the Hot Mess Consumer app, so the betas ask only for `public_profile`;
-    /// until it's back on, everyone's friends list is empty and no email is
-    /// stored. Turn it back on once Meta approves them.
-    static let asksForReviewedPermissions = false
+    /// Whether sign-in also asks for `email` and `user_friends` (friends who
+    /// also use the app at the same venue). Meta's App Review approved only
+    /// `public_profile` and `openid` on the production Hot Mess app (it turned
+    /// down `email` and `user_friends`), so App Store, TestFlight and Play
+    /// builds ask for just those two; without the others everyone's friends
+    /// list is empty and no email comes from Facebook. Debug builds and the
+    /// simulator still ask for all four, so the friends features can be worked
+    /// on (and recorded for the next review) by the app's admins and testers.
+    static var asksForReviewedPermissions: Bool {
+        #if DEBUG || targetEnvironment(simulator)
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Permissions approved for everyone on the production Hot Mess app.
+    static let approvedPermissions = ["public_profile", "openid"]
 
     /// Permissions requested at sign-in, on the Hot Mess Consumer app.
-    static let requestedPermissions = ["public_profile"] + (asksForReviewedPermissions ? ["email", "user_friends"] : [])
+    static let requestedPermissions = approvedPermissions + (asksForReviewedPermissions ? ["email", "user_friends"] : [])
 
     /// Where the session credential lives: the SDK's keychain store, under
     /// the app's own service. A new account name, because the SDK keeps the
