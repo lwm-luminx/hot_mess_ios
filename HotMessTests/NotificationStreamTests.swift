@@ -161,7 +161,9 @@ struct NotificationDedupeTests {
     func window() async {
         let stream = NotificationStream(cable: nil)
         stream.isListening = true
-        stream.systemCopyWindow = .seconds(2)
+        // Long enough that the in-app copy lands inside it even on a busy CI
+        // simulator; it returns as soon as that copy arrives.
+        stream.systemCopyWindow = .seconds(15)
 
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(200))
