@@ -54,8 +54,10 @@ struct HotMessApp: App {
             case .active:
                 model.updateAppIcon()
                 if model.session.isSignedIn { model.location.start() }
+                Task { await model.refreshCache() }
             case .background:
                 model.location.stop()
+                model.cacheRefresher.schedule()
             default:
                 break
             }

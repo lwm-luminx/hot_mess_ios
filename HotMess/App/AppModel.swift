@@ -23,6 +23,8 @@ final class AppModel {
     /// The audience's look, from AudienceKit branding.
     let brand: BrandStore
     let location: LocationProvider
+    /// Keeps the cities the person has been in fresh in the on-device cache.
+    let cacheRefresher: CacheRefresher
     /// Paying cover and showing passes, over whichever tab asked.
     let checkout: CoverCheckout
     /// Friends seen so far, so chat can show them by their full name.
@@ -111,7 +113,9 @@ final class AppModel {
         set { UserDefaults.standard.set(newValue, forKey: Self.promptedFacebookOnChatKey) }
     }
 
-    static let shared = AppModel()
+    /// The app itself keeps the last good answer to each query on disk, so a
+    /// failing request shows it instead of an error; unit tests keep none.
+    static let shared = AppModel(graphQLCache: FileGraphQLCache())
 
     /// `credentialStore`, `urlSession`, `deviceAttestor` and `openSocket` are
     /// the app's real ones by default; unit tests pass an in-memory store, a
@@ -122,7 +126,8 @@ final class AppModel {
         credentialStore: any CredentialStore = SessionStore.credentialStore,
         urlSession: URLSession = .hotMess,
         deviceAttestor: (any DeviceAttestor)? = AppAttestAttestor.platformDefault,
-        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil
+        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil,
+        graphQLCache: (any GraphQLCache)? = nil
     ) {
         self.configuration = configuration
         serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
@@ -134,7 +139,11 @@ final class AppModel {
             credentialStore: credentialStore,
             session: urlSession,
             monitor: operations,
-            deviceAttestor: deviceAttestor
+            deviceAttestor: deviceAttestor,
+            cache: graphQLCache,
+            // Every query falls back to its last good answer (a week at most)
+            // when the API can't answer; refusals still throw.
+            defaultCachePolicy: .networkFirst()
         )
         self.audienceKit = audienceKit
 
@@ -151,6 +160,10 @@ final class AppModel {
         flyers = FlyerSettings(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
+        let cacheRefresher = CacheRefresher(api: api, audienceKit: audienceKit, audienceID: configuration.audienceID,
+                                            isSignedIn: { [session] in session.isSignedIn })
+        self.cacheRefresher = cacheRefresher
+        location.onLocaleResolved = { [cacheRefresher] locale in cacheRefresher.recordVisit(locale) }
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
         safety = SafetyStore(api: api)
         listings = ListingsStore(api: api)
@@ -294,6 +307,7 @@ final class AppModel {
         tribes.forget()
         notifications.reset()
         location.forget()
+        cacheRefresher.forget()
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnPingKey)
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnChatKey)
         Task { [cable] in await cable.disconnect() }
@@ -306,6 +320,15 @@ final class AppModel {
     func startInBackground() async {
         guard location.tracksInBackground, await session.hasStoredSession else { return }
         location.startInBackground()
+        cacheRefresher.schedule()
+    }
+
+    /// The app came to the foreground: refresh the cache if the backoff says
+    /// it's due, and ask iOS for the next background refresh.
+    func refreshCache() async {
+        guard session.isSignedIn else { return }
+        await cacheRefresher.refresh()
+        cacheRefresher.schedule()
     }
 
     /// Deletes the account on the server, then signs out here. The API

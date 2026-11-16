@@ -12,6 +12,10 @@
 	<string>$(AUDIENCEKIT_ENVIRONMENT)</string>
 	<key>AudienceKitHost</key>
 	<string>$(AUDIENCE_HOST)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>social.hotmess.HotMess.refresh</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -105,6 +109,10 @@
 		<string>Figtree-SemiBold.ttf</string>
 		<string>Figtree-Bold.ttf</string>
 		<string>Figtree-ExtraBold.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

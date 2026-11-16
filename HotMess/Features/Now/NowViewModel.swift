@@ -25,7 +25,15 @@ final class NowViewModel {
     /// fix nearby or coming back to the tab reuses a recent one; pass
     /// `sentAfter` to insist on one sent since then.
     func load(from location: LocationProvider, sentAfter: Date? = nil) async {
-        if state.value == nil { state = .loading }
+        if state.value == nil {
+            // The last "Now" (half an hour at most) shows while the position
+            // report goes out.
+            if let cached = await api.cachedNow() {
+                state = .loaded(cached)
+            } else {
+                state = .loading
+            }
+        }
 
         do {
             var now = try await location.now(sentAfter: sentAfter)
