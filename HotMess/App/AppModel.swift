@@ -4,6 +4,7 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import Foundation
 import Observation
 import SwiftUI
@@ -29,6 +30,8 @@ final class AppModel {
     let checkout: CoverCheckout
     /// Friends seen so far, so chat can show them by their full name.
     let friends = FriendDirectory()
+    /// Find friends from contacts: the offer on Now, the requests, and Me › Contacts (AudienceKitUI).
+    let contactFriends: ContactMatchingModel
     /// Who on this device has acknowledged that publishers run their own ads, asked before their first Soapbox story.
     let publisherAds = PublisherAdsAcknowledgement()
     /// A guest's acknowledgement, kept only until the app quits since there's no one to record it for.
@@ -61,6 +64,10 @@ final class AppModel {
     /// The Get help sheet over every tab: from a venue, or from a push about
     /// one of the user's safety alerts.
     var helpPresentation: HelpPresentation?
+
+    /// Find friends from contacts over every tab: the opt-in, or the matches for someone who has it on. Opened from
+    /// Now's card, Me › Contacts, and the pushes about a new match.
+    var findingFriends = false
 
     /// One navigation path per tab, so a deep link can push onto the right
     /// stack without disturbing the others.
@@ -146,6 +153,7 @@ final class AppModel {
             defaultCachePolicy: .networkFirst()
         )
         self.audienceKit = audienceKit
+        contactFriends = ContactMatchingModel(client: audienceKit, audienceID: configuration.audienceID ?? "hotmess")
 
         let api = HotMessAPI(client: APIClient(audienceKit: audienceKit))
         self.api = api
@@ -302,6 +310,8 @@ final class AppModel {
     /// Forgets what was loaded for the signed-in user.
     private func forgetUser() {
         friends.forget()
+        contactFriends.forget()
+        findingFriends = false
         safety.forget()
         listings.forget()
         tribes.forget()
@@ -479,6 +489,16 @@ final class AppModel {
             return true
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
+            return true
+        case .contactMatches:
+            // "Jordan P. from your contacts is on Hot Mess": the matches, over Now.
+            openNow()
+            findingFriends = session.isSignedIn
+            return true
+        case .friendRequests:
+            // "Jordan P. wants to be friends": the request is a card at the top of Now.
+            openNow()
+            Task { await contactFriends.load() }
             return true
         case let .safetyPoster(code):
             // The poster's venue, then its Get help sheet; a code no longer in

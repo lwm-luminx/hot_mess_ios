@@ -90,6 +90,19 @@ struct DeepLinkTests {
         #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/v/aB3dE5g!")) == nil)
     }
 
+    @Test("The pushes about friends from contacts open the matches and the requests")
+    func contactFriendLinks() {
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/friends/contacts")) == .contactMatches)
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/friends/requests")) == .friendRequests)
+        #expect(DeepLink.destination(for: URL(string: "hotmess://friends/contacts")) == .contactMatches)
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/friends")) == nil)
+        #expect(DeepLink.destination(for: URL(string: "https://hotmess.social/friends/other")) == nil)
+
+        #expect(FindFriendsSheet.names(from: "Danny Ortiz Reyes") == ("Danny", "Ortiz Reyes"))
+        #expect(FindFriendsSheet.names(from: "Cher") == ("Cher", ""))
+        #expect(FindFriendsSheet.names(from: nil) == ("", ""))
+    }
+
     @Test("Opens a room's chat from its link, as a push about a room the user left carries")
     func chatLinks() throws {
         let venue = try #require(URL(string: "https://hotmess.social/venues/\(id.uuidString.lowercased())/chat"))

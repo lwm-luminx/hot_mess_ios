@@ -349,6 +349,18 @@ struct SettingsScreen: View {
             }
             .accessibilityIdentifier("me.blocked")
 
+            // Find friends from contacts: the switch, the number and the name friends match on.
+            if model.session.isSignedIn {
+                NavigationLink {
+                    ContactMatchingSettings(model: model.contactFriends, appName: String(localized: "Hot Mess")) {
+                        model.findingFriends = true
+                    }
+                } label: {
+                    Label(String(localized: "Contacts"), systemImage: "person.crop.rectangle.stack")
+                }
+                .accessibilityIdentifier("me.contacts")
+            }
+
             // Promoted cards the viewer turned off: kept on their devices, never sent.
             NavigationLink {
                 CardsYouSeeScreen()
