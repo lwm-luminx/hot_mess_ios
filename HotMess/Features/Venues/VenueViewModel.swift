@@ -71,7 +71,14 @@ final class VenueViewModel {
 
     /// Fetches the venue and its events in one GraphQL request.
     func load() async {
-        if state.value == nil { state = .loading }
+        if state.value == nil {
+            // The venue as last loaded shows at once; the API's answer replaces it.
+            if let cached = await api.cachedVenue(venueID) {
+                state = .loaded(cached)
+            } else {
+                state = .loading
+            }
+        }
 
         do {
             let overview = try await api.venue(venueID)

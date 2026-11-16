@@ -39,11 +39,27 @@ struct HotMessAPI: CoverPaymentAPI {
             )
         }
 
+        // The position changes with every report, so the answer is kept under
+        // one name: when the API fails, the last "Now" stands in for half an
+        // hour rather than an error (where you are can change, so not longer).
         return try await query(
             Documents.reportLocation,
             variables: ["position": coordinates.graphQLInput],
-            as: ReportLocationResponse.self
+            as: ReportLocationResponse.self,
+            cachePolicy: .networkFirst(maxAge: Self.nowMaxAge),
+            cacheKey: Self.nowCacheKey
         ).reportLocation
+    }
+
+    static let nowCacheKey = "Now"
+    static let nowMaxAge: TimeInterval = 30 * 60
+
+    /// The last "Now" the API sent, if it's recent, to show while a new one loads.
+    func cachedNow() async -> Now? {
+        await audienceKit.cachedGraphQL(
+            Documents.reportLocation, as: ReportLocationResponse.self, decoder: .hotMess,
+            maxAge: Self.nowMaxAge, cacheKey: Self.nowCacheKey
+        )?.value.reportLocation
     }
 
     // MARK: - Geofences
@@ -55,7 +71,9 @@ struct HotMessAPI: CoverPaymentAPI {
         try await query(
             Documents.venueFences,
             variables: ["near": coordinates.graphQLInput],
-            as: VenueFencesResponse.self
+            as: VenueFencesResponse.self,
+            // Every report is from a new spot; the last set still stands in.
+            cacheKey: "VenueFences"
         ).venues
     }
 
@@ -87,7 +105,18 @@ struct HotMessAPI: CoverPaymentAPI {
     /// The venue with its upcoming events, in one request.
     func venue(_ id: UUID) async throws -> VenueOverview {
         let response = try await query(Documents.venue, variables: ["id": .string(id.uuidString)], as: VenueResponse.self)
-        guard let venue = response.venue else { throw APIError.notFound }
+        guard let overview = Self.overview(response) else { throw APIError.notFound }
+        return overview
+    }
+
+    /// The venue as last loaded, to show while it refreshes.
+    func cachedVenue(_ id: UUID) async -> VenueOverview? {
+        await cached(Documents.venue, variables: ["id": .string(id.uuidString)], as: VenueResponse.self)
+            .flatMap(Self.overview)
+    }
+
+    private static func overview(_ response: VenueResponse) -> VenueOverview? {
+        guard let venue = response.venue else { return nil }
         return VenueOverview(
             venue: venue.venue,
             bannerPhotos: venue.bannerPhotos,
@@ -180,14 +209,22 @@ struct HotMessAPI: CoverPaymentAPI {
     }
 
     /// A locale's events as the API orders them.
-    func eventList(in localeID: UUID) async throws -> [Event] {
+    func eventList(in localeID: UUID, cachePolicy: GraphQLCachePolicy? = nil) async throws -> [Event] {
         let response = try await query(
             Documents.localeEvents,
             variables: ["id": .string(localeID.uuidString)],
-            as: LocaleEventsResponse.self
+            as: LocaleEventsResponse.self,
+            cachePolicy: cachePolicy
         )
         guard let locale = response.locale else { throw APIError.notFound }
         return locale.events
+    }
+
+    /// A locale's events as last loaded (here or by the background refresh),
+    /// to show while they refresh.
+    func cachedEvents(in localeID: UUID) async -> EventListing? {
+        await cached(Documents.localeEvents, variables: ["id": .string(localeID.uuidString)],
+                     as: LocaleEventsResponse.self)?.locale.map { EventListing(upcoming: $0.events) }
     }
 
     func event(_ id: UUID) async throws -> EventDetail {
@@ -743,16 +780,37 @@ struct HotMessAPI: CoverPaymentAPI {
         ))
     }
 
+    /// Runs a GraphQL operation. Queries use the session's cache policy (the
+    /// last good answer when the API fails, ``AppModel``), unless the caller
+    /// passes another.
     func query<Response: Decodable & Sendable>(
         _ document: String,
         variables: [String: GraphQLValue],
-        as type: Response.Type
+        as type: Response.Type,
+        cachePolicy: GraphQLCachePolicy? = nil,
+        cacheKey: String? = nil
     ) async throws -> Response {
         do {
-            return try await audienceKit.graphQL(document, variables: variables, as: type, decoder: .hotMess)
+            let result = try await audienceKit.graphQLResult(document, variables: variables, as: type,
+                                                             decoder: .hotMess, cachePolicy: cachePolicy,
+                                                             cacheKey: cacheKey)
+            if let error = result.error {
+                // Served from the cache: still worth knowing about.
+                Log.network.error("\(Self.operationName(document), privacy: .public) failed, showing the answer from \(result.fetchedAt.formatted(), privacy: .public): \(error.message, privacy: .public)")
+            }
+            return result.value
         } catch let error as AudienceKitError {
             throw await APIClient.recorded(APIError(error), operation: Self.operationName(document))
         }
+    }
+
+    /// The last good answer to a query, without asking the API.
+    func cached<Response: Decodable & Sendable>(
+        _ document: String,
+        variables: [String: GraphQLValue],
+        as type: Response.Type
+    ) async -> Response? {
+        await audienceKit.cachedGraphQL(document, variables: variables, as: type, decoder: .hotMess)?.value
     }
 
     /// "query Venue" or "mutation SendPing", for error reports: the document's

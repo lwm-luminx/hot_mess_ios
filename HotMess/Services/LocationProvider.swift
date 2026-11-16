@@ -22,6 +22,9 @@ final class LocationProvider {
     /// How accurate the device fix behind `coordinates` is, in metres; `nil`
     /// while pretending to be at a venue.
     private var accuracy: CLLocationAccuracy?
+    /// Told each time the API resolves the locale the device is in, changed
+    /// or not: the cache refresher remembers it (on the phone only).
+    @ObservationIgnored var onLocaleResolved: (@MainActor (AppLocale) -> Void)?
     private(set) var locale: AppLocale?
     private(set) var authorizationStatus: CLAuthorizationStatus
     /// Test builds and App Review only: the venue the app is pretending to be
@@ -273,7 +276,11 @@ final class LocationProvider {
         let lookup = Task { @MainActor [api, weak self] in
             do {
                 let resolved = try await api.closestLocale(to: coordinates)
-                guard let self, let resolved, resolved.id != locale?.id else { return }
+                guard let self, let resolved else { return }
+                // Every visit counts, so a city the person stays in keeps
+                // being refreshed.
+                onLocaleResolved?(resolved)
+                guard resolved.id != locale?.id else { return }
 
                 locale = resolved
                 LocationProvider.persist(resolved)
