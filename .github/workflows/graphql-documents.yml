@@ -1,7 +1,7 @@
 # Checks the GraphQL documents in the app's source against graphql/schema.graphql: the API's consumer schema this
 # app is built and tested against (a copy of audience_kit_api's contracts/schema/schema.graphql from its `next`), so
 # a renamed field fails before it ships. When the app starts using something new, copy the API's dump in with the
-# change. Pull requests into `main` also check that production serves all of that copy (production-api.yml).
+# change. Pull requests into `next` and `main` also check that the matching deployed API serves all of that copy (deployed-api.yml).
 name: GraphQL documents
 
 on:

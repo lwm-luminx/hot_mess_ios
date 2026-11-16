@@ -1,0 +1,75 @@
+# Deployment gate: the API branch an app branch pairs with must already serve everything the app needs.
+#
+# The app and the API both run `next` = staging (api.next.audiencekit.com) and `main` = production
+# (api.audiencekit.com, the App Store builds). Pull requests into the app's `next` are checked against the API's
+# deployed `next`, and pull requests into `main` against deployed production, so an app change can't land before the
+# API change it depends on is deployed on the matching branch, and a release can't be cut before the API is promoted.
+#
+# Against that API's running schema (GET /v1/schemas/<view>, the API's SchemasController) it checks:
+#   1. every GraphQL document the app sends is valid (deprecated fields still answer, so they pass), and
+#   2. the running schema contains ALL of the schema the app was built against (graphql/), not only what the
+#      documents select: nothing in it missing or changed incompatibly. The API having more than that is fine.
+# If this fails, deploy (next) or promote and deploy (main) the API change first, then re-run this check.
+#
+# A required check on `next` and `main`: it has no path filter so it always reports. scripts/graphql/ holds copies of
+# the API's scripts/graphql-documents/check.mjs and superset.mjs.
+name: Deployed API
+
+on:
+  pull_request:
+    branches: [next, main]
+  workflow_dispatch:
+
+jobs:
+  queries:
+    name: Deployed API serves the app
+    runs-on: ubuntu-latest
+    env:
+      # The API deployment this app branch pairs with: next with next (staging), main with main (production).
+      API: ${{ (github.base_ref || github.ref_name) == 'main' && 'https://api.audiencekit.com' || 'https://api.next.audiencekit.com' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The SDK revision the app pins
+        id: sdk
+        run: |
+          revision=$(node -e '
+            const resolved = "HotMess.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved";
+            const pins = JSON.parse(require("fs").readFileSync(resolved, "utf8")).pins;
+            process.stdout.write(pins.find((pin) => pin.identity === "audience-kit-sdk").state.revision);')
+          echo "Hot Mess pins audience-kit-sdk at $revision"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: lwm-luminx/audience-kit-sdk
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: .api-check/audience-kit-sdk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The deployed API's consumer schema
+        run: |
+          cd .api-check
+          status=$(curl -sS -o schema.graphql -D headers.txt -w '%{http_code}' $API/v1/schemas/consumer)
+          if [ "$status" != 200 ]; then
+            echo "::error title=No deployed schema::$API/v1/schemas/consumer answered $status. It ships with audience_kit_api #663; until that's deployed there this check can't pass."
+            exit 1
+          fi
+          commit=$(grep -i '^x-audiencekit-commit:' headers.txt | tr -d '\r' | cut -d' ' -f2)
+          echo "$API runs audience_kit_api ${commit:-(commit unknown)}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Every document is served by the deployed API
+        run: |
+          npm install --silent --no-save --no-package-lock --prefix .api-check graphql@16
+          cp scripts/graphql/check.mjs .api-check/check.mjs
+          if ! node .api-check/check.mjs --schema .api-check/schema.graphql --endpoint consumer \
+               --allow-deprecated HotMess .api-check/audience-kit-sdk/swift/Sources; then
+            echo "::error title=Needs an API change that isn't deployed::Deploy the audience_kit_api change these fields come from to $API (merge to next, or promote to main), then re-run this check."
+            exit 1
+          fi
+      - name: The deployed API contains the schema the app was built against
+        run: |
+          cp scripts/graphql/superset.mjs .api-check/superset.mjs
+          if ! node .api-check/superset.mjs --client graphql/schema.graphql --server .api-check/schema.graphql \
+               --label "$API vs graphql/schema.graphql"; then
+            echo "::error title=The deployed API lacks part of the app's schema::graphql/schema.graphql has types, fields or values $API doesn't serve. Deploy the API change there first, or refresh graphql/schema.graphql from the matching API branch if the app doesn't need them."
+            exit 1
+          fi
