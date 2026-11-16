@@ -41,8 +41,16 @@ enum PairUpStubs {
         let stub = StubAPI()
         stub.stubSignedInBasics()
         stub.on("VenuePairUp", .data(venue))
+        // Once both said yes, the sheet reads their chat.
+        stub.on("QuickieChat", .data(quickieChat))
         return stub
     }
+
+    static let quickieChat = #"""
+    {"venues":{"venue":{"pairUp":{"mine":{"match":{"id":"00000000-0000-4000-8000-0000000000b1","chat":{"id":"quickie-m1",
+     "closesAt":"2099-01-01T05:00:00.000Z","messages":[{"id":"quickie-m1.l1","chatId":"quickie-m1","body":"By the DJ booth",
+     "isMine":false,"sentAt":"2026-11-14T22:00:00.000Z","sender":{"id":"00000000-0000-4000-8000-0000000000a1","name":"Jamie"}}]}}}}}}}
+    """#
 }
 
 @MainActor
@@ -211,6 +219,7 @@ struct PairUpSheetTests {
         #expect(await screen.waitFor("Look for Jamie"))
         #expect(screen.contains("Green hat"))
         #expect(screen.contains("Scan theirs"))
+        #expect(await screen.waitFor("By the DJ booth"))
         stub.expectEverythingStubbed()
     }
 
