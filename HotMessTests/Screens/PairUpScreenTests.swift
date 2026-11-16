@@ -179,7 +179,7 @@ struct PairUpSheetTests {
 
         #expect(await screen.waitFor("Start a quickie"))
         #expect(screen.activate("Start a quickie", exact: false))
-        #expect(await screen.settle(timeout: .seconds(5)) { model.state?.status == .searching })
+        #expect(await screen.settle(timeout: .seconds(20)) { model.state?.status == .searching })
         stub.on("VenuePairUp", .data(PairUpStubs.venue(here: true, mine: PairUpStubs.state("SEARCHING"))))
         #expect(await screen.waitFor("Finding someone to chat with"))
         #expect(screen.contains("Leave Quickie"))

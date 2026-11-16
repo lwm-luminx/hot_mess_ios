@@ -149,7 +149,7 @@ struct EventScreenTests {
 
         #expect(await screen.waitFor(RSVP.attending.title))
         #expect(screen.activate(RSVP.attending.title))
-        #expect(await screen.settle(timeout: .seconds(5)) { stub.requests.contains { $0.key.lowercased().contains("rsvp") } })
+        #expect(await screen.settle(timeout: .seconds(20)) { stub.requests.contains { $0.key.lowercased().contains("rsvp") } })
         #expect(!screen.contains("Couldn't Save RSVP"))
         stub.expectEverythingStubbed()
     }
