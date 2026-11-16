@@ -7,16 +7,19 @@ import Foundation
 import Observation
 import UIKit
 
-/// Where "Get help" was opened from: a venue the user is at, or one of their
-/// alerts (a push, or Me > Your safety alerts).
+/// Where "Get help" was opened from: a venue the user is at, one of their
+/// alerts (a push, or Me > Your safety alerts), or anywhere else, where
+/// there's no staff to tell but a friend, a ride, support and 911 still are.
 enum HelpPresentation: Identifiable, Hashable, Sendable {
     case venue(HelpVenue)
     case alert(id: String)
+    case anywhere
 
     var id: String {
         switch self {
         case let .venue(venue): "venue-\(venue.id.uuidString)"
         case let .alert(id): "alert-\(id)"
+        case .anywhere: "anywhere"
         }
     }
 }
