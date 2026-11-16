@@ -5,7 +5,9 @@
 # its requests would fail for everyone who installs it. So pull requests into `main` validate the app's documents
 # (HotMess/ plus the audience-kit-sdk revision Package.resolved pins) against the schema production is running right
 # now (https://api.audiencekit.com/v1/schemas/consumer, the API's SchemasController). Deprecated fields still
-# answer, so they pass here. If this fails, promote and deploy the API change first, then re-run this check.
+# answer, so they pass here. It also checks that production's schema contains ALL of graphql/schema.graphql, the
+# schema the app was built against (scripts/graphql/superset.mjs), not only the parts its documents select.
+# If this fails, promote and deploy the API change first, then re-run this check.
 #
 # A required check on `main`: it has no path filter so it always reports. scripts/graphql/check.mjs is a copy of the
 # API's scripts/graphql-documents/check.mjs (developer.audiencekit.com doesn't resolve from the runners).
@@ -56,5 +58,13 @@ jobs:
           if ! node .production-check/check.mjs --schema .production-check/schema.graphql --endpoint consumer \
                --allow-deprecated HotMess .production-check/audience-kit-sdk/swift/Sources; then
             echo "::error title=Needs an API change that isn't on production::Promote and deploy the audience_kit_api change these fields come from, then re-run this check."
+            exit 1
+          fi
+      - name: Production contains the schema the app was built against
+        run: |
+          cp scripts/graphql/superset.mjs .production-check/superset.mjs
+          if ! node .production-check/superset.mjs --client graphql/schema.graphql --server .production-check/schema.graphql \
+               --label "production vs graphql/schema.graphql"; then
+            echo "::error title=Production lacks part of the app's schema::graphql/schema.graphql has types, fields or values production doesn't serve. Promote and deploy the API first, or refresh graphql/schema.graphql from the API's main if the app doesn't need them."
             exit 1
           fi
