@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// "Get help" at a venue, and the alert once it's sent: a digital "Ask for
+/// "Get help" at a venue (or anywhere, without telling staff), and the alert once it's sent: a digital "Ask for
 /// Angela" (api doc/design-system/SafetyAlerts.md). Built so someone looking
 /// over the user's shoulder sees nothing alarming: normal surfaces, no red
 /// except 911, and nothing here ever shows in chat or on their profile.
@@ -16,6 +16,7 @@ struct GetHelpSheet: View {
     @State private var model: SafetyAlertModel
     @State private var isTellingStaff = false
     @State private var isShowingSupport = false
+    @State private var isFindingHelp = false
 
     init(presentation: HelpPresentation, api: HotMessAPI) {
         _model = State(initialValue: SafetyAlertModel(api: api, presentation: presentation))
@@ -86,6 +87,20 @@ struct GetHelpSheet: View {
                     .accessibilityIdentifier("help.tellStaff")
                 }
                 HelpEscapeRows(model: model, showSupport: { isShowingSupport = true })
+                // Away from a venue there's no staff to tell, so the city's
+                // food, shelter, health and support lines come forward here.
+                if model.venue == nil {
+                    Button {
+                        isFindingHelp = true
+                    } label: {
+                        HelpRow(
+                            title: String(localized: "Find help nearby"),
+                            subtitle: String(localized: "Food, shelter, health and support in your city."),
+                            systemImage: "hand.raised"
+                        )
+                    }
+                    .accessibilityIdentifier("help.findNearby")
+                }
             } footer: {
                 Text("Nothing here shows in chat or on your profile.")
             }
@@ -93,6 +108,9 @@ struct GetHelpSheet: View {
             EmergencySection()
         }
         .listStyle(.insetGrouped)
+        .fullScreenCover(isPresented: $isFindingHelp) {
+            ResourcesSheet(focusResourceID: nil)
+        }
     }
 }
 
