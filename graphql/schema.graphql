@@ -2046,6 +2046,11 @@ type Audience implements IRelay & Node {
   me: UserState @endpoint(in: [AUDIENCE, STAFF])
 
   """
+  The instance's IAudienceMedia mixin. Left out of the schema where its module isn't installed.
+  """
+  media: IAudienceMedia! @endpoint(in: [AUDIENCE, STAFF])
+
+  """
   People who have signed in on the audience's console or apps, with their latest
   activity and whether they're banned, oldest member first. Admins only; empty
   for everyone else.
@@ -2786,6 +2791,66 @@ type AudienceKitProvider implements IProvider {
   Its name, e.g. KaraFun.
   """
   name: String!
+}
+
+"""
+Media titles stored in AudienceKit (MediaTitle).
+"""
+type AudienceMediaView implements IAudienceMedia {
+  """
+  The list sections, most titles first.
+  """
+  collections: [MediaLabel!]!
+
+  """
+  Every tag on a listed title, most used first.
+  """
+  tags: [MediaLabel!]!
+
+  """
+  A title by its UUID or IMDb id; null when there is none.
+  """
+  title(
+    """
+    Its UUID.
+    """
+    id: ID
+
+    """
+    IMDb's id for it, e.g. tt0109045.
+    """
+    imdbId: String
+  ): MediaTitle
+
+  """
+  Listed titles by title, all of them: a list is a few hundred at most. Filters narrow it; all must match.
+  """
+  titles(
+    """
+    Only titles in this collection.
+    """
+    collection: String
+
+    """
+    Staff only: hidden ones too.
+    """
+    includeHidden: Boolean = false
+
+    """
+    Only these kinds.
+    """
+    kinds: [MediaKind!]
+
+    """
+    Words in its title, or its IMDb id.
+    """
+    search: String
+
+    """
+    Only titles with every one of these tags.
+    """
+    tags: [String!]
+  ): [MediaTitle!]!
 }
 
 """
@@ -10281,6 +10346,68 @@ interface IAudienceKaraoke @mixin(extensionKey: "karaoke", field: "karaoke", nul
 }
 
 """
+The media module's root lookups: films and television the audience recommends,
+each linked to its IMDb page, with the tags and collections to filter them by
+(doc/MEDIA.md). Load the whole list and filter on the phone.
+"""
+interface IAudienceMedia @mixin(extensionKey: "media", field: "media", null: false, on: ["Audience"]) @endpoint(in: [AUDIENCE, STAFF]) {
+  """
+  The list sections, most titles first.
+  """
+  collections: [MediaLabel!]!
+
+  """
+  Every tag on a listed title, most used first.
+  """
+  tags: [MediaLabel!]!
+
+  """
+  A title by its UUID or IMDb id; null when there is none.
+  """
+  title(
+    """
+    Its UUID.
+    """
+    id: ID
+
+    """
+    IMDb's id for it, e.g. tt0109045.
+    """
+    imdbId: String
+  ): MediaTitle
+
+  """
+  Listed titles by title, all of them: a list is a few hundred at most. Filters narrow it; all must match.
+  """
+  titles(
+    """
+    Only titles in this collection.
+    """
+    collection: String
+
+    """
+    Staff only: hidden ones too.
+    """
+    includeHidden: Boolean = false
+
+    """
+    Only these kinds.
+    """
+    kinds: [MediaKind!]
+
+    """
+    Words in its title, or its IMDb id.
+    """
+    search: String
+
+    """
+    Only titles with every one of these tags.
+    """
+    tags: [String!]
+  ): [MediaTitle!]!
+}
+
+"""
 Which payment keys an audience's cover charges go through, and the URLs to give
 Stripe and Square. Secrets are stored encrypted and never returned.
 """
@@ -15125,6 +15252,117 @@ type LocationReportPayload {
 }
 
 """
+What a media title is, as IMDb has it.
+"""
+enum MediaKind {
+  """
+  A feature film.
+  """
+  FILM
+
+  """
+  A short film.
+  """
+  SHORT
+
+  """
+  A limited television series.
+  """
+  TV_MINI_SERIES
+
+  """
+  A film made for television.
+  """
+  TV_MOVIE
+
+  """
+  A television series.
+  """
+  TV_SERIES
+}
+
+"""
+A tag or collection on media titles, with how many listed titles have it.
+"""
+type MediaLabel {
+  """
+  How many listed titles have it.
+  """
+  count: Int!
+
+  """
+  The tag or collection, e.g. lesbian or new-since-2018.
+  """
+  name: String!
+}
+
+"""
+A film or television title the audience recommends, linked to its IMDb page. Open imdbUrl for its plot, cast and rating.
+"""
+type MediaTitle {
+  """
+  The list sections it's in, e.g. new-since-2018 (Audience.media.collections).
+  """
+  collections: [String!]!
+
+  """
+  When a series ended; null while it runs, and for films.
+  """
+  endYear: Int
+
+  """
+  Its UUID.
+  """
+  id: ID!
+
+  """
+  IMDb's id for it, e.g. tt0109045.
+  """
+  imdbId: String!
+
+  """
+  Its IMDb page.
+  """
+  imdbUrl: String!
+
+  """
+  Film, short, TV movie, series or mini-series.
+  """
+  kind: MediaKind!
+
+  """
+  The curator's note, e.g. "Watch Paris Is Burning first"; null for none.
+  """
+  note: String
+
+  """
+  What it is, lowercase: gay, lesbian, bisexual, transgender, qpoc, drag,
+  hivaids, documentary, history, cult, classic, comedy and the curator's own.
+  """
+  tags: [String!]!
+
+  """
+  A series or mini-series.
+  """
+  television: Boolean!
+
+  """
+  Its title, as IMDb has it.
+  """
+  title: String!
+
+  """
+  When it came out, or a series started.
+  """
+  year: Int
+
+  """
+  When it was out, to show: 1994, 1999–2000, or 2018– for a running series.
+  """
+  years: String
+}
+
+"""
 Anyone posting as themself: their own avatar, with presence where the viewer may see it.
 """
 type MemberSender implements Sender {
@@ -15836,6 +16074,17 @@ type Mutation {
     """
     input: PingSendInput!
   ): PingSendPayload @requires(permissions: ["ping:write:self"])
+
+  """
+  Says something in a Ping or Quickie chat you're in. Everyone else in it hears
+  it on Subscription.privateChat; nobody hears what was said once the chat closes.
+  """
+  sendPrivateChatMessage(
+    """
+    Parameters for PrivateChatMessageSend
+    """
+    input: PrivateChatMessageSendInput!
+  ): PrivateChatMessageSendPayload @requires(permissions: ["users:write:self"])
 
   """
   Tells the staff on shift at the venue you're at that you feel unsafe (only
@@ -16721,6 +16970,12 @@ type PairUpMatch {
   A fresh topic from scanning someone else's code: already accepted, no code needed.
   """
   bonus: Boolean!
+
+  """
+  A chat for the two of them, once both accepted, until the pairing ends or 30
+  minutes after they meet. Null before, after, and in audiences without chat.
+  """
+  chat: PrivateChat
 
   """
   Why it ended; null while it lasts.
@@ -17936,6 +18191,12 @@ The sender and everyone who's in make up its circle.
 """
 type Ping implements Node {
   """
+  The circle's chat, once someone has joined: for the sender and everyone who's
+  in, until the ping ends. Null for anyone else, and in audiences without chat.
+  """
+  chat: PrivateChat
+
+  """
   When it was sent.
   """
   createdAt: ISO8601DateTime!
@@ -18787,6 +19048,139 @@ enum Presence {
   Not in chat, but signed in on a device that gets push notifications.
   """
   PUSH
+}
+
+"""
+A short-lived chat: a ping's circle, or a Quickie pair once both accepted.
+What's said is kept only until it closes (5am for a ping; for a Quickie when the
+pairing ends or 30 minutes after meeting), then deleted. Send with
+sendPrivateChatMessage; hear new lines on Subscription.privateChat.
+"""
+type PrivateChat {
+  """
+  When it closes at the latest. Ending the ping or the pairing closes it sooner.
+  """
+  closesAt: ISO8601DateTime!
+
+  """
+  Its id, as sendPrivateChatMessage and privateChat events name it.
+  """
+  id: ID!
+
+  """
+  Its lines, oldest first: the newest 50 before `before`. Leaves out anyone a block stands between you and.
+  """
+  messages(
+    """
+    Only lines said before this, to page back.
+    """
+    before: ISO8601DateTime
+  ): [PrivateChatMessage!]!
+}
+
+"""
+Something new in one of your Ping or Quickie chats (Subscription.privateChat): a line, or the chat closing.
+"""
+type PrivateChatEvent {
+  """
+  Which chat (PrivateChat.id).
+  """
+  chatId: ID!
+
+  """
+  It closed: what was said in it is gone, and nothing more can be sent.
+  """
+  closed: Boolean!
+
+  """
+  The new line; null when it closed.
+  """
+  message: PrivateChatMessage
+}
+
+"""
+A line in a Ping or Quickie chat. It's gone when the chat closes.
+"""
+type PrivateChatMessage {
+  """
+  What they said.
+  """
+  body: String!
+
+  """
+  The chat it was said in (PrivateChat.id).
+  """
+  chatId: ID!
+
+  """
+  Its id, which also names its chat: report it with reportContent(PRIVATE_MESSAGE).
+  """
+  id: ID!
+
+  """
+  Written by the signed-in user.
+  """
+  isMine: Boolean!
+
+  """
+  Who wrote it; null when they've deleted their account.
+  """
+  sender: PrivateChatSender
+
+  """
+  When it was said.
+  """
+  sentAt: ISO8601DateTime!
+}
+
+"""
+Autogenerated input type of PrivateChatMessageSend
+"""
+input PrivateChatMessageSendInput {
+  """
+  What to say, up to 1,000 characters.
+  """
+  body: String!
+
+  """
+  The chat (Ping.chat.id or PairUpMatch.chat.id).
+  """
+  chatId: ID!
+
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+}
+
+"""
+Autogenerated return type of PrivateChatMessageSend.
+"""
+type PrivateChatMessageSendPayload {
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+
+  """
+  The line as sent.
+  """
+  message: PrivateChatMessage!
+}
+
+"""
+Who wrote a line in a Ping or Quickie chat.
+"""
+type PrivateChatSender {
+  """
+  Their user id, to block or report them.
+  """
+  id: ID!
+
+  """
+  Their name: in full for friends, first name and last initial for anyone else.
+  """
+  name: String!
 }
 
 """
@@ -19726,6 +20120,12 @@ enum ReportTarget {
   A comment on a post, by its id.
   """
   POST_COMMENT
+
+  """
+  A line in a Ping or Quickie chat, by its id (PrivateChatMessage.id). It and
+  the lines before it are kept with the report, as the chat is deleted when it closes.
+  """
+  PRIVATE_MESSAGE
 
   """
   A venue, by its id.
@@ -22150,6 +22550,13 @@ type Subscription {
     """
     id: ID!
   ): NodeChanged! @requires(permissions: ["audience:read:self", "venues:read:venue"])
+
+  """
+  New lines in any Ping or Quickie chat you are in, and chats closing, while the
+  app is open. Nothing arrives on subscribing: read a chat's earlier lines from
+  Ping.chat or PairUpMatch.chat.
+  """
+  privateChat: PrivateChatEvent! @requires(permissions: ["users:read:self"])
 
   """
   Follows a venue's chat room: ChatJoined, then everything the room says and who

@@ -276,6 +276,10 @@ struct PairUpSheet: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
 
+                Divider()
+                QuickieChatCard(venueID: model.venueID, matchID: match.id)
+                Divider()
+
                 cancelButton(match)
             }
         }
@@ -296,6 +300,9 @@ struct PairUpSheet: View {
             badge(state)
             if let match = state.match {
                 shareRow(match)
+            }
+            if let match = state.match, match.chatsAfterMeeting() {
+                QuickieChatCard(venueID: model.venueID, matchID: match.id)
             }
 
             VStack(spacing: 10) {

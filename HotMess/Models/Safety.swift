@@ -115,6 +115,8 @@ enum ReportTarget: String, Hashable, Sendable {
     case message = "MESSAGE"
     case post = "POST"
     case postComment = "POST_COMMENT"
+    /// A line in a Ping or Quickie chat; the report keeps a copy, since the chat is deleted when it ends.
+    case privateMessage = "PRIVATE_MESSAGE"
 }
 
 /// Something the user is reporting: what it is, its ID, and the person behind
@@ -138,6 +140,7 @@ struct ReportSubject: Identifiable, Hashable, Sendable {
         case .message: String(localized: "Why are you reporting this message?")
         case .post: String(localized: "Why are you reporting this post?")
         case .postComment: String(localized: "Why are you reporting this comment?")
+        case .privateMessage: String(localized: "Why are you reporting this message?")
         }
     }
 }
