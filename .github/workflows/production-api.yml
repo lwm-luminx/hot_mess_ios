@@ -1,0 +1,60 @@
+# Release gate: every GraphQL document Hot Mess sends must already be served by PRODUCTION's API.
+#
+# `next` is staging and `main` is what goes to the App Store, and the API works the same way. A field added on the
+# API's `next` passes the app's next checks, but if the app reached the store before that API change is promoted,
+# its requests would fail for everyone who installs it. So pull requests into `main` validate the app's documents
+# (HotMess/ plus the audience-kit-sdk revision Package.resolved pins) against the schema production is running right
+# now (https://api.audiencekit.com/v1/schemas/consumer, the API's SchemasController). Deprecated fields still
+# answer, so they pass here. If this fails, promote and deploy the API change first, then re-run this check.
+#
+# A required check on `main`: it has no path filter so it always reports. scripts/graphql/check.mjs is a copy of the
+# API's scripts/graphql-documents/check.mjs (developer.audiencekit.com doesn't resolve from the runners).
+name: Production API
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  queries:
+    name: Queries are live on production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The SDK revision the app pins
+        id: sdk
+        run: |
+          revision=$(node -e '
+            const resolved = "HotMess.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved";
+            const pins = JSON.parse(require("fs").readFileSync(resolved, "utf8")).pins;
+            process.stdout.write(pins.find((pin) => pin.identity === "audience-kit-sdk").state.revision);')
+          echo "Hot Mess pins audience-kit-sdk at $revision"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: lwm-luminx/audience-kit-sdk
+          ref: ${{ steps.sdk.outputs.revision }}
+          path: .production-check/audience-kit-sdk
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Production's consumer schema
+        run: |
+          cd .production-check
+          status=$(curl -sS -o schema.graphql -D headers.txt -w '%{http_code}' https://api.audiencekit.com/v1/schemas/consumer)
+          if [ "$status" != 200 ]; then
+            echo "::error title=No production schema::api.audiencekit.com/v1/schemas/consumer answered $status. It ships with audience_kit_api #663; until that's on production this check can't pass."
+            exit 1
+          fi
+          commit=$(grep -i '^x-audiencekit-commit:' headers.txt | tr -d '\r' | cut -d' ' -f2)
+          echo "Production runs audience_kit_api ${commit:-(commit unknown)}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Every document is served by production
+        run: |
+          npm install --silent --no-save --no-package-lock --prefix .production-check graphql@16
+          cp scripts/graphql/check.mjs .production-check/check.mjs
+          if ! node .production-check/check.mjs --schema .production-check/schema.graphql --endpoint consumer \
+               --allow-deprecated HotMess .production-check/audience-kit-sdk/swift/Sources; then
+            echo "::error title=Needs an API change that isn't on production::Promote and deploy the audience_kit_api change these fields come from, then re-run this check."
+            exit 1
+          fi
