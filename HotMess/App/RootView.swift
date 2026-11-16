@@ -110,6 +110,12 @@ struct MainTabView: View {
             GetHelpSheet(presentation: presentation, api: model.api)
                 .environment(model)
         }
+        .sheet(isPresented: $model.findingFriends) {
+            FindFriendsSheet(friends: model.contactFriends, name: model.session.user?.name) {
+                model.findingFriends = false
+            }
+            .audiencePreset(model.brand.preset)
+        }
         .notificationBannerHost()
     }
 }
