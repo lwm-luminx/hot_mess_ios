@@ -4,6 +4,7 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import SwiftUI
 import UIKit
 
@@ -99,6 +100,18 @@ struct NowScreen: View {
                                     .font(.hotMess(.footnote))
                                     .foregroundStyle(.secondary)
                             }
+                        }
+
+                        // Friends from contacts depend on this account's
+                        // own opt-in, so they aren't server cards: requests
+                        // waiting on an answer, then the offer to turn it on.
+                        if model.session.isSignedIn {
+                            VStack(spacing: 16) {
+                                FriendRequestCards(model: model.contactFriends)
+                                FindFriendsCard(model: model.contactFriends) { model.findingFriends = true }
+                            }
+                            .padding(.horizontal, 16)
+                            .task { await model.contactFriends.load() }
                         }
 
                         // The cards in the server's order (the built-in one

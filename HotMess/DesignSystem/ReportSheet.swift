@@ -17,6 +17,10 @@ struct ReportSheet: View {
     /// Files the report; throws when it didn't go through. The sheet closes
     /// once it returns.
     let onSubmit: (ChatReportReason, _ block: Bool) async throws -> Void
+    /// Sends a test report instead, for a moderation test line: offers "Send
+    /// test report", which files nothing, so the moderators' queue never
+    /// sees it. `nil` for anything else.
+    var onTest: ((ChatReportReason) async throws -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var reason: ChatReportReason?
@@ -27,6 +31,22 @@ struct ReportSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if onTest != nil {
+                    Section {
+                        Button {
+                            Task { await sendTest() }
+                        } label: {
+                            Label(String(localized: "Send test report"), systemImage: "testtube.2")
+                        }
+                        .disabled(isSending)
+                        .accessibilityIdentifier("report.test")
+                    } header: {
+                        Text("This is a moderation test")
+                    } footer: {
+                        Text("A test report goes through every check but nothing is filed, so the moderators' queue never sees it.")
+                    }
+                }
+
                 Section {
                     ForEach(ChatReportReason.allCases) { option in
                         Button {
@@ -92,6 +112,18 @@ struct ReportSheet: View {
         defer { isSending = false }
         do {
             try await onSubmit(reason, alsoBlock)
+            dismiss()
+        } catch {
+            failed = true
+        }
+    }
+
+    private func sendTest() async {
+        guard let onTest, !isSending else { return }
+        isSending = true
+        defer { isSending = false }
+        do {
+            try await onTest(reason ?? .other)
             dismiss()
         } catch {
             failed = true

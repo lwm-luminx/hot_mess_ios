@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().delegate = self
         PushNotifications.registerCategories()
 
+        // Background refreshes of the on-device cache; iOS requires the
+        // handler before launch finishes.
+        AppModel.shared.cacheRefresher.register()
+
         // A venue geofence or a significant change may have relaunched the
         // app with nothing on screen, so SwiftUI won't start anything. A
         // scene-based app often reads as background here on a normal launch

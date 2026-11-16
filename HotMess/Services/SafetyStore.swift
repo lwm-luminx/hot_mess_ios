@@ -95,6 +95,11 @@ final class SafetyStore {
         }
     }
 
+    /// A test report on a moderation test line: nothing is filed or blocked.
+    func reportTest(messageID: UUID, reason: ChatReportReason) async throws {
+        try await api.reportTestChatMessage(messageID, reason: reason.rawValue)
+    }
+
     /// Reports a person, venue, Ping, photo or message (`reportContent`).
     /// Blocking with it hides whoever is behind it at once.
     func report(_ subject: ReportSubject, reason: ChatReportReason, block: Bool) async throws {

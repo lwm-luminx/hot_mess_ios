@@ -4,6 +4,7 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import Foundation
 import Observation
 import SwiftUI
@@ -23,10 +24,14 @@ final class AppModel {
     /// The audience's look, from AudienceKit branding.
     let brand: BrandStore
     let location: LocationProvider
+    /// Keeps the cities the person has been in fresh in the on-device cache.
+    let cacheRefresher: CacheRefresher
     /// Paying cover and showing passes, over whichever tab asked.
     let checkout: CoverCheckout
     /// Friends seen so far, so chat can show them by their full name.
     let friends = FriendDirectory()
+    /// Find friends from contacts: the offer on Now, the requests, and Me › Contacts (AudienceKitUI).
+    let contactFriends: ContactMatchingModel
     /// Who on this device has acknowledged that publishers run their own ads, asked before their first Soapbox story.
     let publisherAds = PublisherAdsAcknowledgement()
     /// A guest's acknowledgement, kept only until the app quits since there's no one to record it for.
@@ -59,6 +64,10 @@ final class AppModel {
     /// The Get help sheet over every tab: from a venue, or from a push about
     /// one of the user's safety alerts.
     var helpPresentation: HelpPresentation?
+
+    /// Find friends from contacts over every tab: the opt-in, or the matches for someone who has it on. Opened from
+    /// Now's card, Me › Contacts, and the pushes about a new match.
+    var findingFriends = false
 
     /// One navigation path per tab, so a deep link can push onto the right
     /// stack without disturbing the others.
@@ -111,7 +120,9 @@ final class AppModel {
         set { UserDefaults.standard.set(newValue, forKey: Self.promptedFacebookOnChatKey) }
     }
 
-    static let shared = AppModel()
+    /// The app itself keeps the last good answer to each query on disk, so a
+    /// failing request shows it instead of an error; unit tests keep none.
+    static let shared = AppModel(graphQLCache: FileGraphQLCache())
 
     /// `credentialStore`, `urlSession`, `deviceAttestor` and `openSocket` are
     /// the app's real ones by default; unit tests pass an in-memory store, a
@@ -122,7 +133,8 @@ final class AppModel {
         credentialStore: any CredentialStore = SessionStore.credentialStore,
         urlSession: URLSession = .hotMess,
         deviceAttestor: (any DeviceAttestor)? = AppAttestAttestor.platformDefault,
-        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil
+        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil,
+        graphQLCache: (any GraphQLCache)? = nil
     ) {
         self.configuration = configuration
         serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
@@ -134,9 +146,14 @@ final class AppModel {
             credentialStore: credentialStore,
             session: urlSession,
             monitor: operations,
-            deviceAttestor: deviceAttestor
+            deviceAttestor: deviceAttestor,
+            cache: graphQLCache,
+            // Every query falls back to its last good answer (a week at most)
+            // when the API can't answer; refusals still throw.
+            defaultCachePolicy: .networkFirst()
         )
         self.audienceKit = audienceKit
+        contactFriends = ContactMatchingModel(client: audienceKit, audienceID: configuration.audienceID ?? "hotmess")
 
         let api = HotMessAPI(client: APIClient(audienceKit: audienceKit))
         self.api = api
@@ -151,6 +168,10 @@ final class AppModel {
         flyers = FlyerSettings(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
+        let cacheRefresher = CacheRefresher(api: api, audienceKit: audienceKit, audienceID: configuration.audienceID,
+                                            isSignedIn: { [session] in session.isSignedIn })
+        self.cacheRefresher = cacheRefresher
+        location.onLocaleResolved = { [cacheRefresher] locale in cacheRefresher.recordVisit(locale) }
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
         safety = SafetyStore(api: api)
         listings = ListingsStore(api: api)
@@ -289,11 +310,14 @@ final class AppModel {
     /// Forgets what was loaded for the signed-in user.
     private func forgetUser() {
         friends.forget()
+        contactFriends.forget()
+        findingFriends = false
         safety.forget()
         listings.forget()
         tribes.forget()
         notifications.reset()
         location.forget()
+        cacheRefresher.forget()
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnPingKey)
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnChatKey)
         Task { [cable] in await cable.disconnect() }
@@ -306,6 +330,15 @@ final class AppModel {
     func startInBackground() async {
         guard location.tracksInBackground, await session.hasStoredSession else { return }
         location.startInBackground()
+        cacheRefresher.schedule()
+    }
+
+    /// The app came to the foreground: refresh the cache if the backoff says
+    /// it's due, and ask iOS for the next background refresh.
+    func refreshCache() async {
+        guard session.isSignedIn else { return }
+        await cacheRefresher.refresh()
+        cacheRefresher.schedule()
     }
 
     /// Deletes the account on the server, then signs out here. The API
@@ -456,6 +489,16 @@ final class AppModel {
             return true
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
+            return true
+        case .contactMatches:
+            // "Jordan P. from your contacts is on Hot Mess": the matches, over Now.
+            openNow()
+            findingFriends = session.isSignedIn
+            return true
+        case .friendRequests:
+            // "Jordan P. wants to be friends": the request is a card at the top of Now.
+            openNow()
+            Task { await contactFriends.load() }
             return true
         case let .safetyPoster(code):
             // The poster's venue, then its Get help sheet; a code no longer in

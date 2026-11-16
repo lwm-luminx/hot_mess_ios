@@ -39,11 +39,27 @@ struct HotMessAPI: CoverPaymentAPI {
             )
         }
 
+        // The position changes with every report, so the answer is kept under
+        // one name: when the API fails, the last "Now" stands in for half an
+        // hour rather than an error (where you are can change, so not longer).
         return try await query(
             Documents.reportLocation,
             variables: ["position": coordinates.graphQLInput],
-            as: ReportLocationResponse.self
+            as: ReportLocationResponse.self,
+            cachePolicy: .networkFirst(maxAge: Self.nowMaxAge),
+            cacheKey: Self.nowCacheKey
         ).reportLocation
+    }
+
+    static let nowCacheKey = "Now"
+    static let nowMaxAge: TimeInterval = 30 * 60
+
+    /// The last "Now" the API sent, if it's recent, to show while a new one loads.
+    func cachedNow() async -> Now? {
+        await audienceKit.cachedGraphQL(
+            Documents.reportLocation, as: ReportLocationResponse.self, decoder: .hotMess,
+            maxAge: Self.nowMaxAge, cacheKey: Self.nowCacheKey
+        )?.value.reportLocation
     }
 
     // MARK: - Geofences
@@ -55,7 +71,9 @@ struct HotMessAPI: CoverPaymentAPI {
         try await query(
             Documents.venueFences,
             variables: ["near": coordinates.graphQLInput],
-            as: VenueFencesResponse.self
+            as: VenueFencesResponse.self,
+            // Every report is from a new spot; the last set still stands in.
+            cacheKey: "VenueFences"
         ).venues
     }
 
@@ -87,7 +105,18 @@ struct HotMessAPI: CoverPaymentAPI {
     /// The venue with its upcoming events, in one request.
     func venue(_ id: UUID) async throws -> VenueOverview {
         let response = try await query(Documents.venue, variables: ["id": .string(id.uuidString)], as: VenueResponse.self)
-        guard let venue = response.venue else { throw APIError.notFound }
+        guard let overview = Self.overview(response) else { throw APIError.notFound }
+        return overview
+    }
+
+    /// The venue as last loaded, to show while it refreshes.
+    func cachedVenue(_ id: UUID) async -> VenueOverview? {
+        await cached(Documents.venue, variables: ["id": .string(id.uuidString)], as: VenueResponse.self)
+            .flatMap(Self.overview)
+    }
+
+    private static func overview(_ response: VenueResponse) -> VenueOverview? {
+        guard let venue = response.venue else { return nil }
         return VenueOverview(
             venue: venue.venue,
             bannerPhotos: venue.bannerPhotos,
@@ -180,14 +209,22 @@ struct HotMessAPI: CoverPaymentAPI {
     }
 
     /// A locale's events as the API orders them.
-    func eventList(in localeID: UUID) async throws -> [Event] {
+    func eventList(in localeID: UUID, cachePolicy: GraphQLCachePolicy? = nil) async throws -> [Event] {
         let response = try await query(
             Documents.localeEvents,
             variables: ["id": .string(localeID.uuidString)],
-            as: LocaleEventsResponse.self
+            as: LocaleEventsResponse.self,
+            cachePolicy: cachePolicy
         )
         guard let locale = response.locale else { throw APIError.notFound }
         return locale.events
+    }
+
+    /// A locale's events as last loaded (here or by the background refresh),
+    /// to show while they refresh.
+    func cachedEvents(in localeID: UUID) async -> EventListing? {
+        await cached(Documents.localeEvents, variables: ["id": .string(localeID.uuidString)],
+                     as: LocaleEventsResponse.self)?.locale.map { EventListing(upcoming: $0.events) }
     }
 
     func event(_ id: UUID) async throws -> EventDetail {
@@ -413,6 +450,45 @@ struct HotMessAPI: CoverPaymentAPI {
         ]
     }
 
+    // MARK: - Ping and Quickie chats
+
+    /// A ping's chat, when the user is in its circle and someone's in; nil otherwise.
+    func pingChat(pingID: String) async throws -> PrivateChat? {
+        struct Response: Decodable, Sendable {
+            struct Node: Decodable, Sendable { let chat: PrivateChat? }
+            let node: Node?
+        }
+        return try await query(Documents.pingChat, variables: ["id": .string(pingID)], as: Response.self).node?.chat
+    }
+
+    /// The chat with the user's Quickie match at a venue, once both said yes; nil otherwise.
+    func quickieChat(venueID: UUID) async throws -> PrivateChat? {
+        struct Response: Decodable, Sendable {
+            struct Venues: Decodable, Sendable { let venue: Venue? }
+            struct Venue: Decodable, Sendable { let pairUp: PairUp? }
+            struct PairUp: Decodable, Sendable { let mine: Mine? }
+            struct Mine: Decodable, Sendable { let match: Match? }
+            struct Match: Decodable, Sendable { let chat: PrivateChat? }
+            let venues: Venues?
+        }
+        return try await query(Documents.quickieChat, variables: ["id": Self.graphQLID(venueID)], as: Response.self)
+            .venues?.venue?.pairUp?.mine?.match?.chat
+    }
+
+    /// Says something in a Ping or Quickie chat. Throws when it has ended, the
+    /// word list refuses it, or the user is sending too fast.
+    func sendPrivateChatMessage(chatID: String, body: String) async throws -> PrivateChatMessage {
+        struct Response: Decodable, Sendable {
+            struct Payload: Decodable, Sendable { let message: PrivateChatMessage }
+            let sendPrivateChatMessage: Payload
+        }
+        return try await query(
+            Documents.sendPrivateChatMessage,
+            variables: ["chatId": .string(chatID), "body": .string(body)],
+            as: Response.self
+        ).sendPrivateChatMessage.message
+    }
+
     // MARK: - Pair me up
 
     /// Pair me up at a venue: nil where the venue doesn't have it.
@@ -522,6 +598,19 @@ struct HotMessAPI: CoverPaymentAPI {
                 "messageId": .string(id.uuidString.lowercased()),
                 "reason": reason.map(GraphQLValue.string) ?? .null,
                 "block": .bool(block),
+            ],
+            as: ReportChatMessageResponse.self
+        )
+    }
+
+    /// Sends a test report on a chat message: nothing is filed, nobody is
+    /// blocked, and the moderators' queue never sees it.
+    func reportTestChatMessage(_ id: UUID, reason: String?) async throws {
+        _ = try await query(
+            Documents.reportTestChatMessage,
+            variables: [
+                "messageId": .string(id.uuidString.lowercased()),
+                "reason": reason.map(GraphQLValue.string) ?? .null,
             ],
             as: ReportChatMessageResponse.self
         )
@@ -730,16 +819,37 @@ struct HotMessAPI: CoverPaymentAPI {
         ))
     }
 
+    /// Runs a GraphQL operation. Queries use the session's cache policy (the
+    /// last good answer when the API fails, ``AppModel``), unless the caller
+    /// passes another.
     func query<Response: Decodable & Sendable>(
         _ document: String,
         variables: [String: GraphQLValue],
-        as type: Response.Type
+        as type: Response.Type,
+        cachePolicy: GraphQLCachePolicy? = nil,
+        cacheKey: String? = nil
     ) async throws -> Response {
         do {
-            return try await audienceKit.graphQL(document, variables: variables, as: type, decoder: .hotMess)
+            let result = try await audienceKit.graphQLResult(document, variables: variables, as: type,
+                                                             decoder: .hotMess, cachePolicy: cachePolicy,
+                                                             cacheKey: cacheKey)
+            if let error = result.error {
+                // Served from the cache: still worth knowing about.
+                Log.network.error("\(Self.operationName(document), privacy: .public) failed, showing the answer from \(result.fetchedAt.formatted(), privacy: .public): \(error.message, privacy: .public)")
+            }
+            return result.value
         } catch let error as AudienceKitError {
             throw await APIClient.recorded(APIError(error), operation: Self.operationName(document))
         }
+    }
+
+    /// The last good answer to a query, without asking the API.
+    func cached<Response: Decodable & Sendable>(
+        _ document: String,
+        variables: [String: GraphQLValue],
+        as type: Response.Type
+    ) async -> Response? {
+        await audienceKit.cachedGraphQL(document, variables: variables, as: type, decoder: .hotMess)?.value
     }
 
     /// "query Venue" or "mutation SendPing", for error reports: the document's
@@ -975,7 +1085,7 @@ extension HotMessAPI {
         static let messageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue presence \
-        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate is_test: isTest \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
@@ -1364,7 +1474,7 @@ extension HotMessAPI {
         static let roomMessageFields = """
         id message body name user_id: userId avatar_url: avatarUrl sent_at: sentAt \
         role kind title photo_url: photoUrl ends_at: endsAt pinned posted_as_venue: postedAsVenue \
-        posted_as_person: postedAsPerson person { id } is_private: isPrivate \
+        posted_as_person: postedAsPerson person { id } is_private: isPrivate is_test: isTest \
         sender { kind ... on PersonaSender { has_page: hasPage } } \
         event { id name start_at: startAt } \
         request { id kind title artist singer state } \
@@ -1380,6 +1490,44 @@ extension HotMessAPI {
         static let reportChatMessage = """
         mutation ReportChatMessage($messageId: ID!, $reason: String, $block: Boolean) {
           reportChatMessage(input: { messageId: $messageId, reason: $reason, block: $block }) { reported blocked }
+        }
+        """
+
+        /// A test report (`test: true`): checked like a real one, but the API
+        /// files nothing and blocks nobody, so it never reaches the queue.
+        static let reportTestChatMessage = """
+        mutation ReportTestChatMessage($messageId: ID!, $reason: String) {
+          reportChatMessage(input: { messageId: $messageId, reason: $reason, test: true }) { reported test }
+        }
+        """
+
+        // Ping and Quickie chats: fetched on their own, so the Ping and
+        // Quickie queries don't need an API with chats.
+        static let privateChatMessageFields = "id chatId body isMine sentAt sender { id name }"
+
+        static let privateChatFields = "id closesAt messages { \(privateChatMessageFields) }"
+
+        static let pingChat = """
+        query PingChat($id: ID!) {
+          node(id: $id) { ... on Ping { id chat { \(privateChatFields) } } }
+        }
+        """
+
+        static let quickieChat = """
+        query QuickieChat($id: ID!) {
+          venues { venue(id: $id) { pairUp { mine { match { id chat { \(privateChatFields) } } } } } }
+        }
+        """
+
+        static let sendPrivateChatMessage = """
+        mutation SendPrivateChatMessage($chatId: ID!, $body: String!) {
+          sendPrivateChatMessage(input: { chatId: $chatId, body: $body }) { message { \(privateChatMessageFields) } }
+        }
+        """
+
+        static let privateChatSubscription = """
+        subscription PrivateChat {
+          privateChat { chatId closed message { \(privateChatMessageFields) } }
         }
         """
 

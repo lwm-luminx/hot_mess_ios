@@ -99,6 +99,12 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// One of the user's safety alerts (`/safety-alerts/<id>`, which the
     /// guest's pushes about it carry): its Get help sheet over any tab.
     case safetyAlert(UUID)
+    /// People found through contacts (`/friends/contacts`, which the push
+    /// about a new match carries): the matches, over Now.
+    case contactMatches
+    /// Friend requests waiting on an answer (`/friends/requests`, which the
+    /// pushes about a request carry): Now, where they're cards at the top.
+    case friendRequests
     /// A venue's short link (`/v/<code>`, what a venue's TV QR code
     /// carries): hotmess.social redirects it to the venue's chat, and the app
     /// follows that redirect (``ShortLink``), since one within the site never
@@ -134,6 +140,8 @@ enum DeepLink {
         if segments.count >= 2, segments[0] == "safety-alerts", let id = UUID(uuidString: segments[1]) {
             return .safetyAlert(id)
         }
+        if segments == ["friends", "contacts"] { return .contactMatches }
+        if segments == ["friends", "requests"] { return .friendRequests }
         if segments.count == 2, segments[0] == "help", SafetyPosterLink.isCode(segments[1]) {
             return .safetyPoster(segments[1])
         }

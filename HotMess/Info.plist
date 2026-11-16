@@ -12,6 +12,10 @@
 	<string>$(AUDIENCEKIT_ENVIRONMENT)</string>
 	<key>AudienceKitHost</key>
 	<string>$(AUDIENCE_HOST)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>social.hotmess.HotMess.refresh</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -95,6 +99,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Hot Mess uses your camera to take photos of the stage at a venue for its page, to scan your payment card when you pay a venue’s cover charge, and to scan your Quickie match’s code when you meet.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Hot Mess checks your contacts for friends who are on Hot Mess too. Names and numbers are turned into scrambled codes on your phone first, so your contacts never leave it.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Hot Mess notices when you arrive at or leave a venue, even with the app closed, so your friends see where you are and venues can tell how busy they are.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -105,6 +111,10 @@
 		<string>Figtree-SemiBold.ttf</string>
 		<string>Figtree-Bold.ttf</string>
 		<string>Figtree-ExtraBold.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

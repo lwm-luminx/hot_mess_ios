@@ -3,6 +3,7 @@
 //  HotMessTests
 //
 
+import AudienceKit
 import Foundation
 import Testing
 
@@ -38,6 +39,18 @@ struct FacebookSignInTests {
         #else
         #expect(SessionStore.requestedPermissions == ["public_profile", "openid"])
         #endif
+    }
+
+    @Test("Asks for the permissions branding gives this kind of build, else the built-in ones")
+    func servedPermissions() {
+        let scopes = Branding.FacebookScopes(production: ["public_profile"], nonProduction: ["public_profile", "email"])
+        #if DEBUG || targetEnvironment(simulator)
+        #expect(SessionStore.permissions(from: scopes) == ["public_profile", "email"])
+        #else
+        #expect(SessionStore.permissions(from: scopes) == ["public_profile"])
+        #endif
+        #expect(SessionStore.permissions(from: nil) == SessionStore.requestedPermissions)
+        #expect(SessionStore.permissions(from: .init(production: [], nonProduction: [])) == SessionStore.requestedPermissions)
     }
 
     @Test("Reads the code from the redirect")
