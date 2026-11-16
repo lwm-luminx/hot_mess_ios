@@ -371,9 +371,17 @@ final class ScreenHost {
 
     /// Waits until some text on screen contains `text`.
     @discardableResult
-    func waitFor(_ text: String, timeout: Duration = .seconds(8)) async -> Bool {
+    ///
+    /// The timeout is generous because Xcode Cloud runs the suites side by side
+    /// on a busy simulator; a passing wait returns as soon as the text shows.
+    /// On a miss it records what the screen did show, so the failure in the
+    /// Xcode Cloud report says why (a print only reaches the raw log).
+    func waitFor(_ text: String, timeout: Duration = .seconds(20),
+                 sourceLocation: SourceLocation = #_sourceLocation) async -> Bool {
         let found = await settle(timeout: timeout) { self.contains(text) }
-        if !found { print("ScreenHost: no \"\(text)\" among \(texts)") }
+        if !found {
+            Issue.record("No \"\(text)\" on screen; it shows: \(texts)", sourceLocation: sourceLocation)
+        }
         return found
     }
 
@@ -466,9 +474,12 @@ final class ScreenHost {
 
 /// Hosts `content` with `model` in its environment, the way RootView does.
 @MainActor
+/// `size` is the window's; a long List only lays out the rows that fit, so a
+/// test that reads rows further down hosts the screen taller.
 func host<Content: View>(_ content: Content, model: AppModel, colorScheme: ColorScheme = .light,
-                         dynamicType: DynamicTypeSize = .large) -> ScreenHost {
-    ScreenHost(content.environment(model), colorScheme: colorScheme, dynamicType: dynamicType)
+                         dynamicType: DynamicTypeSize = .large,
+                         size: CGSize = CGSize(width: 402, height: 874)) -> ScreenHost {
+    ScreenHost(content.environment(model), size: size, colorScheme: colorScheme, dynamicType: dynamicType)
 }
 
 // MARK: - Fixtures
