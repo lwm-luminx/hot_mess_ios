@@ -275,6 +275,20 @@ function scanGraphQL(source) {
 
 const SCANNERS = { kotlin: scanKotlin, swift: scanSwift, typescript: scanTypeScript, ruby: scanRuby, graphql: scanGraphQL };
 
+// `"query Q { a " +\n "b }"`: literals joined with `+` (Kotlin, Swift, TypeScript, Ruby) are one string, so one
+// document. Only plain literals are joined, never tagged templates or heredocs.
+function joinConcatenated(source, strings) {
+  const joined = [];
+  for (const literal of strings) {
+    const previous = joined.at(-1);
+    const plain = (string) => !string.tagged && !string.heredoc;
+    if (previous && plain(previous) && plain(literal) && /^\s*\+\s*$/.test(source.slice(previous.end, literal.start))) {
+      joined[joined.length - 1] = { ...previous, end: literal.end, parts: [...previous.parts, ...literal.parts] };
+    } else joined.push(literal);
+  }
+  return joined;
+}
+
 // Constants: `val NAME = <string> + NAME2 + "…"` (Kotlin), `static let name = …` (Swift), `const name = …` (TS),
 // `NAME = …` (Ruby). The value is a template too, so a constant may build on other constants.
 const DECLARATIONS = {
@@ -413,7 +427,7 @@ function main() {
   for (const file of files) {
     const language = EXTENSIONS[extname(file)];
     const source = readFileSync(file, 'utf8');
-    const strings = SCANNERS[language](source);
+    const strings = joinConcatenated(source, SCANNERS[language](source));
     const owners = findOwners(source, strings);
     for (const constant of findConstants(source, language, strings, file, owners)) {
       if (!constants.has(constant.name)) constants.set(constant.name, []);
