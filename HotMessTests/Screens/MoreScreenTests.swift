@@ -98,7 +98,9 @@ struct SettingsScreenTests {
         let model = stub.appModel()
         await model.session.restoreSession()
         #expect(model.session.isSignedIn)
-        let screen = host(SettingsScreen(), model: model)
+        // Tall enough that the lazy List lays out Help and Safety down to Your
+        // Safety Alerts (Find Help Nearby pushed it below a phone's fold).
+        let screen = host(SettingsScreen(), model: model, size: CGSize(width: 402, height: 1600))
         defer { screen.tearDown() }
 
         #expect(await screen.waitFor("Test Person"))
