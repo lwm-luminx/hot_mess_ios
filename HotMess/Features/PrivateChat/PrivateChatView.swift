@@ -152,6 +152,40 @@ struct PingChatSheet: View {
     }
 }
 
+/// The Quickie chat in a sheet of its own, for the push about a new line.
+struct QuickieChatSheet: View {
+    let venueID: UUID
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
+    @State private var model: PrivateChatModel?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(PrivateChatCopy.ephemeral).font(.hotMess(.footnote)).foregroundStyle(.secondary)
+                    if let model { PrivateChatView(model: model, waiting: PrivateChatCopy.closed) }
+                }
+                .padding(20)
+            }
+            .navigationTitle(PrivateChatCopy.quickieTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "Close")) { dismiss() }
+                }
+            }
+        }
+        .task {
+            let venueID = venueID
+            let model = PrivateChatModel(api: app.api, cable: app.cable) { try await $0.quickieChat(venueID: venueID) }
+            self.model = model
+            await model.run()
+        }
+    }
+}
+
 /// The two of them can talk once both said yes, to find each other, until 30
 /// minutes after they meet (or the pairing or night ends).
 struct QuickieChatCard: View {
