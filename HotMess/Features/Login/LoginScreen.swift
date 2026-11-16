@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import AuthenticationServices
 import SwiftUI
 
@@ -55,6 +56,10 @@ struct LoginScreen: View {
     /// Whether AudienceKit has answered (or couldn't): the buttons wait for
     /// it so nobody skips a warning by tapping early.
     @State private var hasAskedSignInMethods = false
+    /// Shown when this device can't pass the audience's device check (no
+    /// App Attest), so a blocked sign-in is said up front and never fails
+    /// without a reason.
+    @State private var deviceCheckWarning: (message: String, blocksSignIn: Bool)?
     /// A sign-in waiting on the audience's warning: Cancel or Continue.
     @State private var warnedSignIn: PendingSignIn?
     @State private var isShowingWarning = false
@@ -105,6 +110,20 @@ struct LoginScreen: View {
         .task {
             if let methods = await model.session.signInMethods() {
                 signInMethods = methods
+                // No attestor on this platform counts as unable too.
+                let unsupported: String?
+                if let attestor = AppAttestAttestor.platformDefault {
+                    unsupported = await attestor.unsupportedReason()
+                } else {
+                    unsupported = "no_attestor"
+                }
+                deviceCheckWarning = methods.deviceCheckWarning(unsupportedReason: unsupported)
+                if let deviceCheckWarning {
+                    ErrorReporter.shared.record(
+                        kind: "device_check",
+                        message: "\(unsupported ?? "") blocks=\(deviceCheckWarning.blocksSignIn)"
+                    )
+                }
                 var offersCode = methods.reviewCode
                 if offersCode { offersCode = await model.session.installOffersReviewCode() }
                 isReviewSignInEnabled = offersCode
@@ -198,6 +217,18 @@ struct LoginScreen: View {
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("login.sessionEnded")
+            }
+
+            if let deviceCheckWarning {
+                Label(deviceCheckWarning.message, systemImage: "exclamationmark.shield")
+                    .font(.hotMess(.footnote, semibold: deviceCheckWarning.blocksSignIn))
+                    .multilineTextAlignment(.leading)
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityIdentifier("login.deviceCheckWarning")
             }
 
             eulaAgreementRow

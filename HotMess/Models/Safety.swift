@@ -83,6 +83,9 @@ enum ChatReportReason: String, CaseIterable, Identifiable, Sendable {
     case spam = "Spam"
     case harassment = "Harassment or hate"
     case sexual = "Sexual content"
+    /// An intimate image shared without the consent of the person in it. The API gives these 48 hours to be
+    /// acted on (the Take It Down Act), so the wording has to stay as the API reads it.
+    case intimateImage = "Intimate image shared without consent"
     /// Goes to AudienceKit's child safety team too, which withholds the content and reports CSAM to NCMEC.
     case childSafety = "Child safety"
     case danger = "Threats or danger"
@@ -95,6 +98,7 @@ enum ChatReportReason: String, CaseIterable, Identifiable, Sendable {
         case .spam: String(localized: "Spam")
         case .harassment: String(localized: "Harassment or hate")
         case .sexual: String(localized: "Sexual content")
+        case .intimateImage: String(localized: "Intimate image shared without consent")
         case .childSafety: String(localized: "Child safety")
         case .danger: String(localized: "Threats or danger")
         case .other: String(localized: "Something else")

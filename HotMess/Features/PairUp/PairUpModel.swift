@@ -26,6 +26,8 @@ final class PairUpModel {
     private(set) var celebratedMatchID: UUID?
 
     let venueID: UUID
+    /// The venue's name, for the Quickie Live Activity's title once known.
+    var venueName: String?
     private let api: HotMessAPI
 
     init(api: HotMessAPI, venueID: UUID) {
@@ -40,6 +42,7 @@ final class PairUpModel {
         do {
             pairUp = try await api.pairUp(venueID: venueID)
             noteMeeting()
+            publish()
         } catch is CancellationError {
         } catch {
             if !isLoaded { errorMessage = NowViewModel.message(for: error) }
@@ -104,6 +107,7 @@ final class PairUpModel {
             if let mine = scan.pairUp { pairUp = VenuePairUp(here: isHere, mine: mine) }
             scanNotice = Self.notice(for: scan.outcome)
             noteMeeting()
+            publish()
         } catch {
             errorMessage = NowViewModel.message(for: error)
         }
@@ -127,6 +131,11 @@ final class PairUpModel {
 
     private var lastMetID: UUID?
 
+    /// Keeps the Lock Screen's Quickie Live Activity in step with the state.
+    private func publish() {
+        LiveActivities.sync(quickie: state, venueID: venueID, venueName: venueName)
+    }
+
     /// Celebrates each meeting once, whichever phone scanned.
     private func noteMeeting() {
         guard state?.status == .met, let match = state?.match, match.id != lastMetID else { return }
@@ -142,6 +151,7 @@ final class PairUpModel {
             let mine = try await action(api)
             pairUp = VenuePairUp(here: isHere, mine: mine)
             noteMeeting()
+            publish()
         } catch {
             if case .termsNotAccepted? = error as? APIError {
                 needsTerms = true

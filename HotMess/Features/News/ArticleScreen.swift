@@ -13,7 +13,11 @@ struct ArticleScreen: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
     @State private var state: LoadState<Article> = .idle
+    /// Set when the reader reached the story without acknowledging that publishers run their own ads (a push or a
+    /// link), so the note shows over it first.
+    @State private var needsPublisherAdsNote: (() -> Void)?
 
     var body: some View {
         LoadStateView(state: state, retry: { Task { await load() } }) { article in
@@ -36,6 +40,14 @@ struct ArticleScreen: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                             .accessibilityIdentifier("article.disclosure")
+                    }
+                    if article.showsWithoutAds {
+                        AdFreeThanks(publicationName: article.publication.name)
+                    } else if !article.teaser {
+                        AdFreeTipButton(publicationID: article.publication.id, publicationName: article.publication.name,
+                                        offered: article.publication.adFreeOffered) {
+                            await load()
+                        }
                     }
                     if let body = article.body, !body.isEmpty {
                         Text(ArticleScreen.markdown(body))
@@ -62,6 +74,7 @@ struct ArticleScreen: View {
         .navigationTitle(state.value?.publication.name ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .modifier(PublisherAdsNote(pending: $needsPublisherAdsNote, onDecline: { dismiss() }))
         .refreshable { await load() }
     }
 
@@ -124,7 +137,12 @@ struct ArticleScreen: View {
         if state.value == nil { state = .loading }
         do {
             if let article = try await model.audienceKit.article(id: articleID) {
+                let firstLoad = state.value == nil
                 state = .loaded(article)
+                // A reader who tipped the publication to read it without ads has nothing to acknowledge.
+                if firstLoad && !model.hasAcknowledgedPublisherAds && !article.showsWithoutAds {
+                    needsPublisherAdsNote = {}
+                }
             } else {
                 state = LoadState(catching: APIError.notFound)
             }

@@ -92,7 +92,7 @@ final class ClipSession {
 
     /// The venue, event or performer behind `link`, for a signed-in session.
     func loadDetails(for link: ClipLink) async {
-        guard signedIn, link.kind != "pings" else { return }
+        guard signedIn, !["pings", "help"].contains(link.kind) else { return }
         detailsError = nil
         do {
             let loaded = try await api.details(for: link)

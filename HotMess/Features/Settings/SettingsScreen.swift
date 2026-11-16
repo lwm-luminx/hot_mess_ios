@@ -32,6 +32,7 @@ struct SettingsScreen: View {
     @State private var isSavingPairUpPush = false
     /// The API a tester picked, waiting on the confirmation.
     @State private var pendingServer: AppConfiguration.APIServer?
+    @State private var findingHelp = false
 
     var body: some View {
         List {
@@ -312,6 +313,17 @@ struct SettingsScreen: View {
                 Label(String(localized: "Need Support?"), systemImage: "heart.text.square")
             }
             .accessibilityIdentifier("me.support")
+
+            // Food, shelter, health and support in the city, filtered on the phone.
+            Button {
+                findingHelp = true
+            } label: {
+                Label(String(localized: "Find Help Nearby"), systemImage: "hand.raised")
+            }
+            .accessibilityIdentifier("me.findHelp")
+            .fullScreenCover(isPresented: $findingHelp) {
+                ResourcesSheet(focusResourceID: nil)
+            }
 
             NavigationLink {
                 GettingHelpScreen()

@@ -164,6 +164,19 @@ struct EndpointTests {
         #expect(methods.reviewCode)
         #expect(methods.warning(for: "apple") == nil)
 
+        // The device check: said only when this device can't pass it and the audience checks.
+        let enforced = try JSONDecoder().decode(SignInMethods.self, from: Data(
+            #"{"methods": ["apple"], "deviceAttestation": {"mode": "enforce", "required": true, "warning": "Blocked here."}}"#.utf8
+        ))
+        #expect(enforced.deviceCheckWarning(unsupportedReason: "simulator")?.message == "Blocked here.")
+        #expect(enforced.deviceCheckWarning(unsupportedReason: "simulator")?.blocksSignIn == true)
+        #expect(enforced.deviceCheckWarning(unsupportedReason: nil) == nil)
+        let reported = SignInMethods(methods: ["apple"], deviceAttestation: .init(mode: "report", required: false))
+        #expect(reported.deviceCheckWarning(unsupportedReason: "unsupported")?.blocksSignIn == false)
+        let off = SignInMethods(methods: ["apple"], deviceAttestation: .init(mode: "off", required: false))
+        #expect(off.deviceCheckWarning(unsupportedReason: "unsupported") == nil)
+        #expect(SignInMethods(methods: ["apple"]).deviceCheckWarning(unsupportedReason: "unsupported") == nil)
+
         let warned = try JSONDecoder().decode(SignInMethods.self, from: Data(
             #"{"methods": ["facebook"], "warnings": {"facebook": "Facebook login is only for testers", "apple": " "}}"#.utf8
         ))

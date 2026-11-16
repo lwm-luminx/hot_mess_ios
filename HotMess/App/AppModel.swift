@@ -27,6 +27,10 @@ final class AppModel {
     let checkout: CoverCheckout
     /// Friends seen so far, so chat can show them by their full name.
     let friends = FriendDirectory()
+    /// Who on this device has acknowledged that publishers run their own ads, asked before their first Soapbox story.
+    let publisherAds = PublisherAdsAcknowledgement()
+    /// A guest's acknowledgement, kept only until the app quits since there's no one to record it for.
+    @ObservationIgnored var publisherAdsAcknowledgedAsGuest = false
     /// Who the user blocked, and whether they've agreed to the terms.
     let safety: SafetyStore
     /// The venues and talent the user manages, so Me offers Velvet or Backstage.
@@ -47,6 +51,8 @@ final class AppModel {
     /// Which promoted cards the viewer turned off (on the device only), and
     /// the reports of the ones they saw.
     let cards: CardSettings
+    /// Digital flyers hidden on this phone, and the city's resource directory (doc/DIGITAL_FLYERS.md in the API).
+    let flyers: FlyerSettings
 
     var selectedTab: AppTab = .now
 
@@ -107,7 +113,17 @@ final class AppModel {
 
     static let shared = AppModel()
 
-    init(configuration: AppConfiguration = AppConfiguration()) {
+    /// `credentialStore`, `urlSession`, `deviceAttestor` and `openSocket` are
+    /// the app's real ones by default; unit tests pass an in-memory store, a
+    /// stubbed session and a socket that never connects, so a screen can be
+    /// hosted without the keychain or the network.
+    init(
+        configuration: AppConfiguration = AppConfiguration(),
+        credentialStore: any CredentialStore = SessionStore.credentialStore,
+        urlSession: URLSession = .hotMess,
+        deviceAttestor: (any DeviceAttestor)? = AppAttestAttestor.platformDefault,
+        openSocket: (@Sendable (URLRequest) -> any CableSocket)? = nil
+    ) {
         self.configuration = configuration
         serverSwitchAllowed = configuration.canSwitchServer && !configuration.isBetaInstall
 
@@ -115,9 +131,10 @@ final class AppModel {
         self.operations = operations
         let audienceKit = AudienceKitClient(
             configuration: configuration.audienceKit,
-            credentialStore: SessionStore.credentialStore,
-            session: .hotMess,
-            monitor: operations
+            credentialStore: credentialStore,
+            session: urlSession,
+            monitor: operations,
+            deviceAttestor: deviceAttestor
         )
         self.audienceKit = audienceKit
 
@@ -131,6 +148,7 @@ final class AppModel {
 
         brand = BrandStore(audienceKit: audienceKit)
         cards = CardSettings(audienceKit: audienceKit)
+        flyers = FlyerSettings(audienceKit: audienceKit)
         session = SessionStore(api: api, audienceKit: audienceKit, brand: brand, configuration: configuration)
         location = LocationProvider(api: api, configuration: configuration)
         checkout = CoverCheckout(api: api, applePayMerchantID: configuration.applePayMerchantID, tintColor: UIColor(Color.hotMessAccent))
@@ -141,7 +159,6 @@ final class AppModel {
         // HTTP 401 does. The cable reads the credential from the SDK's store
         // whenever it (re)opens, so a new sign-in is picked up, and signs the
         // handshake the way every call is signed (Bearer, API version).
-        let credentialStore = SessionStore.credentialStore
         let cable = AudienceCable(
             configuration: configuration.audienceKit,
             url: GraphQLCable.url(for: configuration),
@@ -150,7 +167,7 @@ final class AppModel {
                 guard let token else { return }
                 Task { @MainActor in await session.sessionRejected(token: token) }
             },
-            openSocket: { request in
+            openSocket: openSocket ?? { request in
                 WebSocketTaskSocket(URLSession.realtime.webSocketTask(with: request))
             }
         )
@@ -214,6 +231,7 @@ final class AppModel {
 
     /// Signs out and forgets what was loaded for the user.
     func signOut() {
+        LiveActivities.endAll()
         forgetUser()
         session.signOut()
     }
@@ -438,6 +456,34 @@ final class AppModel {
             return true
         case let .safetyAlert(id):
             helpPresentation = .alert(id: id.uuidString.lowercased())
+            return true
+        case let .safetyPoster(code):
+            // The poster's venue, then its Get help sheet; a code no longer in
+            // use (or no network) still opens Get help, without a venue.
+            shareLinkTask = Task {
+                let venue = try? await api.safetyPoster(code)
+                guard !Task.isCancelled else { return }
+                if let venue {
+                    helpPresentation = .venue(HelpVenue(id: venue.id, name: venue.name, address: nil, posterCode: code))
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
+            return true
+        case let .coverPoster(code):
+            // The poster's venue, where Cover pays tonight's; a code the API
+            // doesn't know (or no network) leaves the user on Venues.
+            shareLinkTask = Task {
+                let venueID = try? await api.coverPosterVenue(code)
+                guard !Task.isCancelled else { return }
+                if let venueID {
+                    open(.venue(venueID))
+                } else {
+                    selectedTab = .venues
+                    venuesPath = []
+                }
+            }
             return true
         case let .shortLink(url):
             // Where the site redirects it, opened as that link would be; a

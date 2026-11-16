@@ -24,11 +24,29 @@ extension HotMessAPI {
 
     /// Tells the staff on shift. While the user's alert there is open, the
     /// API adds what they picked to it instead.
-    func sendSafetyAlert(venueID: UUID, _ draft: SafetyAlertDraft) async throws -> SafetyAlert {
+    /// `posterCode`, from a venue's safety poster, lets them send before the
+    /// app places them there; it's its own document so a send without one
+    /// works against an API older than safety posters.
+    func sendSafetyAlert(venueID: UUID, _ draft: SafetyAlertDraft, posterCode: String? = nil) async throws -> SafetyAlert {
         var variables = draft.variables
         variables["venueId"] = .string(venueID.uuidString.lowercased())
-        return try await alert(from: query(SafetyAlertDocuments.send, variables: variables, as: SendResponse.self)
+        if let posterCode { variables["posterCode"] = .string(posterCode) }
+        let document = posterCode == nil ? SafetyAlertDocuments.send : SafetyAlertDocuments.sendFromPoster
+        return try await alert(from: query(document, variables: variables, as: SendResponse.self)
             .sendSafetyAlert.safetyAlert)
+    }
+
+    /// The venue a safety poster's code belongs to (public, no sign-in), or
+    /// nil for a code no longer in use.
+    func safetyPoster(_ code: String) async throws -> SafetyPosterVenue? {
+        do {
+            let data = try await client.audienceKit.data(for: APIRequest(path: "/v1/safety/posters/\(code)", queryItems: [
+                URLQueryItem(name: "host", value: client.audienceKit.configuration.host)
+            ], authenticated: false))
+            return try JSONDecoder().decode(SafetyPosterResponse.self, from: data).venue
+        } catch let error as AudienceKitError where error.status == 404 {
+            return nil
+        }
     }
 
     /// "Add more": where they are and what's going on, after sending.
@@ -117,6 +135,14 @@ enum SafetyAlertDocuments {
     }
     """
 
+    static let sendFromPoster = """
+    mutation SendSafetyAlertFromPoster($venueId: ID!, $posterCode: String!, $place: SafetyAlertPlace, $concerns: [SafetyAlertConcern!], $description: String) {
+      sendSafetyAlert(input: { venueId: $venueId, posterCode: $posterCode, place: $place, concerns: $concerns, description: $description }) {
+        safetyAlert { \(alert) }
+      }
+    }
+    """
+
     static let send = """
     mutation SendSafetyAlert($venueId: ID!, $place: SafetyAlertPlace, $concerns: [SafetyAlertConcern!], $description: String) {
       sendSafetyAlert(input: { venueId: $venueId, place: $place, concerns: $concerns, description: $description }) {
@@ -193,6 +219,13 @@ private struct VenueSafetyResponse: Decodable, Sendable {
 
 private struct AlertPayload: Decodable, Sendable { let safetyAlert: SafetyAlert? }
 private struct SendResponse: Decodable, Sendable { let sendSafetyAlert: AlertPayload }
+
+/// A safety poster's venue, from `GET /v1/safety/posters/<code>`.
+struct SafetyPosterVenue: Decodable, Sendable, Hashable {
+    let id: UUID
+    let name: String
+}
+private struct SafetyPosterResponse: Decodable, Sendable { let venue: SafetyPosterVenue }
 private struct UpdateResponse: Decodable, Sendable { let updateSafetyAlert: AlertPayload }
 private struct RemindResponse: Decodable, Sendable { let remindSafetyAlert: AlertPayload }
 private struct CancelResponse: Decodable, Sendable { let cancelSafetyAlert: AlertPayload }
