@@ -29,7 +29,15 @@ final class EventsViewModel {
             return
         }
 
-        if state.value == nil { state = .loading }
+        if state.value == nil {
+            // What was loaded last time (or by the background refresh) shows
+            // at once; the API's answer replaces it.
+            if let cached = await api.cachedEvents(in: localeID) {
+                state = .loaded(cached)
+            } else {
+                state = .loading
+            }
+        }
 
         do {
             state = .loaded(try await api.events(in: localeID))

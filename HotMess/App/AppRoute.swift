@@ -96,9 +96,21 @@ enum DeepLinkDestination: Hashable, Sendable {
     /// A locale's chat room, by the locale's ID (`/locales/<id>/chat`): the
     /// room when it's the user's locale now, else Now.
     case localeChat(UUID)
+    /// A Ping's chat (`/pings/<id>/chat`, what a push about a new line in it
+    /// carries): the chat with the Ping's circle, over Now.
+    case pingChat(UUID)
+    /// The Quickie chat at a venue (`/venues/<id>/quickie`, what a push about a
+    /// new line from the Quickie carries): the chat, over the venue.
+    case quickieChat(UUID)
     /// One of the user's safety alerts (`/safety-alerts/<id>`, which the
     /// guest's pushes about it carry): its Get help sheet over any tab.
     case safetyAlert(UUID)
+    /// People found through contacts (`/friends/contacts`, which the push
+    /// about a new match carries): the matches, over Now.
+    case contactMatches
+    /// Friend requests waiting on an answer (`/friends/requests`, which the
+    /// pushes about a request carry): Now, where they're cards at the top.
+    case friendRequests
     /// A venue's short link (`/v/<code>`, what a venue's TV QR code
     /// carries): hotmess.social redirects it to the venue's chat, and the app
     /// follows that redirect (``ShortLink``), since one within the site never
@@ -128,12 +140,18 @@ enum DeepLink {
             switch segments[0] {
             case "venues": return .venueChat(id)
             case "locales": return .localeChat(id)
+            case "pings": return .pingChat(id)
             default: break
             }
+        }
+        if segments.count == 3, segments[0] == "venues", segments[2] == "quickie", let id = UUID(uuidString: segments[1]) {
+            return .quickieChat(id)
         }
         if segments.count >= 2, segments[0] == "safety-alerts", let id = UUID(uuidString: segments[1]) {
             return .safetyAlert(id)
         }
+        if segments == ["friends", "contacts"] { return .contactMatches }
+        if segments == ["friends", "requests"] { return .friendRequests }
         if segments.count == 2, segments[0] == "help", SafetyPosterLink.isCode(segments[1]) {
             return .safetyPoster(segments[1])
         }

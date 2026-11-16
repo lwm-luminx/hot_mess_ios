@@ -83,8 +83,16 @@ final class SessionStore {
     /// Permissions approved for everyone on the production Hot Mess app.
     static let approvedPermissions = ["public_profile", "openid"]
 
-    /// Permissions requested at sign-in, on the Hot Mess Consumer app.
+    /// Permissions requested at sign-in when branding doesn't say, on the Hot Mess Consumer app.
     static let requestedPermissions = approvedPermissions + (asksForReviewedPermissions ? ["email", "user_friends"] : [])
+
+    /// What sign-in asks Facebook for: the list AudienceKit's branding gives this kind of build (`facebook_scopes`:
+    /// production for App Store and TestFlight builds, non-production for debug and simulator builds), so it changes
+    /// without a new build; ``requestedPermissions`` when branding has none.
+    static func permissions(from scopes: Branding.FacebookScopes?) -> [String] {
+        let served = scopes?.scopes(nonProduction: asksForReviewedPermissions) ?? []
+        return served.isEmpty ? requestedPermissions : served
+    }
 
     /// Where the session credential lives: the SDK's keychain store, under
     /// the app's own service. A new account name, because the SDK keeps the
@@ -444,7 +452,7 @@ final class SessionStore {
             throw SessionError.configurationUnavailable
         }
         let configID = branding?.facebookAppID == appID ? branding?.facebookLoginConfigID : nil
-        return FacebookSignIn(appID: appID, configID: configID, permissions: Self.requestedPermissions)
+        return FacebookSignIn(appID: appID, configID: configID, permissions: Self.permissions(from: branding?.facebookScopes))
     }
 
     /// Signs out as soon as the API ends the session, wherever in the app the

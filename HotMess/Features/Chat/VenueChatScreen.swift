@@ -34,6 +34,8 @@ struct VenueChatScreen: View {
     @State private var reportTarget: ChatThreadMessage?
     /// Reported; thanked once the report sheet has gone.
     @State private var didReport = false
+    /// The report just sent was a test (a moderation test line): the thanks says so.
+    @State private var didTestReport = false
     @State private var blockTarget: ChatThreadMessage?
     @State private var deleteTarget: ChatThreadMessage?
     @State private var failureMessage: String?
@@ -159,10 +161,12 @@ struct VenueChatScreen: View {
         .sheet(item: $reportTarget, onDismiss: thankIfReported) { message in
             ReportSheet(
                 question: String(localized: "Why are you reporting this message?"),
-                blockable: blockable(message)
-            ) { reason, block in
-                try await report(message, reason: reason, block: block)
-            }
+                blockable: message.isOwn ? nil : blockable(message),
+                onSubmit: { reason, block in
+                    try await report(message, reason: reason, block: block)
+                },
+                onTest: message.isTest ? { reason in try await reportTest(message, reason: reason) } : nil
+            )
         }
         .alert(
             blockTitle(blockTarget),
@@ -189,10 +193,17 @@ struct VenueChatScreen: View {
         } message: { _ in
             Text("It's removed for everyone in the room.")
         }
-        .alert(String(localized: "Thanks for reporting it"), isPresented: $isThankingForReport) {
-            Button(String(localized: "OK"), role: .cancel) {}
+        .alert(
+            didTestReport ? String(localized: "Test report sent") : String(localized: "Thanks for reporting it"),
+            isPresented: $isThankingForReport
+        ) {
+            Button(String(localized: "OK"), role: .cancel) { didTestReport = false }
         } message: {
-            Text("Our moderation team will review it within 24 hours.")
+            if didTestReport {
+                Text("It went through every check. Nothing was filed, so the moderators' queue never saw it.")
+            } else {
+                Text("Our moderation team will review it within 24 hours.")
+            }
         }
         .contentReporting(report: $personReport, block: $personBlock)
         .sheet(item: $profileTarget, onDismiss: runProfileFollowUp) { profile in
@@ -492,6 +503,14 @@ struct VenueChatScreen: View {
         // block; the API ignores `block` for it.
         let author: BlockedUser? = message.isFromPlace || message.isFromAudience ? nil : sender(of: message)
         try await model.safety.report(messageID: id, sender: author, reason: reason, block: block && author != nil)
+        didReport = true
+    }
+
+    /// A test report on a moderation test line: nothing is filed or blocked.
+    private func reportTest(_ message: ChatThreadMessage, reason: ChatReportReason) async throws {
+        guard let id = UUID(uuidString: message.id) else { return }
+        try await model.safety.reportTest(messageID: id, reason: reason)
+        didTestReport = true
         didReport = true
     }
 

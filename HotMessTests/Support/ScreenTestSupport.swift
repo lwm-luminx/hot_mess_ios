@@ -273,6 +273,8 @@ extension StubAPI {
         on("Pings", .data(#"{"me":{"ping":{"my_ping":null,"friend_pings":[]}}}"#))
         on("Layout", .error("No layout in the stub"))
         on("Me", .data(#"{"me":{"self":{"id":"11111111-2222-4333-8444-555555555555","name":"Test Person","first_name":"Test","last_name":"Person","photo":null}}}"#))
+        // Find friends: texting isn't set up in the stub, so Now shows no card unless a test says otherwise.
+        on("ContactMatching", .data(#"{"me":{"contactMatching":{"enabled":false,"phoneVerified":false,"phoneNumber":null,"firstName":null,"lastName":null,"contactsChecked":0,"lastCheckedAt":null,"nextCheckAt":null,"textCodesAvailable":false,"matches":[],"incomingRequests":[]}}}"#))
     }
 }
 

@@ -110,6 +110,21 @@ struct MainTabView: View {
             GetHelpSheet(presentation: presentation, api: model.api)
                 .environment(model)
         }
+        .sheet(isPresented: $model.findingFriends) {
+            FindFriendsSheet(friends: model.contactFriends, name: model.session.user?.name) {
+                model.findingFriends = false
+            }
+            .audiencePreset(model.brand.preset)
+        }
+        .sheet(item: $model.privateChat) { link in
+            Group {
+                switch link {
+                case let .ping(id): PingChatSheet(pingID: id.uuidString.lowercased())
+                case let .quickie(venueID): QuickieChatSheet(venueID: venueID)
+                }
+            }
+            .environment(model)
+        }
         .notificationBannerHost()
     }
 }
