@@ -120,6 +120,11 @@ final class CacheRefresher {
             // Venues are audience-wide; the screens fall back to the last list
             // on their own, so a failure here doesn't count.
             if succeeded { _ = try? await audienceKit.venues() }
+            // Friends' Pings for the Tonight widget, which only shows what
+            // the app last saved.
+            if succeeded, let pings = try? await api.pings() {
+                TonightWidget.update(myPing: pings.myPing, friendPings: pings.friendPings)
+            }
             return succeeded
         }
         running = task
