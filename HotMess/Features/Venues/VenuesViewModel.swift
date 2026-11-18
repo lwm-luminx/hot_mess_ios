@@ -94,7 +94,10 @@ extension Venue {
             subtitle: venue.locale.name ?? venue.locale.label,
             photoURL: resolve(venue.page?.photoUrl ?? venue.photoUrl),
             bannerURL: resolve(venue.page?.bannerUrl ?? venue.bannerUrl),
-            point: venue.location?.coordinate.map { GeoPoint(x: $0.longitude, y: $0.latitude) }
+            point: venue.location?.coordinate.map { GeoPoint(x: $0.longitude, y: $0.latitude) },
+            hours: venue.hours.map {
+                VenueHours(status: $0.status, isOpen: $0.isOpen, label: $0.label, lines: $0.lines)
+            }
         )
     }
 }
