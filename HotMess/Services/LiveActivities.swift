@@ -15,7 +15,7 @@ import Foundation
 /// last state until it goes stale.
 @MainActor
 enum LiveActivities {
-    private typealias Attributes = HotMessActivityAttributes
+    typealias Attributes = HotMessActivityAttributes
 
     /// Shows the open Ping, or ends the Ping activity when there is none.
     /// `friendPings` is every Ping the user can see, joined or not.
