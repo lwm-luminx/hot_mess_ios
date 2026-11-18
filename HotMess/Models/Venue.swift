@@ -20,6 +20,9 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
     let bannerURL: URL?
     let point: GeoPoint?
     let isLiked: Bool
+    /// Its opening hours and whether it's open now; nil when the document
+    /// didn't ask.
+    let hours: VenueHours?
 
     var coordinate: CLLocationCoordinate2D? { point?.coordinate }
 
@@ -56,6 +59,7 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
         facebookID = profile.facebookID
         facebookLink = profile.facebookLink
         isLiked = profile.isLiked
+        hours = profile.hours
     }
 
     /// Writes the shape `init(from:)` reads, with the profile mixin.
@@ -69,7 +73,8 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
         try container.encodeIfPresent(bannerURL, forKey: .bannerURL)
         try container.encodeIfPresent(point, forKey: .point)
         try container.encode(
-            ListingProfile(address: address, phone: phone, facebookID: facebookID, facebookLink: facebookLink, isLiked: isLiked),
+            ListingProfile(address: address, phone: phone, facebookID: facebookID, facebookLink: facebookLink,
+                           isLiked: isLiked, hours: hours),
             forKey: .profile
         )
     }
@@ -86,7 +91,8 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
         photoURL: URL? = nil,
         bannerURL: URL? = nil,
         point: GeoPoint? = nil,
-        isLiked: Bool = false
+        isLiked: Bool = false,
+        hours: VenueHours? = nil
     ) {
         self.id = id
         self.name = name
@@ -100,6 +106,41 @@ struct Venue: Codable, Hashable, Sendable, Identifiable {
         self.bannerURL = bannerURL
         self.point = point
         self.isLiked = isLiked
+        self.hours = hours
+    }
+}
+
+/// A venue's opening hours and whether it's open now, from Google via the
+/// API's `profile { places { hours } }`, worded by the server in the venue's
+/// own time zone ("Open until 2 AM", "Opens at 4 PM").
+struct VenueHours: Codable, Hashable, Sendable {
+    /// OPEN, CLOSED, UNKNOWN, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY.
+    var status: String
+    /// Nil when nobody knows.
+    var isOpen: Bool?
+    /// Nil when the hours are unknown.
+    var label: String?
+    /// The week, a line a day ("Monday: 4:00 PM – 2:00 AM").
+    var lines: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case status, label, lines
+        case isOpen = "is_open"
+    }
+
+    init(status: String = "UNKNOWN", isOpen: Bool? = nil, label: String? = nil, lines: [String] = []) {
+        self.status = status
+        self.isOpen = isOpen
+        self.label = label
+        self.lines = lines
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "UNKNOWN"
+        isOpen = try container.decodeIfPresent(Bool.self, forKey: .isOpen)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        lines = try container.decodeIfPresent([String].self, forKey: .lines) ?? []
     }
 }
 
@@ -117,6 +158,8 @@ struct ListingProfile: Codable, Hashable, Sendable {
     var facebookID: FacebookID?
     var facebookLink: URL?
     var isLiked: Bool
+    /// From the places module's mixin: `places { hours }`.
+    var hours: VenueHours?
 
     init(
         address: String? = nil,
@@ -124,8 +167,10 @@ struct ListingProfile: Codable, Hashable, Sendable {
         socialLinks: [SocialLink]? = nil,
         facebookID: FacebookID? = nil,
         facebookLink: URL? = nil,
-        isLiked: Bool = false
+        isLiked: Bool = false,
+        hours: VenueHours? = nil
     ) {
+        self.hours = hours
         self.address = address
         self.phone = phone
         self.socialLinks = socialLinks
@@ -135,9 +180,11 @@ struct ListingProfile: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case address, phone, facebook
+        case address, phone, facebook, places
         case socialLinks = "social_links"
     }
+
+    private struct Places: Codable, Hashable, Sendable { var hours: VenueHours? }
 
     private enum FacebookKeys: String, CodingKey {
         case facebookID = "facebook_id"
@@ -167,6 +214,7 @@ struct ListingProfile: Codable, Hashable, Sendable {
             facebookLink = nil
             isLiked = false
         }
+        hours = (try? container.decodeIfPresent(Places.self, forKey: .places))?.hours
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -181,6 +229,9 @@ struct ListingProfile: Codable, Hashable, Sendable {
         try facebook.encodeIfPresent(facebookID, forKey: .facebookID)
         try facebook.encodeIfPresent(facebookLink, forKey: .facebookLink)
         try facebook.encode(isLiked, forKey: .isLiked)
+        if let hours {
+            try container.encode(Places(hours: hours), forKey: .places)
+        }
     }
 }
 
