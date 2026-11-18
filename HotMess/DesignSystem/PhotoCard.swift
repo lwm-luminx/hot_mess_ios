@@ -336,6 +336,11 @@ struct VenueCard<Corner: View>: View {
                     }
                 }
 
+                if let hours = venue.hours, hours.label != nil {
+                    OpenStatusLine(hours: hours)
+                        .font(.hotMess(.footnote, semibold: true))
+                }
+
                 let summary = description ?? venue.summary
                 if !summary.isEmpty {
                     Text(summary)
@@ -395,6 +400,28 @@ extension Event {
         guard isOn(at: date) else { return nextUpLine }
         guard let endDate else { return name }
         return String(localized: "\(name) · until \(endDate.formatted(date: .omitted, time: .shortened))")
+    }
+}
+
+/// "Open until 2 AM" with a green dot, or "Opens at 4 PM" / "Temporarily
+/// closed" with a grey one: the server's line, in the venue's own time zone.
+/// Shows nothing when the hours are unknown.
+struct OpenStatusLine: View {
+    let hours: VenueHours
+
+    var body: some View {
+        if let label = hours.label {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(hours.isOpen == true ? Color.green : Color.secondary)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+                Text(label)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("venue.openStatus")
+        }
     }
 }
 

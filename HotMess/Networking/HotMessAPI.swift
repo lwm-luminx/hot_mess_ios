@@ -1060,8 +1060,12 @@ extension HotMessAPI {
         /// `profile` is the venue's profile mixin (see `ListingProfile`).
         static let venueFields = """
         id name distance point photo_url: photoUrl banner_url: bannerUrl \
-        profile { address phone facebook { facebook_id: facebookId is_liked: isLiked link } }
+        profile { address phone facebook { facebook_id: facebookId is_liked: isLiked link } \
+        places { hours { \(hoursFields) } } }
         """
+
+        /// A venue's opening hours, from Google, in its own time zone (`VenueHours`).
+        static let hoursFields = "status is_open: isOpen label lines"
 
         /// `profile` is the person's profile mixin (see `ListingProfile`).
         static let personFields = """
