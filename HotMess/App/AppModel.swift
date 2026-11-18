@@ -212,6 +212,10 @@ final class AppModel {
         // The API ended the session (a 401, or a socket refused as
         // unauthorized): forget the user's things as signing out does.
         session.onSessionEnded = { [weak self] in self?.forgetUser() }
+
+        // The Lock Screen and Home Screen buttons ("I'm in", "New topic") run
+        // here, in the app, with the user's session.
+        WidgetActions.handlers = TonightWidget.handlers(api: api) { [weak self] in self?.pingsChanged() }
     }
 
     func start() async {
@@ -323,6 +327,7 @@ final class AppModel {
         notifications.reset()
         location.forget()
         cacheRefresher.forget()
+        TonightWidget.clear()
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnPingKey)
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnChatKey)
         Task { [cable] in await cable.disconnect() }
