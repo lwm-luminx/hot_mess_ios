@@ -68,7 +68,7 @@ struct PeopleScreen: View {
         }
         .task(id: model.location.locale?.id) {
             ensureViewModel()
-            await loadCards(force: true)
+            await loadCards(force: false)
         }
         .refreshable {
             await model.location.refreshPosition()
