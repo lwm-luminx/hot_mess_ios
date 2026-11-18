@@ -15,29 +15,62 @@ import Observation
 @MainActor
 @Observable
 final class ScreenLayout {
-    private(set) var layout: CardLayout
-    private let client: LayoutClient
-    private var loadedAt: ContinuousClock.Instant?
+    typealias Fetch = @Sendable (_ position: AudienceKit.Coordinate?, _ beaconMajor: Int?, _ localeID: String?) async
+        -> CardLayout
 
-    init(audienceKit: AudienceKitClient, screen: LayoutScreen, kinds: [String], fallback: [String], appVersion: String) {
-        client = LayoutClient(session: audienceKit, screen: screen, cardKinds: kinds, fallback: fallback,
-                              appVersion: appVersion)
+    private(set) var layout: CardLayout
+    @ObservationIgnored private let fetch: Fetch
+    @ObservationIgnored private let now: () -> ContinuousClock.Instant
+    @ObservationIgnored private(set) var policy: LayoutRefreshPolicy
+    /// The ask on the wire, which every other caller waits for instead of sending its own.
+    @ObservationIgnored private var inFlight: Task<CardLayout, Never>?
+
+    convenience init(audienceKit: AudienceKitClient, screen: LayoutScreen, kinds: [String], fallback: [String],
+                     appVersion: String) {
+        let client = LayoutClient(session: audienceKit, screen: screen, cardKinds: kinds, fallback: fallback,
+                                  appVersion: appVersion)
+        self.init(fallback: fallback, fetch: { position, beaconMajor, localeID in
+            await client.load(position: position, beaconMajor: beaconMajor, localeID: localeID)
+        })
+    }
+
+    init(fallback: [String], policy: LayoutRefreshPolicy = LayoutRefreshPolicy(),
+         now: @escaping () -> ContinuousClock.Instant = { .now }, fetch: @escaping Fetch) {
+        self.fetch = fetch
+        self.now = now
+        self.policy = policy
         layout = .fallback(fallback)
     }
 
     /// The server's order for where the device is, or the app's locale
-    /// without a position. Asks again only once `refreshAfter` has passed,
-    /// unless `force`.
+    /// without a position. Asks only when ``LayoutRefreshPolicy`` says it's
+    /// due (`force` is for a person pulling to refresh), never twice at once,
+    /// and backs off after a failure so a slow server isn't asked harder.
     func load(coordinates: Coordinates?, localeID: UUID?, force: Bool = false) async {
-        if !force, let loadedAt, ContinuousClock.now - loadedAt < .seconds(layout.refreshAfter) { return }
+        if let inFlight {
+            _ = await inFlight.value
+            return
+        }
+        let request = LayoutRefreshPolicy.Request(coordinates: coordinates, localeID: localeID)
+        guard policy.isDue(request, at: now(), force: force) else { return }
+        policy.asked(request, at: now())
+
         let position = coordinates.map { AudienceKit.Coordinate(latitude: $0.latitude, longitude: $0.longitude) }
-        let fetched = await client.load(position: position, beaconMajor: coordinates?.beaconMajor,
-                                        localeID: localeID?.uuidString.lowercased())
-        guard !Task.isCancelled else { return }
-        // A failed fetch keeps the server's last order rather than jumping back to the built-in one.
-        if fetched.isFallback, !layout.isFallback { return }
-        layout = fetched
-        loadedAt = fetched.isFallback ? nil : .now
+        let fetch = fetch, beaconMajor = coordinates?.beaconMajor, locale = localeID?.uuidString.lowercased()
+        // Not tied to the caller: a screen's task cancelled mid-ask still gets
+        // its answer recorded, rather than leaving the layout due at once.
+        let task = Task { await fetch(position, beaconMajor, locale) }
+        inFlight = task
+        let fetched = await task.value
+        inFlight = nil
+
+        if fetched.isFallback {
+            // A failed fetch keeps the server's last order rather than jumping back to the built-in one.
+            policy.failed(at: now())
+        } else {
+            policy.succeeded(refreshAfter: fetched.refreshAfter, at: now())
+            layout = fetched
+        }
     }
 }
 

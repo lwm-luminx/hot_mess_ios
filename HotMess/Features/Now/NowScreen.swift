@@ -206,7 +206,8 @@ struct NowScreen: View {
             ensureViewModel()
             let pingsChanged = loadedPingRevision.map { $0 != model.pingRevision } ?? false
             loadedPingRevision = model.pingRevision
-            async let cards: Void = loadCards(force: true)
+            // Not forced: the layout asks again only for a real move (see LayoutRefreshPolicy), not every fix.
+            async let cards: Void = loadCards()
             await viewModel?.load(from: model.location, sentAfter: pingsChanged ? .now : nil)
             await cards
         }
@@ -845,7 +846,7 @@ struct NowScreen: View {
     private func reload() {
         Task {
             ensureViewModel()
-            async let cards: Void = loadCards(force: true)
+            async let cards: Void = loadCards()
             await viewModel?.load(from: model.location, sentAfter: .now)
             await cards
         }
