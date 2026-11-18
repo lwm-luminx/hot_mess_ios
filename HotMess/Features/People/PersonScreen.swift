@@ -120,17 +120,26 @@ struct PersonScreen: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button(role: .destructive) {
-                        reportSubject = ReportSubject(target: .person, targetID: personID.uuidString.lowercased())
-                    } label: {
-                        Label(String(localized: "Report Creator…"), systemImage: "exclamationmark.bubble")
+                HStack(spacing: 12) {
+                    // The same signed hotmess.social link as venues and events; its preview shows only what the
+                    // person's public card does (a Community performer's names no one).
+                    if viewModel?.state.value != nil {
+                        SignedShareButton(path: "/people/\(personID.uuidString.lowercased())")
+                            .accessibilityIdentifier("person.share")
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.body)
+
+                    Menu {
+                        Button(role: .destructive) {
+                            reportSubject = ReportSubject(target: .person, targetID: personID.uuidString.lowercased())
+                        } label: {
+                            Label(String(localized: "Report Creator…"), systemImage: "exclamationmark.bubble")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.body)
+                    }
+                    .accessibilityIdentifier("person.optionsMenu")
                 }
-                .accessibilityIdentifier("person.optionsMenu")
             }
         }
         .contentReporting(report: $reportSubject, block: $blockTarget)
