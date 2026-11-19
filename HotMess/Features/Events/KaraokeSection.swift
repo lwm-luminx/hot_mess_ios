@@ -4,6 +4,8 @@ struct KaraokeSection: View {
     let karaoke: KaraokeNight
     /// Where the event is, whose page takes AudienceKit's own karaoke signups.
     var venue: Venue? = nil
+    /// Who's hosting, for "Ask Sequoia how to join"; nil says "the host".
+    var hostName: String? = nil
     @State private var showingJoinCode = false
 
     private var joinTitle: String {
@@ -18,6 +20,13 @@ struct KaraokeSection: View {
             return String(localized: "Sign up to sing on \(venue.name)'s page, or in its chat once you're there.")
         }
         return String(localized: "Sign up to sing on the venue's page, or in its chat once you're there.")
+    }
+
+    private var askHost: String {
+        if let hostName, !hostName.isEmpty {
+            return String(localized: "Ask \(hostName) how to join the karaoke session.")
+        }
+        return String(localized: "Ask the host how to join the karaoke session.")
     }
 
     var body: some View {
@@ -41,7 +50,7 @@ struct KaraokeSection: View {
                 }
             } else {
                 Label(String(localized: "Karaoke night"), systemImage: "music.mic")
-                Text(String(localized: "Ask the host how to join the karaoke session.")).foregroundStyle(.secondary)
+                Text(askHost).foregroundStyle(.secondary)
             }
         }
         .sheet(isPresented: $showingJoinCode) {

@@ -20,16 +20,22 @@ struct VenueLineupTests {
                                 state: state)
     }
 
-    @Test("The host on now is the lineup's host who's on, else the one taking signups")
-    func hostOnNow() {
+    @Test("The featured host is the lineup's host who's on, else the one taking signups, else the event's")
+    func featuredHost() {
         let done = entry("a", role: .host, state: .done, person: UUID().uuidString)
         let on = entry("b", role: .host, state: .on, person: hostID)
         let dj = entry("c", role: .dj, state: .on, person: UUID().uuidString)
-        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj, on]).hostOnNow?.id == "b")
+        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj, on]).featuredHost?.id == "b")
 
         let window = KaraokeWindow(permitted: true, open: true, host: on)
-        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj], karaoke: window).hostOnNow?.id == "b")
-        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj]).hostOnNow == nil)
+        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj], karaoke: window).featuredHost?.id == "b")
+        #expect(VenueLineup(venueID: "v", venueName: "The Stud", entries: [done, dj]).featuredHost == nil)
+
+        // Nobody put on: the event's listed host, whose page the row opens and whose tip links it loads.
+        let listed = VenueLineup(venueID: "v", venueName: "Blue Gene's", entries: [],
+                                 hostsTonight: [.init(id: hostID, name: "Sequoia")])
+        #expect(listed.featuredHost?.displayName == "Sequoia")
+        #expect(listed.featuredHost?.personID == UUID(uuidString: hostID))
     }
 
     @Test("Karaoke shows on Now and an event's page when signups are taken, there are singers, or a partner runs it")
