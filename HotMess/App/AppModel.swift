@@ -549,9 +549,17 @@ final class AppModel {
             }
             return true
         case let .shortLink(url):
-            // Where the site redirects it, opened as that link would be; a
-            // code it doesn't know (or no network) leaves the user on Venues.
+            // A venue's TV code: its chat. The API names the venue for the
+            // code (the cover poster's read, the same code), so the scan
+            // doesn't hang on the site; else where the site redirects it, as
+            // that link would open. A code neither knows (or no network)
+            // leaves the user on Venues.
             shareLinkTask = Task {
+                if let venueID = try? await api.coverPosterVenue(url.lastPathComponent) {
+                    guard !Task.isCancelled else { return }
+                    openVenueChat(venueID)
+                    return
+                }
                 let target = await ShortLink.target(of: url)
                 guard !Task.isCancelled else { return }
                 if let target, let next = DeepLink.destination(for: target), next != .shortLink(url) {
