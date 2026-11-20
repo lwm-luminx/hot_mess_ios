@@ -15,6 +15,9 @@ import SwiftUI
 struct VenueLineupSection: View {
     let lineupModel: VenueLineupModel
     let lineup: VenueLineup
+    /// Tonight's event when it's a sing-along: its section takes the place of
+    /// karaoke and song requests, and the "+" opens its playlist.
+    var singAlongEventID: UUID?
 
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
@@ -24,8 +27,9 @@ struct VenueLineupSection: View {
 
     /// The "+" at the end of the lineup: karaoke signups, then song requests.
     private var additions: [LineupAddition] {
-        [LineupAddition.karaoke(lineup) { signingUp = true },
-         LineupAddition.songRequests(lineup) { requesting = true }].compactMap { $0 }
+        guard singAlongEventID == nil else { return [] }
+        return [LineupAddition.karaoke(lineup) { signingUp = true },
+                LineupAddition.songRequests(lineup) { requesting = true }].compactMap { $0 }
     }
 
     var body: some View {
@@ -45,17 +49,21 @@ struct VenueLineupSection: View {
                 if let id = UUID(uuidString: person.id) { model.push(.person(id)) }
             })
 
-            KaraokeQueue(
-                lineup: lineup,
-                viewerName: model.session.singerName,
-                previewLimit: 3,
-                onSeeAll: { model.push(.karaokeList(lineupModel.venueID)) },
-                showsSignUp: false,
-                onSignUp: lineupModel.signUp,
-                onRemove: lineupModel.remove
-            )
+            if let singAlongEventID {
+                SingAlongSection(eventID: singAlongEventID, isLive: true, lineupModel: lineupModel)
+            } else {
+                KaraokeQueue(
+                    lineup: lineup,
+                    viewerName: model.session.singerName,
+                    previewLimit: 3,
+                    onSeeAll: { model.push(.karaokeList(lineupModel.venueID)) },
+                    showsSignUp: false,
+                    onSignUp: lineupModel.signUp,
+                    onRemove: lineupModel.remove
+                )
+            }
 
-            if lineup.showsSongRequests {
+            if singAlongEventID == nil, lineup.showsSongRequests {
                 SongRequestsSection(
                     lineup: lineup,
                     signedIn: model.session.isSignedIn,

@@ -484,7 +484,8 @@ struct EventCard: View {
             VStack(alignment: .trailing, spacing: 6) {
                 RSVPBadge(rsvp: event.rsvp)
                 if event.isKaraoke {
-                    Label(String(localized: "Karaoke"), systemImage: "music.mic")
+                    Label(event.karaoke?.singAlong == true ? String(localized: "Sing-along") : String(localized: "Karaoke"),
+                          systemImage: event.karaoke?.singAlong == true ? "music.note.tv" : "music.mic")
                         .font(.hotMess(.caption, semibold: true))
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(.ultraThinMaterial, in: Capsule())

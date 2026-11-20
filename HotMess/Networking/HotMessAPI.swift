@@ -167,6 +167,26 @@ struct HotMessAPI: CoverPaymentAPI {
         }
     }
 
+    /// An event's sing-along: its playlist and its venue's rotation (now
+    /// playing, up next), from the SDK. Nil for an unknown event.
+    func singAlong(eventID: UUID) async throws -> SingAlongNight? {
+        do {
+            return try await audienceKit.singAlong(eventID: eventID.uuidString.lowercased())
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// A venue's rotation right now, for a sing-along card on screen: nil
+    /// when its player hasn't reported or the report went stale.
+    func nowPlaying(venueID: String) async throws -> NowPlaying? {
+        do {
+            return try await audienceKit.nowPlaying(venueID: venueID)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
     /// Signs the user up to sing at a venue. The server's refusal (not at the
     /// venue, signups closed) comes back worded for the room.
     func signUpToSing(venueID: UUID, _ signup: KaraokeSignup) async throws {
@@ -1141,7 +1161,7 @@ extension HotMessAPI {
         static let eventFields = """
         id name start_at: startAt end_at: endAt facebook_id: facebookId \
         banner_url: bannerUrl is_featured: isFeatured rsvp { mine } \
-        karaoke { provider provider_name: providerName session_code: sessionCode own_session_code: ownSessionCode join_url: joinUrl } \
+        karaoke { provider provider_name: providerName session_code: sessionCode own_session_code: ownSessionCode join_url: joinUrl sing_along: singAlong } \
         venue { name venue { \(venueFields) } }
         """
 

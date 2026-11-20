@@ -56,4 +56,14 @@ struct KaraokeTests {
         #expect(HotMessAPI.Documents.eventFields.contains("join_url: joinUrl"))
         #expect(HotMessAPI.Documents.eventFields.contains("own_session_code: ownSessionCode"))
     }
+
+    @Test("A sing-along night says so, and older APIs read as plain karaoke")
+    func singAlong() throws {
+        let night = try event(karaoke: ["provider": "sing_along", "provider_name": "Sing-along", "sing_along": true])
+        #expect(night.karaoke?.singAlong == true)
+        #expect(night.karaoke?.isAudienceKit == false)
+        let roundTrip = try JSONDecoder.hotMess.decode(Event.self, from: JSONEncoder.hotMess.encode(night))
+        #expect(roundTrip.karaoke?.singAlong == true)
+        #expect(try event(karaoke: ["provider": "karafun"]).karaoke?.singAlong == false)
+    }
 }
