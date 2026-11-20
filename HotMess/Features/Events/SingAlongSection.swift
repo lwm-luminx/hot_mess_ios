@@ -375,7 +375,7 @@ struct SingAlongPlaylistSheet: View {
     @ViewBuilder
     private func row(_ track: SingAlongTrack) -> some View {
         let status = night.status(of: track, requests: requests)
-        let label = TrackRow(track: track, status: status)
+        let label = SingAlongTrackRow(track: track, status: status)
         if picks, status == nil {
             NavigationLink(value: track) { label }
                 .accessibilityIdentifier("singAlong.track")
@@ -385,7 +385,7 @@ struct SingAlongPlaylistSheet: View {
     }
 }
 
-private struct TrackRow: View {
+private struct SingAlongTrackRow: View {
     let track: SingAlongTrack
     let status: SingAlongTrackStatus?
 
