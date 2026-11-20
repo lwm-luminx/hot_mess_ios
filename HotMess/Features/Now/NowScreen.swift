@@ -619,20 +619,28 @@ struct NowScreen: View {
     private func stageSection(_ now: Now) -> some View {
         if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke
             || lineup.showsSongRequests || lineup.featuredHost != nil {
-            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+            VenueLineupSection(lineupModel: lineupModel, lineup: lineup, singAlongEventID: singAlongEventID(now))
             // A karaoke night the lineup doesn't run (a partner's, or one the host runs off the app): its card
             // still shows, under the host it says to ask.
-            if !lineup.showsKaraoke, let karaoke = now.event?.karaoke {
+            if singAlongEventID(now) == nil, !lineup.showsKaraoke, let karaoke = now.event?.karaoke {
                 KaraokeSection(karaoke: karaoke, hostName: lineupModel.hostEntry?.displayName)
             }
         } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
                 OnNowSection(onNow: now.onNow)
             }
-            if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
+            if let eventID = singAlongEventID(now) {
+                SingAlongSection(eventID: eventID, isLive: true, lineupModel: lineupModel)
+            } else if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
                 KaraokeSection(karaoke: karaoke)
             }
         }
+    }
+
+    /// The event you're at, when it's a sing-along night.
+    private func singAlongEventID(_ now: Now) -> UUID? {
+        guard let event = now.event, event.karaoke?.singAlong == true else { return nil }
+        return event.id
     }
 
     /// At a venue: its photos, led by the camera. What you take goes on the

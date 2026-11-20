@@ -141,7 +141,8 @@ struct VenueScreen: View {
                         // karaoke. Until it loads, or if it can't, the venue
                         // query's whole night, else just who's on (an older API).
                         if let lineupModel, let lineup = lineupModel.lineup {
-                            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+                            VenueLineupSection(lineupModel: lineupModel, lineup: lineup,
+                                               singAlongEventID: overview.singAlongTonight?.id)
                         } else if !overview.onNow.lineup.isEmpty {
                             TonightLineupSection(onNow: overview.onNow)
                         } else if overview.onNow.hasAnything {
