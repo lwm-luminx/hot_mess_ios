@@ -243,8 +243,13 @@ struct HotMessAPI: CoverPaymentAPI {
     /// A locale's events as last loaded (here or by the background refresh),
     /// to show while they refresh.
     func cachedEvents(in localeID: UUID) async -> EventListing? {
+        await cachedEventList(in: localeID).map { EventListing(upcoming: $0) }
+    }
+
+    /// ``eventList(in:cachePolicy:)`` as last loaded, without the network.
+    func cachedEventList(in localeID: UUID) async -> [Event]? {
         await cached(Documents.localeEvents, variables: ["id": .string(localeID.uuidString)],
-                     as: LocaleEventsResponse.self)?.locale.map { EventListing(upcoming: $0.events) }
+                     as: LocaleEventsResponse.self)?.locale?.events
     }
 
     func event(_ id: UUID) async throws -> EventDetail {

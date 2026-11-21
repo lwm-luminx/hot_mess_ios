@@ -121,21 +121,45 @@ final class VenuesViewModel {
     }
 
     func load(localeID: UUID?) async {
-        if state.value == nil { state = .loading }
+        // The last list first, so the screen draws at once on a slow or
+        // flaky connection, then the fresh one replaces it.
+        if state.value == nil || loadedLocaleID != localeID {
+            let shown = await showSaved(localeID: localeID)
+            if !shown, state.value == nil { state = .loading }
+        }
 
         // The rows show without them, so a failure here only leaves them out.
         async let events = Self.upcomingEvents(api: api, localeID: localeID)
         do {
             let venues = try await audienceKit.venues()
-            everywhere = VenueCollection(audienceVenues: venues, localeID: nil, resolve: audienceKit.url(for:))
-            state = .loaded(VenueCollection(audienceVenues: venues, localeID: localeID, resolve: audienceKit.url(for:)))
+            show(venues, localeID: localeID)
             nextEvents = Self.nextEvents(await events)
         } catch is CancellationError {
-        } catch let error as AudienceKitError {
-            state = LoadState(catching: APIError(error))
         } catch {
-            state = LoadState(catching: error)
+            // A list already showing stays; the error shows only without one.
+            guard state.value == nil else { return }
+            state = (error as? AudienceKitError).map { LoadState(catching: APIError($0)) } ?? LoadState(catching: error)
         }
+    }
+
+    /// The locale the list showing was narrowed to.
+    private var loadedLocaleID: UUID?
+
+    private func show(_ venues: [AudienceKit.Venue], localeID: UUID?) {
+        everywhere = VenueCollection(audienceVenues: venues, localeID: nil, resolve: audienceKit.url(for:))
+        state = .loaded(VenueCollection(audienceVenues: venues, localeID: localeID, resolve: audienceKit.url(for:)))
+        loadedLocaleID = localeID
+    }
+
+    /// Shows the venues and events last fetched, if any are kept. Returns
+    /// whether it showed a list.
+    private func showSaved(localeID: UUID?) async -> Bool {
+        guard let venues = await audienceKit.cachedVenues(), !venues.isEmpty else { return false }
+        show(venues, localeID: localeID)
+        if let localeID, let events = await api.cachedEventList(in: localeID) {
+            nextEvents = Self.nextEvents(events)
+        }
+        return true
     }
 
     private nonisolated static func upcomingEvents(api: HotMessAPI, localeID: UUID?) async -> [Event] {
