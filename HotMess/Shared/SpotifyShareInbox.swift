@@ -61,7 +61,7 @@ enum SpotifyShareInbox {
     }
 
     static func rememberRequestVenue(id: String, name: String, now: Date = Date()) {
-        store(RequestVenue(id: id, name: name, seenAt: now), key: venueKey)
+        _ = store(RequestVenue(id: id, name: name, seenAt: now), key: venueKey)
     }
 
     /// The venue whose song requests the person last saw open, while it's recent.

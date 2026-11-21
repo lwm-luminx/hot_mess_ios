@@ -14,7 +14,8 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             let link = await sharedLink()
             let saved = link.map { SpotifyShareInbox.save($0) } ?? false
             show(ShareConfirmation(state: link == nil ? .notSpotify : (saved ? .saved : .failed),
