@@ -282,7 +282,7 @@ extension StubAPI {
     /// An AppModel signed in to this stub: in-memory credential, stubbed
     /// session, no App Attest, a socket that never opens.
     @MainActor
-    func appModel(signedIn: Bool = true) -> AppModel {
+    func appModel(signedIn: Bool = true, graphQLCache: (any GraphQLCache)? = nil) -> AppModel {
         // The locale Now last found is remembered across launches; start
         // each test from none, so one test's locale can't leak into the next.
         for key in ["localeId", "localeName"] { UserDefaults.standard.removeObject(forKey: key) }
@@ -292,7 +292,7 @@ extension StubAPI {
                                     audienceId: audienceID, role: "member", endpoint: endpoint)
         let store = InMemoryCredentialStore(credential: signedIn ? credential : nil)
         return AppModel(configuration: configuration, credentialStore: store, urlSession: urlSession,
-                        deviceAttestor: nil, openSocket: { _ in SilentSocket() })
+                        deviceAttestor: nil, openSocket: { _ in SilentSocket() }, graphQLCache: graphQLCache)
     }
 }
 

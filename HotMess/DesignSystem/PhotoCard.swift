@@ -336,6 +336,11 @@ struct VenueCard<Corner: View>: View {
                     }
                 }
 
+                if let hours = venue.hours, hours.label != nil {
+                    OpenStatusLine(hours: hours)
+                        .font(.hotMess(.footnote, semibold: true))
+                }
+
                 let summary = description ?? venue.summary
                 if !summary.isEmpty {
                     Text(summary)
@@ -398,6 +403,28 @@ extension Event {
     }
 }
 
+/// "Open until 2 AM" with a green dot, or "Opens at 4 PM" / "Temporarily
+/// closed" with a grey one: the server's line, in the venue's own time zone.
+/// Shows nothing when the hours are unknown.
+struct OpenStatusLine: View {
+    let hours: VenueHours
+
+    var body: some View {
+        if let label = hours.label {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(hours.isOpen == true ? Color.green : Color.secondary)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+                Text(label)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("venue.openStatus")
+        }
+    }
+}
+
 /// A `VenueCard` that opens the venue.
 struct VenueCardLink<Card: View>: View {
     let venue: Venue
@@ -457,7 +484,8 @@ struct EventCard: View {
             VStack(alignment: .trailing, spacing: 6) {
                 RSVPBadge(rsvp: event.rsvp)
                 if event.isKaraoke {
-                    Label(String(localized: "Karaoke"), systemImage: "music.mic")
+                    Label(event.karaoke?.singAlong == true ? String(localized: "Sing-along") : String(localized: "Karaoke"),
+                          systemImage: event.karaoke?.singAlong == true ? "music.note.tv" : "music.mic")
                         .font(.hotMess(.caption, semibold: true))
                         .padding(.horizontal, 8).padding(.vertical, 4)
                         .background(.ultraThinMaterial, in: Capsule())

@@ -108,7 +108,7 @@ struct LocaleScreen: View {
         }
         .navigationTitle(name)
         .task { await load() }
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
     }
 
     @ViewBuilder
@@ -155,14 +155,14 @@ struct LocaleScreen: View {
 
     private var nextEvents: [UUID: Event] { VenuesViewModel.nextEvents(events) }
 
-    private func load() async {
+    private func load(force: Bool = false) async {
         let layout = cardLayout ?? ScreenLayout(audienceKit: model.audienceKit, screen: .locale,
                                                 kinds: Self.cardKinds, fallback: Self.fallbackCards,
                                                 appVersion: model.configuration.version)
         cardLayout = layout
         if venues.value == nil { venues = .loading }
         // The page goes by the locale, never where the device is.
-        async let cards: Void = layout.load(coordinates: nil, localeID: localeID, force: true)
+        async let cards: Void = layout.load(coordinates: nil, localeID: localeID, force: force)
         let api = model.api
         let localeID = localeID
         async let loadedEvents = try? api.eventList(in: localeID)

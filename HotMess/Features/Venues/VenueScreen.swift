@@ -141,7 +141,8 @@ struct VenueScreen: View {
                         // karaoke. Until it loads, or if it can't, the venue
                         // query's whole night, else just who's on (an older API).
                         if let lineupModel, let lineup = lineupModel.lineup {
-                            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+                            VenueLineupSection(lineupModel: lineupModel, lineup: lineup,
+                                               singAlongEventID: overview.singAlongTonight?.id)
                         } else if !overview.onNow.lineup.isEmpty {
                             TonightLineupSection(onNow: overview.onNow)
                         } else if overview.onNow.hasAnything {
@@ -304,6 +305,11 @@ struct VenueScreen: View {
                     .lineLimit(2)
             }
 
+            if !isHere, let hours = venue.hours {
+                OpenStatusLine(hours: hours)
+                    .font(.hotMess(.subheadline, semibold: true))
+            }
+
             if !overview.friends.isEmpty {
                 HStack(spacing: 8) {
                     HeroFaces(friends: overview.friends)
@@ -385,6 +391,23 @@ struct VenueScreen: View {
             if let subtitle = venue.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.hotMess(.subheadline))
+            }
+
+            // The week's hours; whether it's open now is on the hero.
+            if let lines = venue.hours?.lines, !lines.isEmpty {
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(lines, id: \.self) { line in
+                            Text(line)
+                                .font(.hotMess(.subheadline))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    InfoRow(title: String(localized: "Hours"), value: venue.hours?.label, systemImage: "clock")
+                }
+                .accessibilityIdentifier("venue.hours")
             }
 
             // Its address, distance and phone are on the hero, which has

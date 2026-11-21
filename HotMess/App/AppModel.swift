@@ -212,6 +212,10 @@ final class AppModel {
         // The API ended the session (a 401, or a socket refused as
         // unauthorized): forget the user's things as signing out does.
         session.onSessionEnded = { [weak self] in self?.forgetUser() }
+
+        // The Lock Screen and Home Screen buttons ("I'm in", "New topic") run
+        // here, in the app, with the user's session.
+        WidgetActions.handlers = TonightWidget.handlers(api: api) { [weak self] in self?.pingsChanged() }
     }
 
     func start() async {
@@ -323,6 +327,7 @@ final class AppModel {
         notifications.reset()
         location.forget()
         cacheRefresher.forget()
+        TonightWidget.clear()
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnPingKey)
         UserDefaults.standard.removeObject(forKey: Self.promptedFacebookOnChatKey)
         Task { [cable] in await cable.disconnect() }
@@ -544,9 +549,17 @@ final class AppModel {
             }
             return true
         case let .shortLink(url):
-            // Where the site redirects it, opened as that link would be; a
-            // code it doesn't know (or no network) leaves the user on Venues.
+            // A venue's TV code: its chat. The API names the venue for the
+            // code (the cover poster's read, the same code), so the scan
+            // doesn't hang on the site; else where the site redirects it, as
+            // that link would open. A code neither knows (or no network)
+            // leaves the user on Venues.
             shareLinkTask = Task {
+                if let venueID = try? await api.coverPosterVenue(url.lastPathComponent) {
+                    guard !Task.isCancelled else { return }
+                    openVenueChat(venueID)
+                    return
+                }
                 let target = await ShortLink.target(of: url)
                 guard !Task.isCancelled else { return }
                 if let target, let next = DeepLink.destination(for: target), next != .shortLink(url) {

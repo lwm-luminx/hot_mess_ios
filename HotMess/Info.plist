@@ -65,6 +65,8 @@
 	<string>$(NEW_RELIC_TOKEN)</string>
 	<key>FacebookDisplayName</key>
 	<string>Hot Mess</string>
+	<key>HotMessAppGroup</key>
+	<string>$(HOTMESS_APP_GROUP)</string>
 	<key>HotMessAPNSEnvironment</key>
 	<string>$(APNS_ENVIRONMENT)</string>
 	<key>HotMessBetaServer</key>

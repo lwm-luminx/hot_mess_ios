@@ -7,6 +7,7 @@
 //  the cover section.
 //
 
+import AudienceKit
 import CoreLocation
 import Foundation
 import SwiftUI
@@ -138,6 +139,26 @@ struct ListScreenTests {
         #expect(await screen.waitFor("The Globe"))
         #expect(screen.contains("Nyne"))
         stub.expectEverythingStubbed()
+    }
+
+    @Test("Venues shows the last list at once while a slow API answers")
+    func venuesFromCache() async throws {
+        let cache = InMemoryGraphQLCache()
+        let stub = MoreStubs.stub()
+        stub.on("Venues", .data(MoreStubs.venues))
+        let warm = host(VenuesScreen(), model: stub.appModel(graphQLCache: cache))
+        #expect(await warm.waitFor("The Globe"))
+        warm.tearDown()
+
+        // Next launch: the API takes a minute, the saved list shows anyway.
+        stub.on("Venues", .offline)
+        stub.delay("Venues", by: .seconds(60))
+        let screen = host(VenuesScreen(), model: stub.appModel(graphQLCache: cache))
+        defer { screen.tearDown() }
+
+        #expect(await screen.waitFor("The Globe"))
+        #expect(screen.contains("Nyne"))
+        #expect(!screen.contains("Something went wrong"))
     }
 
     @Test("Venues shows the error when the list can't be had")

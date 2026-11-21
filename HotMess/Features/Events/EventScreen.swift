@@ -72,7 +72,12 @@ struct EventScreen: View {
                         // On the night, the venue's karaoke itself: who's singing
                         // and Sign up to sing. Otherwise how to join, held back
                         // while tonight's lineup loads so it doesn't flash.
-                        if let lineupModel, let lineup = lineupModel.lineup, lineup.showsKaraoke {
+                        // A sing-along night has no singers: the rotation, Request a song
+                        // from its playlist and the playlist instead.
+                        if event.karaoke?.singAlong == true {
+                            SingAlongSection(eventID: event.id, isLive: viewModel?.isTonight == true,
+                                             lineupModel: lineupModel)
+                        } else if let lineupModel, let lineup = lineupModel.lineup, lineup.showsKaraoke {
                             KaraokeQueue(
                                 lineup: lineup,
                                 viewerName: model.session.singerName,
@@ -87,7 +92,8 @@ struct EventScreen: View {
                         }
 
                         // On the night, song requests too, when the venue takes them.
-                        if let lineupModel, let lineup = lineupModel.lineup, lineup.showsSongRequests {
+                        if event.karaoke?.singAlong != true, let lineupModel, let lineup = lineupModel.lineup,
+                           lineup.showsSongRequests {
                             SongRequestsSection(
                                 lineup: lineup,
                                 signedIn: model.session.isSignedIn,

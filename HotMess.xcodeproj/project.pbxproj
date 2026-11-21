@@ -13,6 +13,8 @@
 
 /* Begin PBXBuildFile section */
 		ACDA00000000000000000003 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000002; };
+		ACDA00000000000000000014 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000013; };
+		ACDA00000000000000000016 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000015; };
 		ACDA00000000000000000004 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,);}; };
 		AC00000000000000000000A0 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000090 /* FacebookCore */; };
 		AC00000000000000000000A1 /* FacebookLogin in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000091 /* FacebookLogin */; };
@@ -66,6 +68,8 @@
 /* Begin PBXFileReference section */
 		ACDA00000000000000000001 = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HotMessWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		ACDA00000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/HotMessActivity.swift"; sourceTree = SOURCE_ROOT; };
+		ACDA00000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Shared/TonightSnapshot.swift"; sourceTree = SOURCE_ROOT; };
+		ACDA00000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Shared/WidgetIntents.swift"; sourceTree = SOURCE_ROOT; };
 		AC0000000000000000000020 /* HotMess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HotMess.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC0000000000000000000021 /* HotMessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HotMessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC0000000000000000000022 /* HotMessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HotMessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -87,7 +91,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		ACDA00000000000000000006 = { isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist,); target = ACDA0000000000000000000A; };
+		ACDA00000000000000000006 = { isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist, HotMessWidgets.entitlements,); target = ACDA0000000000000000000A; };
 		AC0000000000000000000033 /* Exceptions for "HotMess" folder in "HotMess" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -181,6 +185,8 @@
 				ACCB00000000000000000009,
 				ACCB0000000000000000000A,
 				ACDA00000000000000000002,
+				ACDA00000000000000000013,
+				ACDA00000000000000000015,
 				ACCC00000000000000000001,
 				ACCA00000000000000000001,
 				ACDA00000000000000000007,
@@ -440,7 +446,7 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		ACDA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACDA00000000000000000003,); runOnlyForDeploymentPostprocessing = 0; };
+		ACDA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACDA00000000000000000003, ACDA00000000000000000014, ACDA00000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
 		AC0000000000000000000050 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -697,7 +703,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -720,7 +726,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -743,7 +749,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -938,7 +944,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -960,7 +966,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -982,7 +988,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -994,6 +1000,7 @@
    baseConfigurationReference = AC0000000000000000000040;
    buildSettings = {
     APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessWidgets/HotMessWidgets.entitlements;
     CODE_SIGN_STYLE = Automatic;
     CURRENT_PROJECT_VERSION = 1272;
     DEVELOPMENT_TEAM = DWVXMLB45Y;
@@ -1002,7 +1009,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1016,6 +1023,7 @@
    baseConfigurationReference = AC0000000000000000000041;
    buildSettings = {
     APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessWidgets/HotMessWidgets.entitlements;
     CODE_SIGN_STYLE = Automatic;
     CURRENT_PROJECT_VERSION = 1272;
     DEVELOPMENT_TEAM = DWVXMLB45Y;
@@ -1024,7 +1032,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1038,6 +1046,7 @@
    baseConfigurationReference = AC0000000000000000000042;
    buildSettings = {
     APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessWidgets/HotMessWidgets.entitlements;
     CODE_SIGN_STYLE = Automatic;
     CURRENT_PROJECT_VERSION = 1272;
     DEVELOPMENT_TEAM = DWVXMLB45Y;
@@ -1046,7 +1055,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.8;
+    MARKETING_VERSION = 2.9;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1143,7 +1152,7 @@
 			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
-				revision = 8b2d4304139bedb6b5ea7f0abedd1eea18038907;
+				revision = 14f1290ff4478a8e0b7170adc0ddb7f4f5455664;
 			};
 		};
 		AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {

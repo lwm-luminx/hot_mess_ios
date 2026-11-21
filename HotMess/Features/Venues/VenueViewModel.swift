@@ -44,6 +44,10 @@ struct VenueOverview: Sendable, Equatable {
 
     /// The next event, on the hero.
     var nextEvent: Event? { events.first }
+    /// Tonight's sing-along here, if tonight's event is one.
+    var singAlongTonight: Event? {
+        PingChoices.tonight(events).first { $0.karaoke?.singAlong == true }
+    }
     /// The events the page lists: all of them, except that one that's on
     /// right now leads the hero and isn't listed again. A later one stays in
     /// the list, though the hero names it too.

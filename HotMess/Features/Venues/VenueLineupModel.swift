@@ -73,16 +73,16 @@ final class VenueLineupModel {
         await refresh()
     }
 
-    /// The host on now, from the lineup.
-    var hostEntry: AudienceKit.LineupEntry? { lineup?.hostOnNow }
+    /// The host to feature, from the lineup: the host on now, else the event's host nobody has put on yet.
+    var hostEntry: AudienceKit.LineupEntry? { lineup?.featuredHost }
 
-    /// The host on now's links elsewhere, as icon buttons on the host row.
+    /// The featured host's links elsewhere, as icon buttons on the host row.
     var hostLinks: [HostLink] {
         guard let host, host.id == hostEntry?.personID else { return [] }
         return HostLink.links(for: host)
     }
 
-    /// Where to tip the host on now (Cash App, Venmo), as their page offers.
+    /// Where to tip the featured host (Cash App, Venmo), as their page offers.
     var hostTipLinks: [SocialLink] {
         guard let host, host.id == hostEntry?.personID else { return [] }
         return host.tipLinks
@@ -110,12 +110,6 @@ extension VenueLineupModel {
 }
 
 extension VenueLineup {
-    /// The host on now: the lineup's host entry that's on, else the one
-    /// taking karaoke signups.
-    var hostOnNow: AudienceKit.LineupEntry? {
-        entries.first { $0.role == .host && $0.state == .on } ?? karaoke?.host
-    }
-
     /// Whether `KaraokeQueue` shows anything: a partner's session to join on a
     /// karaoke night, or AudienceKit signups that are taken (only on karaoke
     /// nights) or have singers.

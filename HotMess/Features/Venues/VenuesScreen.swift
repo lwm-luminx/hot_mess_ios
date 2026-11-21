@@ -89,7 +89,7 @@ struct VenuesScreen: View {
         .navigationTitle(model.location.locale?.name ?? String(localized: "Venues"))
         .task(id: model.location.locale?.id) {
             ensureViewModel()
-            async let cards: Void = loadCards(force: true)
+            async let cards: Void = loadCards(force: false)
             await viewModel?.load(localeID: model.location.locale?.id)
             await cards
         }
@@ -260,7 +260,7 @@ struct VenuesScreen: View {
     private func reload() {
         Task {
             ensureViewModel()
-            async let cards: Void = loadCards(force: true)
+            async let cards: Void = loadCards(force: false)
             await viewModel?.load(localeID: model.location.locale?.id)
             await cards
         }

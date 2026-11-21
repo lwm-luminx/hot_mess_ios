@@ -7,49 +7,90 @@ import ActivityKit
 import Foundation
 
 /// Keeps one Live Activity per kind on the Lock Screen while something is
-/// open tonight: the Ping the user sent (or else the first one they joined),
-/// and their Quickie while it's searching or paired. The app updates them
-/// whenever it loads that state, and ends them once it's over. In the
-/// background they keep their last state until it goes stale.
+/// open tonight: the Ping the user sent (or else the first one they joined,
+/// or else the newest one a friend sent, with "I'm in" on it), and their
+/// Quickie while it's searching or paired, with its topic and "I'm in" / "New
+/// topic". The app updates them whenever it loads that state, and after each
+/// button, and ends them once it's over. In the background they keep their
+/// last state until it goes stale.
 @MainActor
 enum LiveActivities {
-    private typealias Attributes = HotMessActivityAttributes
+    typealias Attributes = HotMessActivityAttributes
 
     /// Shows the open Ping, or ends the Ping activity when there is none.
+    /// `friendPings` is every Ping the user can see, joined or not.
     static func sync(myPing: Ping?, friendPings: [Ping], now: Date = .now) {
-        let ping = [myPing].compactMap { $0 }.first { $0.expiresAt > now }
-            ?? friendPings.first { $0.joined && $0.expiresAt > now }
-        guard let ping else {
+        guard let ping = shown(myPing: myPing, friendPings: friendPings, now: now) else {
             end(.ping)
             return
         }
+        show(.ping, key: ping.id, url: URL(string: "hotmess://pings/\(ping.id)"), state: state(for: ping),
+             staleDate: ping.expiresAt)
+    }
+
+    /// Which Ping the activity is about: the user's own, else one they're in,
+    /// else the newest one a friend sent them directly (not one they only see
+    /// through someone in its circle), to join from the Lock Screen.
+    static func shown(myPing: Ping?, friendPings: [Ping], now: Date = .now) -> Ping? {
+        let open = friendPings.filter { $0.expiresAt > now }
+        return [myPing].compactMap { $0 }.first { $0.expiresAt > now }
+            ?? open.first { $0.joined }
+            ?? open.filter { !$0.isMine && $0.via == nil }.max { $0.createdAt < $1.createdAt }
+    }
+
+    static func state(for ping: Ping) -> Attributes.ContentState {
         let count = ping.joins.count
         let place = ping.targets.first?.name ?? ""
         let people = count == 1 ? String(localized: "1 person in") : String(localized: "\(count) people in")
-        let state = Attributes.ContentState(
+        let canJoin = !ping.isMine && !ping.joined
+        return Attributes.ContentState(
             title: ping.isMine ? String(localized: "Your Ping") : String(localized: "\(ping.user.firstName)'s Ping"),
             status: place.isEmpty ? people : "\(people) · \(place)",
-            short: String(localized: "\(count) in"),
-            endsAt: ping.expiresAt
+            short: canJoin ? String(localized: "Join?") : String(localized: "\(count) in"),
+            endsAt: ping.expiresAt,
+            actions: canJoin ? [.joinPing] : [.chat],
+            chatURL: URL(string: "hotmess://pings/\(ping.id)/chat")
         )
-        show(.ping, key: ping.id, url: URL(string: "hotmess://pings/\(ping.id)"), state: state, staleDate: ping.expiresAt)
     }
 
     /// Shows the user's Quickie at a venue while it's open, or ends it.
+    /// With no `venueName` it keeps the title the activity already has.
     static func sync(quickie: PairUpState?, venueID: UUID, venueName: String?) {
+        let key = venueID.uuidString
         guard let quickie, let line = lines(for: quickie) else {
-            end(.quickie, key: venueID.uuidString)
+            end(.quickie, key: key)
             return
         }
         let name = venueName?.isEmpty == false ? venueName : nil
+        let current = Activity<Attributes>.activities.first { $0.attributes.kind == .quickie && $0.attributes.key == key }
+        let title = name.map { String(localized: "Quickie at \($0)") }
+            ?? current?.content.state.title
+            ?? String(localized: "Quickie")
+        let match = quickie.status.isPaired ? quickie.match : nil
         let state = Attributes.ContentState(
-            title: name.map { String(localized: "Quickie at \($0)") } ?? String(localized: "Quickie"),
+            title: title,
             status: line.status,
             short: line.short,
-            endsAt: nil
+            endsAt: nil,
+            topic: match?.topic.text,
+            matchID: match?.id.uuidString,
+            actions: actions(for: quickie),
+            chatURL: URL(string: "hotmess://venues/\(key)/quickie")
         )
-        show(.quickie, key: venueID.uuidString, url: URL(string: "hotmess://venues/\(venueID.uuidString)"),
+        show(.quickie, key: key, url: URL(string: "hotmess://venues/\(key)"),
              state: state, staleDate: Date.now.addingTimeInterval(6 * 60 * 60))
+    }
+
+    /// The Quickie's buttons: say yes to the topic or ask for another while
+    /// it's proposed, another while waiting on them, and Chat once both said
+    /// yes (the chat opens then).
+    static func actions(for state: PairUpState) -> [Attributes.Action] {
+        switch state.status {
+        case .proposed where state.match?.accepted == true, .waiting: [.newTopic]
+        case .proposed: [.acceptQuickie, .newTopic]
+        case .revealed: [.chat]
+        case .searching, .met, .left: []
+        }
     }
 
     /// Ends every Hot Mess Live Activity, for signing out.
@@ -66,7 +107,7 @@ enum LiveActivities {
         case .searching:
             (String(localized: "Looking for someone to pair you with"), String(localized: "Looking"))
         case .proposed:
-            (String(localized: "We found someone. Open to see your topic"), String(localized: "Found"))
+            (String(localized: "We found someone. Up for this topic?"), String(localized: "Found"))
         case .waiting:
             (String(localized: "Waiting for them to say yes"), String(localized: "Waiting"))
         case .revealed:

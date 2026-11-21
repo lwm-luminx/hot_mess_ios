@@ -206,7 +206,8 @@ struct NowScreen: View {
             ensureViewModel()
             let pingsChanged = loadedPingRevision.map { $0 != model.pingRevision } ?? false
             loadedPingRevision = model.pingRevision
-            async let cards: Void = loadCards(force: true)
+            // Not forced: the layout asks again only for a real move (see LayoutRefreshPolicy), not every fix.
+            async let cards: Void = loadCards()
             await viewModel?.load(from: model.location, sentAfter: pingsChanged ? .now : nil)
             await cards
         }
@@ -240,10 +241,16 @@ struct NowScreen: View {
             guard let tonightVenueID else { safety = nil; return }
             safety = (try? await model.api.venueSafety(tonightVenueID)) ?? nil
         }
-        // The open Ping (theirs, or one they joined) on the Lock Screen.
+        // The open Ping (theirs, one they joined, or a friend's to join) on
+        // the Lock Screen.
         .onChange(of: openPings, initial: true) { _, pings in
             guard let pings else { return }
-            LiveActivities.sync(myPing: pings.mine, friendPings: pings.joined)
+            LiveActivities.sync(myPing: pings.mine, friendPings: pings.friends)
+        }
+        // What's on and friends' Pings, for the Tonight widget.
+        .onChange(of: viewModel?.state.value, initial: true) { _, now in
+            guard let now else { return }
+            TonightWidget.update(from: now)
         }
         .sheet(isPresented: $isPairingUp, onDismiss: { Task { await pairUpModel?.load() } }) {
             if let pairUpModel {
@@ -603,23 +610,37 @@ struct NowScreen: View {
         }
     }
 
-    /// At a venue: tonight as its page shows it, the host, the lineup strip,
-    /// karaoke signups and song requests. Until that loads, or from an older API, who's on and up
+    /// At a venue: tonight as its page shows it, the host (the event's own
+    /// before anyone puts them on) with Tip, the lineup strip, karaoke signups
+    /// and song requests. Until that loads, or from an older API, who's on and up
     /// next, and the event's karaoke session when it has one (held back while
     /// loading, so its pointer doesn't flash before the signups).
     @ViewBuilder
     private func stageSection(_ now: Now) -> some View {
         if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke
-            || lineup.showsSongRequests {
-            VenueLineupSection(lineupModel: lineupModel, lineup: lineup)
+            || lineup.showsSongRequests || lineup.featuredHost != nil {
+            VenueLineupSection(lineupModel: lineupModel, lineup: lineup, singAlongEventID: singAlongEventID(now))
+            // A karaoke night the lineup doesn't run (a partner's, or one the host runs off the app): its card
+            // still shows, under the host it says to ask.
+            if singAlongEventID(now) == nil, !lineup.showsKaraoke, let karaoke = now.event?.karaoke {
+                KaraokeSection(karaoke: karaoke, hostName: lineupModel.hostEntry?.displayName)
+            }
         } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
                 OnNowSection(onNow: now.onNow)
             }
-            if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
+            if let eventID = singAlongEventID(now) {
+                SingAlongSection(eventID: eventID, isLive: true, lineupModel: lineupModel)
+            } else if let karaoke = now.event?.karaoke, lineupModel?.hasLoaded != false {
                 KaraokeSection(karaoke: karaoke)
             }
         }
+    }
+
+    /// The event you're at, when it's a sing-along night.
+    private func singAlongEventID(_ now: Now) -> UUID? {
+        guard let event = now.event, event.karaoke?.singAlong == true else { return nil }
+        return event.id
     }
 
     /// At a venue: its photos, led by the camera. What you take goes on the
@@ -845,7 +866,7 @@ struct NowScreen: View {
     private func reload() {
         Task {
             ensureViewModel()
-            async let cards: Void = loadCards(force: true)
+            async let cards: Void = loadCards()
             await viewModel?.load(from: model.location, sentAfter: .now)
             await cards
         }
@@ -899,13 +920,13 @@ struct FriendStrip: View {
 /// The Pings a Live Activity can show, so Now updates it only when they change.
 private struct OpenPings: Equatable {
     let mine: Ping?
-    let joined: [Ping]
+    let friends: [Ping]
 }
 
 private extension NowScreen {
     /// Nil until Now has loaded, so the activity isn't ended before it knows.
     var openPings: OpenPings? {
         guard let now = viewModel?.state.value else { return nil }
-        return OpenPings(mine: now.myPing, joined: now.friendPings.filter(\.joined))
+        return OpenPings(mine: now.myPing, friends: now.friendPings)
     }
 }

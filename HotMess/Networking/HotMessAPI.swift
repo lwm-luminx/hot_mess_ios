@@ -167,6 +167,26 @@ struct HotMessAPI: CoverPaymentAPI {
         }
     }
 
+    /// An event's sing-along: its playlist and its venue's rotation (now
+    /// playing, up next), from the SDK. Nil for an unknown event.
+    func singAlong(eventID: UUID) async throws -> SingAlongNight? {
+        do {
+            return try await audienceKit.singAlong(eventID: eventID.uuidString.lowercased())
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
+    /// A venue's rotation right now, for a sing-along card on screen: nil
+    /// when its player hasn't reported or the report went stale.
+    func nowPlaying(venueID: String) async throws -> NowPlaying? {
+        do {
+            return try await audienceKit.nowPlaying(venueID: venueID)
+        } catch let error as AudienceKitError {
+            throw APIError(error)
+        }
+    }
+
     /// Signs the user up to sing at a venue. The server's refusal (not at the
     /// venue, signups closed) comes back worded for the room.
     func signUpToSing(venueID: UUID, _ signup: KaraokeSignup) async throws {
@@ -223,8 +243,13 @@ struct HotMessAPI: CoverPaymentAPI {
     /// A locale's events as last loaded (here or by the background refresh),
     /// to show while they refresh.
     func cachedEvents(in localeID: UUID) async -> EventListing? {
+        await cachedEventList(in: localeID).map { EventListing(upcoming: $0) }
+    }
+
+    /// ``eventList(in:cachePolicy:)`` as last loaded, without the network.
+    func cachedEventList(in localeID: UUID) async -> [Event]? {
         await cached(Documents.localeEvents, variables: ["id": .string(localeID.uuidString)],
-                     as: LocaleEventsResponse.self)?.locale.map { EventListing(upcoming: $0.events) }
+                     as: LocaleEventsResponse.self)?.locale?.events
     }
 
     func event(_ id: UUID) async throws -> EventDetail {
@@ -1060,8 +1085,12 @@ extension HotMessAPI {
         /// `profile` is the venue's profile mixin (see `ListingProfile`).
         static let venueFields = """
         id name distance point photo_url: photoUrl banner_url: bannerUrl \
-        profile { address phone facebook { facebook_id: facebookId is_liked: isLiked link } }
+        profile { address phone facebook { facebook_id: facebookId is_liked: isLiked link } \
+        places { hours { \(hoursFields) } } }
         """
+
+        /// A venue's opening hours, from Google, in its own time zone (`VenueHours`).
+        static let hoursFields = "status is_open: isOpen label lines"
 
         /// `profile` is the person's profile mixin (see `ListingProfile`).
         static let personFields = """
@@ -1137,7 +1166,7 @@ extension HotMessAPI {
         static let eventFields = """
         id name start_at: startAt end_at: endAt facebook_id: facebookId \
         banner_url: bannerUrl is_featured: isFeatured rsvp { mine } \
-        karaoke { provider provider_name: providerName session_code: sessionCode own_session_code: ownSessionCode join_url: joinUrl } \
+        karaoke { provider provider_name: providerName session_code: sessionCode own_session_code: ownSessionCode join_url: joinUrl sing_along: singAlong } \
         venue { name venue { \(venueFields) } }
         """
 
