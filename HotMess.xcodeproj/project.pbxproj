@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXCopyFilesBuildPhase section */
-		ACDA00000000000000000005 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (ACDA00000000000000000004,); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+		ACDA00000000000000000005 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (ACDA00000000000000000004, AC5E00000000000000000004,); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0; };
 		ACCA00000000000000000046 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips"; dstSubfolderSpec = 16; files = (ACCA00000000000000000013,); name = "Embed App Clips"; runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXCopyFilesBuildPhase section */
 
@@ -16,6 +16,8 @@
 		ACDA00000000000000000014 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000013; };
 		ACDA00000000000000000016 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000015; };
 		ACDA00000000000000000004 = { isa = PBXBuildFile; fileRef = ACDA00000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,);}; };
+		AC5E00000000000000000004 = { isa = PBXBuildFile; fileRef = AC5E00000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,);}; };
+		AC5E00000000000000000005 = { isa = PBXBuildFile; fileRef = AC5E00000000000000000006; };
 		AC00000000000000000000A0 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000090 /* FacebookCore */; };
 		AC00000000000000000000A1 /* FacebookLogin in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000091 /* FacebookLogin */; };
 		AC00000000000000000000A2 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000092 /* Kingfisher */; };
@@ -41,6 +43,7 @@
 
 /* Begin PBXContainerItemProxy section */
 		ACDA00000000000000000008 = { isa = PBXContainerItemProxy; containerPortal = AC0000000000000000000001; proxyType = 1; remoteGlobalIDString = ACDA0000000000000000000A; remoteInfo = HotMessWidgets; };
+		AC5E00000000000000000008 = { isa = PBXContainerItemProxy; containerPortal = AC0000000000000000000001; proxyType = 1; remoteGlobalIDString = AC5E0000000000000000000A; remoteInfo = HotMessShare; };
 		AC00000000000000000000B1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = AC0000000000000000000001 /* Project object */;
@@ -67,6 +70,8 @@
 
 /* Begin PBXFileReference section */
 		ACDA00000000000000000001 = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HotMessWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC5E00000000000000000001 = { isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HotMessShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AC5E00000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Shared/SpotifyShareInbox.swift"; sourceTree = SOURCE_ROOT; };
 		ACDA00000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Models/HotMessActivity.swift"; sourceTree = SOURCE_ROOT; };
 		ACDA00000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Shared/TonightSnapshot.swift"; sourceTree = SOURCE_ROOT; };
 		ACDA00000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotMess/Shared/WidgetIntents.swift"; sourceTree = SOURCE_ROOT; };
@@ -92,6 +97,7 @@
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		ACDA00000000000000000006 = { isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist, HotMessWidgets.entitlements,); target = ACDA0000000000000000000A; };
+		AC5E00000000000000000002 = { isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist, HotMessShare.entitlements,); target = AC5E0000000000000000000A; };
 		AC0000000000000000000033 /* Exceptions for "HotMess" folder in "HotMess" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -104,6 +110,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ACDA00000000000000000007 = { isa = PBXFileSystemSynchronizedRootGroup; exceptions = (ACDA00000000000000000006,); path = HotMessWidgets; sourceTree = "<group>"; };
+		AC5E00000000000000000003 = { isa = PBXFileSystemSynchronizedRootGroup; exceptions = (AC5E00000000000000000002,); path = HotMessShare; sourceTree = "<group>"; };
 		AC0000000000000000000030 /* HotMess */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -132,6 +139,7 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		ACDA0000000000000000000D = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AC5E0000000000000000000D = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		AC0000000000000000000051 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -190,6 +198,8 @@
 				ACCC00000000000000000001,
 				ACCA00000000000000000001,
 				ACDA00000000000000000007,
+				AC5E00000000000000000006,
+				AC5E00000000000000000003,
 				AC0000000000000000000004 /* Configurations */,
 				AC0000000000000000000030 /* HotMess */,
 				AC0000000000000000000031 /* HotMessTests */,
@@ -204,6 +214,7 @@
 			children = (
 				ACCA0000000000000000000B,
 				ACDA00000000000000000001,
+				AC5E00000000000000000001,
 				AC0000000000000000000020 /* HotMess.app */,
 				AC0000000000000000000021 /* HotMessTests.xctest */,
 				AC0000000000000000000022 /* HotMessUITests.xctest */,
@@ -226,6 +237,7 @@
 
 /* Begin PBXNativeTarget section */
 		ACDA0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = ACDA0000000000000000000B; buildPhases = (ACDA0000000000000000000C, ACDA0000000000000000000D, ACDA0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (ACDA00000000000000000007,); name = HotMessWidgets; productName = HotMessWidgets; productReference = ACDA00000000000000000001; productType = "com.apple.product-type.app-extension"; };
+		AC5E0000000000000000000A = { isa = PBXNativeTarget; buildConfigurationList = AC5E0000000000000000000B; buildPhases = (AC5E0000000000000000000C, AC5E0000000000000000000D, AC5E0000000000000000000E,); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (AC5E00000000000000000003,); name = HotMessShare; productName = HotMessShare; productReference = AC5E00000000000000000001; productType = "com.apple.product-type.app-extension"; };
 		AC0000000000000000000010 /* HotMess */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AC0000000000000000000061 /* Build configuration list for PBXNativeTarget "HotMess" */;
@@ -242,6 +254,7 @@
 			dependencies = (
 				ACCA00000000000000000048,
 				ACDA00000000000000000009,
+				AC5E00000000000000000009,
 			);
 			fileSystemSynchronizedGroups = (
 				AC0000000000000000000030 /* HotMess */,
@@ -382,6 +395,7 @@
 			targets = (
 				ACCA0000000000000000000A,
 				ACDA0000000000000000000A,
+				AC5E0000000000000000000A,
 				AC0000000000000000000010 /* HotMess */,
 				AC0000000000000000000011 /* HotMessTests */,
 				AC0000000000000000000012 /* HotMessUITests */,
@@ -392,6 +406,7 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		ACDA0000000000000000000E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AC5E0000000000000000000E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		AC0000000000000000000052 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -447,6 +462,7 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		ACDA0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (ACDA00000000000000000003, ACDA00000000000000000014, ACDA00000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
+		AC5E0000000000000000000C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AC5E00000000000000000005,); runOnlyForDeploymentPostprocessing = 0; };
 		AC0000000000000000000050 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -480,6 +496,7 @@
 
 /* Begin PBXTargetDependency section */
 		ACDA00000000000000000009 = { isa = PBXTargetDependency; target = ACDA0000000000000000000A; targetProxy = ACDA00000000000000000008; };
+		AC5E00000000000000000009 = { isa = PBXTargetDependency; target = AC5E0000000000000000000A; targetProxy = AC5E00000000000000000008; };
 		AC00000000000000000000B0 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = AC0000000000000000000010 /* HotMess */;
@@ -1065,10 +1082,80 @@
     TARGETED_DEVICE_FAMILY = "1,2";
    };
    name = Release; };
+		AC5E00000000000000000010 = { isa = XCBuildConfiguration;
+   baseConfigurationReference = AC0000000000000000000040;
+   buildSettings = {
+    APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessShare/HotMessShare.entitlements;
+    CODE_SIGN_STYLE = Automatic;
+    CURRENT_PROJECT_VERSION = 1272;
+    DEVELOPMENT_TEAM = DWVXMLB45Y;
+    ENABLE_USER_SCRIPT_SANDBOXING = NO;
+    GENERATE_INFOPLIST_FILE = YES;
+    INFOPLIST_FILE = HotMessShare/Info.plist;
+    INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
+    LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
+    MARKETING_VERSION = 2.10;
+    PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
+    PRODUCT_NAME = "$(TARGET_NAME)";
+    SKIP_INSTALL = YES;
+    SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+    SUPPORTS_MACCATALYST = NO;
+    SWIFT_EMIT_LOC_STRINGS = YES;
+    TARGETED_DEVICE_FAMILY = "1,2";
+   };
+   name = Debug; };
+		AC5E00000000000000000011 = { isa = XCBuildConfiguration;
+   baseConfigurationReference = AC0000000000000000000041;
+   buildSettings = {
+    APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessShare/HotMessShare.entitlements;
+    CODE_SIGN_STYLE = Automatic;
+    CURRENT_PROJECT_VERSION = 1272;
+    DEVELOPMENT_TEAM = DWVXMLB45Y;
+    ENABLE_USER_SCRIPT_SANDBOXING = NO;
+    GENERATE_INFOPLIST_FILE = YES;
+    INFOPLIST_FILE = HotMessShare/Info.plist;
+    INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
+    LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
+    MARKETING_VERSION = 2.10;
+    PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
+    PRODUCT_NAME = "$(TARGET_NAME)";
+    SKIP_INSTALL = YES;
+    SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+    SUPPORTS_MACCATALYST = NO;
+    SWIFT_EMIT_LOC_STRINGS = YES;
+    TARGETED_DEVICE_FAMILY = "1,2";
+   };
+   name = Staging; };
+		AC5E00000000000000000012 = { isa = XCBuildConfiguration;
+   baseConfigurationReference = AC0000000000000000000042;
+   buildSettings = {
+    APPLICATION_EXTENSION_API_ONLY = YES;
+    CODE_SIGN_ENTITLEMENTS = HotMessShare/HotMessShare.entitlements;
+    CODE_SIGN_STYLE = Automatic;
+    CURRENT_PROJECT_VERSION = 1272;
+    DEVELOPMENT_TEAM = DWVXMLB45Y;
+    ENABLE_USER_SCRIPT_SANDBOXING = NO;
+    GENERATE_INFOPLIST_FILE = YES;
+    INFOPLIST_FILE = HotMessShare/Info.plist;
+    INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
+    LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
+    MARKETING_VERSION = 2.10;
+    PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
+    PRODUCT_NAME = "$(TARGET_NAME)";
+    SKIP_INSTALL = YES;
+    SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+    SUPPORTS_MACCATALYST = NO;
+    SWIFT_EMIT_LOC_STRINGS = YES;
+    TARGETED_DEVICE_FAMILY = "1,2";
+   };
+   name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		ACDA0000000000000000000B = { isa = XCConfigurationList; buildConfigurations = (ACDA00000000000000000010, ACDA00000000000000000011, ACDA00000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		AC5E0000000000000000000B = { isa = XCConfigurationList; buildConfigurations = (AC5E00000000000000000010, AC5E00000000000000000011, AC5E00000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		AC0000000000000000000060 /* Build configuration list for PBXProject "HotMess" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1152,7 +1239,7 @@
 			repositoryURL = "https://github.com/lwm-luminx/audience-kit-sdk.git";
 			requirement = {
 				kind = revision;
-				revision = 14f1290ff4478a8e0b7170adc0ddb7f4f5455664;
+				revision = 9e527c88c530e5ec589567f1b2b2b97ea2eb95a2;
 			};
 		};
 		AC0000000000000000000083 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {

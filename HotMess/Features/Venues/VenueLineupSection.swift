@@ -6,6 +6,7 @@
 import AudienceKit
 import AudienceKitUI
 import SwiftUI
+import UIKit
 
 /// Tonight at a venue, from AudienceKitUI: the host on now with their links
 /// and Tip, the lineup strip (each act opening its page, "Hosted by" when
@@ -24,6 +25,7 @@ struct VenueLineupSection: View {
     @State private var choosingTip = false
     @State private var signingUp = false
     @State private var requesting = false
+    @State private var pastedShare: SpotifyShare?
 
     /// The "+" at the end of the lineup: karaoke signups, then song requests.
     private var additions: [LineupAddition] {
@@ -71,7 +73,25 @@ struct VenueLineupSection: View {
                     onRequest: lineupModel.requestSong,
                     onWithdraw: lineupModel.remove
                 )
+                if model.session.isSignedIn, lineup.songRequests?.open == true {
+                    Button(action: pasteSpotifyLink) {
+                        Label(String(localized: "Paste a song link from Spotify"), systemImage: "doc.on.clipboard")
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
+        }
+        .task(id: lineup.songRequests?.open) {
+            // Where a song shared from Spotify goes: the venue whose requests
+            // the person last saw open.
+            if lineup.songRequests?.open == true {
+                SpotifyShareInbox.rememberRequestVenue(id: lineupModel.venueID.uuidString.lowercased(),
+                                                       name: lineup.venueName)
+            }
+        }
+        .sheet(item: $pastedShare) { share in
+            SpotifyRequestSheet(share: share) { Task { await lineupModel.refresh() } }
+                .environment(model)
         }
         .audiencePreset(model.brand.preset)
         .sheet(isPresented: $signingUp) {
@@ -93,6 +113,16 @@ struct VenueLineupSection: View {
                 }
             }
         }
+    }
+
+    /// A Spotify song link from the clipboard, as a request at this venue.
+    private func pasteSpotifyLink() {
+        guard let link = UIPasteboard.general.string.flatMap(SpotifyShareInbox.spotifyLink(in:)) else {
+            pastedShare = SpotifyShare(link: "", venueID: nil, venueName: nil)
+            return
+        }
+        pastedShare = SpotifyShare(link: link, venueID: lineupModel.venueID.uuidString.lowercased(),
+                                   venueName: lineup.venueName)
     }
 
     /// Tips go to the host the way their page takes them: straight to the one
