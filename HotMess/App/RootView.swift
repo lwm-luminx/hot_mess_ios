@@ -116,6 +116,10 @@ struct MainTabView: View {
             }
             .audiencePreset(model.brand.preset)
         }
+        .sheet(item: $model.spotifyShare) { share in
+            SpotifyRequestSheet(share: share)
+                .environment(model)
+        }
         .sheet(item: $model.privateChat) { link in
             Group {
                 switch link {

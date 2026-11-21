@@ -103,6 +103,8 @@ struct EventScreen: View {
                             .audiencePreset(model.brand.preset)
                         }
 
+                        SetListOnSpotifyButton(eventID: event.id)
+
                         PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
                         NewsSection.inTheNews(.event(event.id.uuidString.lowercased()))
 

@@ -54,6 +54,7 @@ struct HotMessApp: App {
             case .active:
                 model.updateAppIcon()
                 if model.session.isSignedIn { model.location.start() }
+                model.takeSpotifyShare()
                 Task { await model.refreshCache() }
             case .background:
                 model.location.stop()
@@ -97,6 +98,11 @@ struct HotMessApp: App {
         )
 
         guard !handledByFacebook else { return }
+        // hotmess://share-song: a song shared from Spotify is waiting.
+        if url.scheme == "hotmess", url.host == "share-song" {
+            model.takeSpotifyShare()
+            return
+        }
 
         _ = model.open(url)
     }
