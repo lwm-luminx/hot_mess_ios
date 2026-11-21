@@ -270,13 +270,18 @@ struct HotMessAPI: CoverPaymentAPI {
 
     /// Starts paying tonight's cover at a venue. Asking again the same night
     /// returns the same pass and payment.
-    func buyCover(venueID: UUID, quantity: Int = 1, tier: String? = nil) async throws -> CoverPurchase {
+    /// `amountCents` is what the buyer picked for each cover on a sliding
+    /// scale; nil pays the suggested (or fixed) amount.
+    func buyCover(venueID: UUID, quantity: Int = 1, tier: String? = nil, amountCents: Int? = nil) async throws -> CoverPurchase {
         var variables: [String: GraphQLValue] = [
             "venueId": .string(venueID.uuidString),
             "quantity": .int(quantity),
         ]
         if let tier {
             variables["tier"] = .string(tier)
+        }
+        if let amountCents {
+            variables["amount"] = .object(["cents": .int(amountCents), "currency": .string("usd")])
         }
         return try await query(
             Documents.buyCover,
@@ -1177,6 +1182,7 @@ extension HotMessAPI {
         amount { \(moneyFields) } fee { \(moneyFields) } total { \(moneyFields) } \
         night from until payable payment_mechanisms: paymentMechanisms \
         tiers { id name amount { \(moneyFields) } total { \(moneyFields) } description } \
+        scale { min { \(moneyFields) } max { \(moneyFields) } suggested { \(moneyFields) } } \
         coat_check: coatCheck { amount { \(moneyFields) } fee { \(moneyFields) } total { \(moneyFields) } night payable payment_mechanisms: paymentMechanisms }
         """
 
@@ -1288,8 +1294,8 @@ extension HotMessAPI {
         """
 
         static let buyCover = """
-        mutation BuyCover($venueId: ID!, $quantity: Int, $tier: String) {
-          buyCover(input: { venueId: $venueId, quantity: $quantity, tier: $tier }) {
+        mutation BuyCover($venueId: ID!, $quantity: Int, $tier: String, $amount: MoneyInput) {
+          buyCover(input: { venueId: $venueId, quantity: $quantity, tier: $tier, amount: $amount }) {
             admission { \(admissionFields) }
             payment_intent_client_secret: paymentIntentClientSecret
             publishable_key: publishableKey
