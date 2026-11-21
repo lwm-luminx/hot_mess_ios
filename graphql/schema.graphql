@@ -2258,6 +2258,18 @@ type Audience implements IRelay & Node {
   spotify: AudienceSpotify @requires(permissions: ["audience:read:*"])
 
   """
+  A Spotify song, playlist, album or artist link read without signing in to
+  Spotify: what the share extension and link paste show before a song request.
+  Null when it is not a Spotify link.
+  """
+  spotifyLink(
+    """
+    The link as shared: open.spotify.com, spotify.link or a spotify: URI.
+    """
+    url: String!
+  ): SpotifyLink @endpoint(in: [AUDIENCE, STAFF])
+
+  """
   The unique audience subdomain.
   """
   subdomain: String!
@@ -3931,6 +3943,11 @@ type BannerPhoto implements HasPhotoFocus {
   focalPoint: FocalPoint
 
   """
+  Whether it is mostly text (a flyer, words across it), so screens show it last; null before it has been looked at.
+  """
+  hasText: Boolean
+
+  """
   Its height in pixels, upright; null before it has been looked at.
   """
   height: Int
@@ -3939,6 +3956,11 @@ type BannerPhoto implements HasPhotoFocus {
   Its UUID.
   """
   id: ID!
+
+  """
+  How much of it has text in it, 0..1; null before it has been looked at.
+  """
+  textCoverage: Float
 
   """
   The image.
@@ -7836,6 +7858,16 @@ type EquipmentTrack {
   playerId: String
 
   """
+  Whether it was playing (false: paused) when reported, with positionMs; null when the player gave no position.
+  """
+  playing: Boolean
+
+  """
+  How far into the song the player was at reportedAt, in ms.
+  """
+  positionMs: Int
+
+  """
   Server time of the report.
   """
   reportedAt: ISO8601DateTime!
@@ -8024,6 +8056,11 @@ type Event implements HasBanner & HasCredits & HasReviews & HasTags & HasTaskTem
   An occurrence edited on its own: changes to its series leave it alone.
   """
   seriesOverride: Boolean!
+
+  """
+  Its set list on Spotify, for people to open in their own Spotify (syncEventSetList); null until the venue mirrors it.
+  """
+  setList: EventSetList
 
   """
   Where its community talks outside AudienceKit (Discord, Matrix, IRC, mailing
@@ -9321,6 +9358,34 @@ type EventSeriesVenueView implements IEventSeriesVenue {
   talent series at their home venue or still to be announced.
   """
   venue: Venue
+}
+
+"""
+A night's set list mirrored to a public Spotify playlist in the venue's
+connected account (syncEventSetList), for people to open in their own Spotify:
+save it, add its songs to their own playlists, or listen to rehearse. For
+personal listening only: Spotify is not for playing to a room.
+"""
+type EventSetList {
+  """
+  How many songs it held at the last mirror.
+  """
+  songCount: Int
+
+  """
+  Its Spotify URI (spotify:playlist:<id>), which the app opens.
+  """
+  spotifyUri: String!
+
+  """
+  Its open.spotify.com link.
+  """
+  spotifyUrl: String!
+
+  """
+  When it was last mirrored.
+  """
+  syncedAt: ISO8601DateTime
 }
 
 """
@@ -10775,9 +10840,19 @@ interface HasPhotoFocus {
   focalPoint: FocalPoint
 
   """
+  Whether it is mostly text (a flyer, words across it), so screens show it last; null before it has been looked at.
+  """
+  hasText: Boolean
+
+  """
   Its height in pixels, upright; null before it has been looked at.
   """
   height: Int
+
+  """
+  How much of it has text in it, 0..1; null before it has been looked at.
+  """
+  textCoverage: Float
 
   """
   Its width in pixels, upright; null before it has been looked at.
@@ -15839,6 +15914,23 @@ type LiveSong {
   the clock says, as a demo does; null follows the song's clock.
   """
   line: Int
+
+  """
+  Whether the venue's player has it playing (false: paused) as of positionAt; null when no player reported a position.
+  """
+  playing: Boolean
+
+  """
+  Seconds into the song at positionAt, from the venue's player (Velvet Display
+  reading Spotify). When set, screens run lyrics from it instead of startedAt,
+  through pauses and seeks.
+  """
+  position: Float
+
+  """
+  Server time the player reported position.
+  """
+  positionAt: ISO8601DateTime
 
   """
   Its Spotify track id, when it has one.
@@ -20913,6 +21005,11 @@ type Photo implements HasPhoto & HasPhotoFocus & Node {
   focalPoint: FocalPoint
 
   """
+  Whether it is mostly text (a flyer, words across it), so screens show it last; null before it has been looked at.
+  """
+  hasText: Boolean
+
+  """
   Its height in pixels, upright; null before it has been looked at.
   """
   height: Int
@@ -20936,6 +21033,11 @@ type Photo implements HasPhoto & HasPhotoFocus & Node {
   The original URL from which the photo was fetched.
   """
   sourceUrl: PhotoURL!
+
+  """
+  How much of it has text in it, 0..1; null before it has been looked at.
+  """
+  textCoverage: Float
 
   """
   Its width in pixels, upright; null before it has been looked at.
@@ -24533,6 +24635,52 @@ type Scene {
 }
 
 """
+A picture Velvet's screens may show behind the board (ScreenBackdrops), with its faces and how much of it is text.
+"""
+type ScreenBackdrop implements HasPhotoFocus {
+  """
+  The faces in it, largest first; empty when there are none, null before it has been looked at.
+  """
+  faces: [FaceBox!]
+
+  """
+  Where a crop should centre; null before it has been looked at (centre it).
+  """
+  focalPoint: FocalPoint
+
+  """
+  Whether it is mostly text (a flyer, words across it), so screens show it last; null before it has been looked at.
+  """
+  hasText: Boolean
+
+  """
+  Its height in pixels, upright; null before it has been looked at.
+  """
+  height: Int
+
+  """
+  Where it's from: 'banner' (an admin added it), 'instagram' (the venue's latest
+  posts) or 'google' (Google's photos of the place).
+  """
+  source: String!
+
+  """
+  How much of it has text in it, 0..1; null before it has been looked at.
+  """
+  textCoverage: Float
+
+  """
+  The image.
+  """
+  url: PhotoURL!
+
+  """
+  Its width in pixels, upright; null before it has been looked at.
+  """
+  width: Int
+}
+
+"""
 The signed-in user's own profile: their public fields and what only they see.
 """
 type SelfUser implements HasTimestamps & HasTribes & IUser {
@@ -25163,6 +25311,11 @@ type SongLyrics {
   lrc: String
 
   """
+  True when the words are only part of the song (a Basic Musixmatch plan's); they're asked for whole again.
+  """
+  partial: Boolean!
+
+  """
   Where the words came from, such as musixmatch.
   """
   source: String!
@@ -25245,6 +25398,16 @@ type SongRequest implements Node {
   singer: String
 
   """
+  The Spotify song it was shared from (spotify:track:<id>); null when typed or picked without one.
+  """
+  spotifyUri: String
+
+  """
+  The song's open.spotify.com link, when shared from Spotify.
+  """
+  spotifyUrl: String
+
+  """
   Where it is in the queue.
   """
   state: SongRequestState!
@@ -25315,9 +25478,16 @@ input SongRequestCreateInput {
   singer: String
 
   """
-  The song.
+  A Spotify song link the person shared or pasted (open.spotify.com,
+  spotify.link or spotify:track:). Its name and artists fill in title and artist
+  when those are left out.
   """
-  title: String!
+  spotifyUrl: String
+
+  """
+  The song; may be left out with spotifyUrl.
+  """
+  title: String
 
   """
   The venue whose room you're in.
@@ -25596,6 +25766,53 @@ type SpotifyAccount {
   The connected account's Spotify name.
   """
   displayName: String
+}
+
+"""
+A Spotify link someone shared or pasted, read without signing in to Spotify
+(SpotifyLink): what it names, with Spotify's name and artwork for it. Show it
+with Spotify's name and a link back to Spotify, and the artwork uncropped.
+"""
+type SpotifyLink {
+  """
+  A song's artists, comma separated; null for other kinds.
+  """
+  artist: String
+
+  """
+  Spotify's embed player for it, to show a playlist or album so the person can pick a song from it.
+  """
+  embedUrl: String!
+
+  """
+  Spotify's ID for it.
+  """
+  id: ID!
+
+  """
+  track, playlist, album or artist.
+  """
+  kind: String!
+
+  """
+  Spotify's artwork for it; null when Spotify didn't say.
+  """
+  thumbnailUrl: String
+
+  """
+  The song, playlist, album or artist name; null when Spotify didn't answer.
+  """
+  title: String
+
+  """
+  Its Spotify URI (spotify:track:<id>), which the Spotify app opens.
+  """
+  uri: String!
+
+  """
+  Its open.spotify.com link.
+  """
+  url: String!
 }
 
 """
@@ -28371,6 +28588,12 @@ type Venue implements HasBanner & HasCredits & HasPhoto & HasTags & HasTaskTempl
   Whether anyone on shift here hears safety alerts right now; the app offers other ways to get help when not.
   """
   safetyStaffOnShift: Boolean!
+
+  """
+  The pictures Velvet's screens may show behind the board, in the order to show
+  them: banners without text, Google photos without text, then ones that are mostly text.
+  """
+  screenBackdrops: [ScreenBackdrop!]!
 
   """
   Its own connected Spotify account, which reads the playlists it owns for its
