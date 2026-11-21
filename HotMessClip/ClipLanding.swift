@@ -156,7 +156,9 @@ struct ClipCoverPanel: View {
                         Text(charge.price).font(.system(size: 24, weight: .heavy)).foregroundStyle(ClipTheme.ink)
                     }
                     ClipApplePayButton(label: .checkout) { pay(.cover) }
-                    ClipFinePrint(text: Text("Includes fees. Refundable until the door scans it."))
+                    ClipFinePrint(text: Text(charge.scale != nil
+                        ? "Pay what you can, \(charge.scale!.suggested.formatted) suggested. Refundable until the door scans it."
+                        : "Includes fees. Refundable until the door scans it."))
                 } else {
                     header("No cover tonight", subtitle: isEvent
                         ? "Nothing to pay ahead at \(details.venue?.name ?? "the venue")."
@@ -181,11 +183,12 @@ struct ClipCoverPanel: View {
             HStack(alignment: .firstTextBaseline) {
                 header("Cover tonight", subtitle: guestSubtitle(cover))
                 Spacer()
-                Text(cover.total.formatted).font(.system(size: 24, weight: .heavy)).foregroundStyle(ClipTheme.ink)
+                Text(cover.price).font(.system(size: 24, weight: .heavy)).foregroundStyle(ClipTheme.ink)
             }
             if cover.payable, cover.guestCheckout {
                 ClipApplePayButton(label: .checkout) { pay(.cover) }
-                ClipFinePrint(text: Text("Includes fees. No account needed."))
+                ClipFinePrint(text: Text(cover.coverScale.map { "Pay what you can, \($0.suggested.formatted) suggested. No account needed." }
+                    ?? "Includes fees. No account needed."))
             } else if cover.payable {
                 // Square: its SDK doesn't fit the clip.
                 Button("Pay cover in Hot Mess") { getApp() }.buttonStyle(ClipAccentButtonStyle())

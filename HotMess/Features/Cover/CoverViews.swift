@@ -53,6 +53,9 @@ struct CoverSection: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var quantity = 1
     @State private var selectedTierID: String?
+    /// What the buyer picked on a sliding scale; nil until they move it, so
+    /// it starts at the suggested amount.
+    @State private var pickedCents: Int?
 
     private var isOnlyApplePay: Bool {
         guard let coverCharge else { return false }
@@ -82,6 +85,23 @@ struct CoverSection: View {
             return tier
         }
         return tiers.first
+    }
+
+    /// What one cover costs the buyer before fees on a sliding scale, or nil
+    /// for a fixed cover.
+    private var chosenCents: Int? {
+        guard let scale = coverCharge?.scale else { return nil }
+        return scale.clamped(pickedCents ?? scale.suggested.cents)
+    }
+
+    /// The pay button's price: the picked amount on a sliding scale (fees are
+    /// added on the payment sheet), else the all-in total.
+    private func payPrice(_ coverCharge: CoverCharge) -> String {
+        if let chosenCents {
+            let price = CoverFormat.price(cents: chosenCents * quantity, currency: coverCharge.amount.currency)
+            return coverCharge.fee.cents > 0 ? String(localized: "\(price) + fees") : price
+        }
+        return selectedTier?.total(for: quantity).formatted ?? coverCharge.price(for: quantity)
     }
 
     var body: some View {
@@ -129,6 +149,10 @@ struct CoverSection: View {
                             .pickerStyle(.segmented)
                         }
 
+                        if let scale = coverCharge.scale, let chosenCents {
+                            CoverAmountStepper(scale: scale, cents: chosenCents) { pickedCents = $0 }
+                        }
+
                         Stepper(value: $quantity, in: 1...10) {
                             HStack {
                                 Text(String(localized: "Quantity"))
@@ -140,7 +164,9 @@ struct CoverSection: View {
                             }
                         }
 
-                        let totalPrice = selectedTier?.total(for: quantity).formatted ?? coverCharge.price(for: quantity)
+                        let totalPrice = payPrice(coverCharge)
+                        // A sliding scale always names the amount, so the buyer sees what they picked.
+                        let namesPrice = quantity > 1 || chosenCents != nil
 
                         if showsPayCoverButton {
                             PayCoverButton(
@@ -148,9 +174,10 @@ struct CoverSection: View {
                                 venueName: venueName,
                                 quantity: quantity,
                                 tier: selectedTier?.id,
+                                amountCents: chosenCents,
                                 title: showsApplePayButton
-                                    ? (quantity > 1 ? String(localized: "Pay \(totalPrice) with card") : String(localized: "Pay with card"))
-                                    : (quantity > 1 ? String(localized: "Pay \(totalPrice)") : String(localized: "Pay cover"))
+                                    ? (namesPrice ? String(localized: "Pay \(totalPrice) with card") : String(localized: "Pay with card"))
+                                    : (namesPrice ? String(localized: "Pay \(totalPrice)") : String(localized: "Pay cover"))
                             )
                         }
 
@@ -162,7 +189,8 @@ struct CoverSection: View {
                                         venueID: venueID,
                                         venueName: venueName,
                                         quantity: quantity,
-                                        tier: selectedTier?.id
+                                        tier: selectedTier?.id,
+                                        amountCents: chosenCents
                                     )
                                 }
                             }
@@ -358,12 +386,47 @@ struct PayCoatCheckButton: View {
     }
 }
 
+/// A sliding-scale cover's amount: the range, and a stepper that moves a
+/// dollar at a time from the suggested amount.
+struct CoverAmountStepper: View {
+    let scale: CoverScale
+    let cents: Int
+    let onChange: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Stepper {
+                HStack {
+                    Text(String(localized: "Pay what you can"))
+                        .font(.hotMess(.body))
+                    Spacer()
+                    Text(CoverFormat.price(cents: cents, currency: scale.suggested.currency))
+                        .font(.hotMess(.body, semibold: true))
+                        .monospacedDigit()
+                }
+            } onIncrement: {
+                onChange(scale.step(cents, by: 1))
+            } onDecrement: {
+                onChange(scale.step(cents, by: -1))
+            }
+            .accessibilityIdentifier("cover.amount")
+            .accessibilityValue(CoverFormat.price(cents: cents, currency: scale.suggested.currency))
+
+            Text(String(localized: "\(scale.range), \(scale.suggested.formatted) suggested"))
+                .font(.hotMess(.caption))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 /// Starts paying tonight's cover at a venue.
 struct PayCoverButton: View {
     let venueID: UUID
     let venueName: String
     var quantity: Int = 1
     var tier: String? = nil
+    /// What the buyer picked for each cover on a sliding scale.
+    var amountCents: Int? = nil
     var title: String? = nil
 
     @Environment(AppModel.self) private var model
@@ -379,7 +442,8 @@ struct PayCoverButton: View {
                     venueID: venueID,
                     venueName: venueName,
                     quantity: quantity,
-                    tier: tier
+                    tier: tier,
+                    amountCents: amountCents
                 )
             }
         } label: {
@@ -441,6 +505,19 @@ struct SkipTheLineCard: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @State private var pickedCents: Int?
+
+    /// What the buyer picked on a sliding scale (the suggested amount until
+    /// they move it), or nil for a fixed cover.
+    private var chosenCents: Int? {
+        coverCharge.scale.map { $0.clamped(pickedCents ?? $0.suggested.cents) }
+    }
+
+    private var payPrice: String {
+        guard let chosenCents else { return coverCharge.price }
+        let price = CoverFormat.price(cents: chosenCents, currency: coverCharge.amount.currency)
+        return coverCharge.fee.cents > 0 ? String(localized: "\(price) + fees") : price
+    }
 
     private var isOnlyApplePay: Bool {
         !coverCharge.hasOtherPaymentMechanisms && coverCharge.supportsApplePay
@@ -497,13 +574,18 @@ struct SkipTheLineCard: View {
                     .font(.hotMess(.subheadline))
                     .foregroundStyle(.secondary)
             } else {
+                if let scale = coverCharge.scale, let chosenCents {
+                    CoverAmountStepper(scale: scale, cents: chosenCents) { pickedCents = $0 }
+                }
+
                 if showsPayCoverButton {
                     PayCoverButton(
                         venueID: venue.id,
                         venueName: venue.name,
+                        amountCents: chosenCents,
                         title: showsApplePayButton
-                            ? String(localized: "Pay with card")
-                            : String(localized: "Pay \(coverCharge.price)")
+                            ? (chosenCents != nil ? String(localized: "Pay \(payPrice) with card") : String(localized: "Pay with card"))
+                            : String(localized: "Pay \(payPrice)")
                     )
                 }
 
@@ -513,7 +595,8 @@ struct SkipTheLineCard: View {
                         Task {
                             await model.checkout.payWithApplePay(
                                 venueID: venue.id,
-                                venueName: venue.name
+                                venueName: venue.name,
+                                amountCents: chosenCents
                             )
                         }
                     }

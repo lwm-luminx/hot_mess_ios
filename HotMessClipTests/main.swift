@@ -75,6 +75,14 @@ let tipOffer = try ClipOffer.decoder().decode(ClipOffer.self, from: Data("""
 """.utf8))
 assert(tipOffer.guestTipping?.tipping.quote(for: 1000)?.totalCents == 1061)
 assert(tipOffer.guestTipping?.tipping.amounts.suggested == 1000)
+// A sliding-scale cover: the guest picks from min to max, amount_cents is the suggested amount.
+let sliding = try ClipOffer.decoder().decode(ClipOffer.self, from: Data("""
+{"kind":"cover","venue_id":"\(venueID)","sign_in_required":false,"cover":{"night":"2026-10-09","amount_cents":1500,
+"fee_cents":50,"total_cents":1647,"currency":"usd","tiers":[],"payable":true,"provider":"stripe","guest_checkout":true,
+"scale":{"min_cents":500,"max_cents":3000,"suggested_cents":1500}}}
+""".utf8))
+assert(sliding.cover?.scale == ClipOffer.Cover.Scale(minCents: 500, maxCents: 3000, suggestedCents: 1500))
+assert(coverOffer.cover?.scale == nil)
 // A card without `clip` (pings, older APIs) still decodes.
 let plain = try ClipOffer.decoder().decode(ClipCard.self, from: fixture)
 assert(plain.clip == nil)
@@ -155,4 +163,12 @@ let nextPoster = try ClipCoverPoster.decoder().decode(ClipCoverPoster.self, from
 """.utf8))
 assert(!nextPoster.opensCheckout)
 assert(nextPoster.nextNightNotice == "Nothing's on tonight. Next: Fri, Nov 20 · Drag Bingo · $10 cover", nextPoster.nextNightNotice ?? "nil")
+let slidingPoster = try ClipCoverPoster.decoder().decode(ClipCoverPoster.self, from: Data("""
+{"code":"3XyZ0abC","audience":{"name":"Hot Mess"},"venue":{"id":"\(venueID)","name":"Purr","path":"/venues/\(venueID)"},
+"tonight":{"night":"2026-11-17","tonight":true,"event":null,"cover":null},
+"next":{"night":"2026-11-20","tonight":false,"event":null,
+"cover":{"night":"2026-11-20","event_id":null,"amount_cents":1500,"fee_cents":0,"total_cents":1500,"currency":"usd",
+"tiers":[],"payable":false,"guest_checkout":false,"scale":{"min_cents":500,"max_cents":3000,"suggested_cents":1500}}}}
+""".utf8))
+assert(slidingPoster.nextNightNotice?.hasSuffix("$5–$30 cover, pay what you can") == true, slidingPoster.nextNightNotice ?? "nil")
 print("App Clip cover poster checks passed")

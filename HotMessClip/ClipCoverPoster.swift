@@ -47,8 +47,14 @@ struct ClipCoverPoster: Decodable, Equatable, Sendable {
         var parts = ["Next: \(ClipCoverPoster.dayLabel(next.night))"]
         if let name = next.event?.name { parts.append(name) }
         if let cover = next.cover {
-            parts.append(String(format: "$%@ cover", cover.amountCents % 100 == 0
-                ? "\(cover.amountCents / 100)" : String(format: "%.2f", Double(cover.amountCents) / 100)))
+            func dollars(_ cents: Int) -> String {
+                "$" + (cents % 100 == 0 ? "\(cents / 100)" : String(format: "%.2f", Double(cents) / 100))
+            }
+            if let scale = cover.scale {
+                parts.append("\(dollars(scale.minCents))–\(dollars(scale.maxCents)) cover, pay what you can")
+            } else {
+                parts.append("\(dollars(cover.amountCents)) cover")
+            }
         }
         return "Nothing's on tonight. " + parts.joined(separator: " · ")
     }
