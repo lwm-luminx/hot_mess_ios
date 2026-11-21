@@ -234,8 +234,11 @@ struct ClipCoverPicker: View {
     @Bindable var checkout: ClipCheckout
     let done: (ClipCheckout.CoverResult) -> Void
     @State private var tier: CoverTier?
+    @State private var pickedCents: Int?
 
     private var charge: CoverCharge? { details.coverCharge }
+    /// What they picked on a sliding scale, the suggested amount until they move it.
+    private var chosenCents: Int? { charge?.scale.map { $0.clamped(pickedCents ?? $0.suggested.cents) } }
     private var venue: ClipVenue? { details.venue }
 
     var body: some View {
@@ -253,25 +256,30 @@ struct ClipCoverPicker: View {
                     Text("Doors \(from)\(charge.until.flatMap(CoverFormat.time).map { " · until \($0)" } ?? "")")
                         .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
                 }
-                VStack(spacing: 8) {
-                    tierRow(name: "General admission", detail: nil, price: charge.price, selected: tier == nil) { tier = nil }
-                    ForEach(charge.tiers ?? []) { item in
-                        tierRow(name: item.name, detail: item.description, price: item.price, selected: tier == item) { tier = item }
+                if let scale = charge.scale, let chosenCents {
+                    ClipAmountStepper(scale: scale, cents: chosenCents, hasFee: charge.fee.cents > 0,
+                                      disabled: checkout.busy) { pickedCents = $0 }
+                } else {
+                    VStack(spacing: 8) {
+                        tierRow(name: "General admission", detail: nil, price: charge.price, selected: tier == nil) { tier = nil }
+                        ForEach(charge.tiers ?? []) { item in
+                            tierRow(name: item.name, detail: item.description, price: item.price, selected: tier == item) { tier = item }
+                        }
                     }
-                }
-                let total = tier?.total ?? charge.total
-                let fee = tier.map { Money(cents: $0.total.cents - $0.amount.cents, currency: $0.total.currency) } ?? charge.fee
-                HStack {
-                    Text("1 person").font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
-                    Spacer()
-                    Text(fee.cents > 0 ? "\(total.formatted) total, includes a \(fee.formatted) fee" : "\(total.formatted) total")
-                        .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                    let total = tier?.total ?? charge.total
+                    let fee = tier.map { Money(cents: $0.total.cents - $0.amount.cents, currency: $0.total.currency) } ?? charge.fee
+                    HStack {
+                        Text("1 person").font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                        Spacer()
+                        Text(fee.cents > 0 ? "\(total.formatted) total, includes a \(fee.formatted) fee" : "\(total.formatted) total")
+                            .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                    }
                 }
                 if checkout.busy {
                     ProgressView("Processing…").tint(ClipTheme.accentInk).frame(maxWidth: .infinity).frame(height: 50)
                 } else {
                     ClipApplePayButton(label: .checkout) {
-                        Task { done(await checkout.payCover(venue: venue, tier: tier)) }
+                        Task { done(await checkout.payCover(venue: venue, tier: tier, amountCents: chosenCents)) }
                     }
                 }
                 ClipFinePrint(text: Text("Refundable until the door scans it. Paid to \(venue.name) through Hot Mess. [Terms](https://hotmess.social/terms/)"))
@@ -579,6 +587,10 @@ struct ClipGuestCoverPicker: View {
     @Bindable var checkout: ClipCheckout
     let done: (ClipCheckout.CoverResult) -> Void
     @State private var tier: ClipOffer.Tier?
+    @State private var pickedCents: Int?
+
+    /// What they picked on a sliding scale, the suggested amount until they move it.
+    private var chosenCents: Int? { cover.coverScale.map { $0.clamped(pickedCents ?? $0.suggested.cents) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -588,31 +600,85 @@ struct ClipGuestCoverPicker: View {
                 Text("Doors \(from)\(cover.coverUntil.flatMap(CoverFormat.time).map { " · until \($0)" } ?? "")")
                     .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
             }
-            VStack(spacing: 8) {
-                ClipTierRow(name: "General admission", detail: nil, price: cover.total.formatted, selected: tier == nil,
-                            disabled: checkout.busy) { tier = nil }
-                ForEach(cover.tiers) { item in
-                    ClipTierRow(name: item.name, detail: item.description, price: item.total(cover.currency).formatted,
-                                selected: tier == item, disabled: checkout.busy) { tier = item }
+            if let scale = cover.coverScale, let chosenCents {
+                ClipAmountStepper(scale: scale, cents: chosenCents, hasFee: cover.feeCents > 0,
+                                  disabled: checkout.busy) { pickedCents = $0 }
+            } else {
+                VStack(spacing: 8) {
+                    ClipTierRow(name: "General admission", detail: nil, price: cover.total.formatted, selected: tier == nil,
+                                disabled: checkout.busy) { tier = nil }
+                    ForEach(cover.tiers) { item in
+                        ClipTierRow(name: item.name, detail: item.description, price: item.total(cover.currency).formatted,
+                                    selected: tier == item, disabled: checkout.busy) { tier = item }
+                    }
                 }
-            }
-            let total = tier?.total(cover.currency) ?? cover.total
-            let fee = tier?.fee(cover.currency) ?? cover.fee
-            HStack {
-                Text("1 person").font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
-                Spacer()
-                Text(fee.cents > 0 ? "\(total.formatted) total, includes a \(fee.formatted) fee" : "\(total.formatted) total")
-                    .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                let total = tier?.total(cover.currency) ?? cover.total
+                let fee = tier?.fee(cover.currency) ?? cover.fee
+                HStack {
+                    Text("1 person").font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                    Spacer()
+                    Text(fee.cents > 0 ? "\(total.formatted) total, includes a \(fee.formatted) fee" : "\(total.formatted) total")
+                        .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+                }
             }
             if checkout.busy {
                 ProgressView("Processing…").tint(ClipTheme.accentInk).frame(maxWidth: .infinity).frame(height: 50)
             } else {
                 ClipApplePayButton(label: .checkout) {
-                    Task { done(await checkout.payGuestCover(venueID: venueID, venueName: title, night: cover.night, tier: tier)) }
+                    Task {
+                        done(await checkout.payGuestCover(venueID: venueID, venueName: title, night: cover.night, tier: tier,
+                                                          amountCents: chosenCents))
+                    }
                 }
             }
             ClipFinePrint(text: Text("No account needed. Paid to \(title) through Hot Mess. Sign in afterwards to keep the pass in Hot Mess. [Terms](https://hotmess.social/terms/)"))
         }
+    }
+}
+
+/// A sliding-scale cover's amount, shared by the member and guest pickers:
+/// minus and plus a dollar at a time, from the suggested amount. Apple Pay's
+/// sheet shows the all-in total with fees.
+struct ClipAmountStepper: View {
+    let scale: CoverScale
+    let cents: Int
+    let hasFee: Bool
+    var disabled = false
+    let onChange: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Pay what you can").font(.system(size: 15, weight: .semibold)).foregroundStyle(ClipTheme.ink)
+            HStack(spacing: 16) {
+                button("minus", label: "Less", enabled: cents > scale.min.cents) { onChange(scale.step(cents, by: -1)) }
+                Text(CoverFormat.price(cents: cents, currency: scale.suggested.currency))
+                    .font(.system(size: 32, weight: .heavy)).monospacedDigit().foregroundStyle(ClipTheme.ink)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Amount")
+                    .accessibilityValue(CoverFormat.price(cents: cents, currency: scale.suggested.currency))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: onChange(scale.step(cents, by: 1))
+                        case .decrement: onChange(scale.step(cents, by: -1))
+                        @unknown default: break
+                        }
+                    }
+                button("plus", label: "More", enabled: cents < scale.max.cents) { onChange(scale.step(cents, by: 1)) }
+            }
+            Text("\(scale.range), \(scale.suggested.formatted) suggested\(hasFee ? ". Fees are added at checkout." : "")")
+                .font(.system(size: 13)).foregroundStyle(ClipTheme.inkMuted)
+        }
+    }
+
+    private func button(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 18, weight: .bold)).frame(width: 44, height: 44)
+        }
+        .buttonStyle(.bordered)
+        .clipShape(Circle())
+        .tint(ClipTheme.accent)
+        .disabled(disabled || !enabled)
+        .accessibilityLabel(label)
     }
 }
 

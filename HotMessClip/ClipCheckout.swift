@@ -36,13 +36,14 @@ final class ClipCheckout {
         case failed(String)
     }
 
-    /// One admission for tonight at `venue`, in `tier` or general admission.
-    func payCover(venue: ClipVenue, tier: CoverTier?) async -> CoverResult {
+    /// One admission for tonight at `venue`, in `tier` or general admission;
+    /// `amountCents` is what they picked on a sliding scale.
+    func payCover(venue: ClipVenue, tier: CoverTier?, amountCents: Int? = nil) async -> CoverResult {
         guard !busy else { return .canceled }
         busy = true
         defer { busy = false }
         do {
-            let purchase = try await api.buyCover(venueID: venue.id, tier: tier?.id)
+            let purchase = try await api.buyCover(venueID: venue.id, tier: tier?.id, amountCents: amountCents)
             switch purchase.nextStep {
             case .showPass:
                 return .paid(purchase.admission)
@@ -109,14 +110,15 @@ final class ClipCheckout {
     /// the claim token in the keychain, pay with Apple Pay, then confirm. A
     /// canceled or failed payment forgets the token; the pending admission
     /// stays the API's, as an abandoned member checkout does.
-    func payGuestCover(venueID: UUID, venueName: String, night: String, tier: ClipOffer.Tier?) async -> CoverResult {
+    func payGuestCover(venueID: UUID, venueName: String, night: String, tier: ClipOffer.Tier?,
+                       amountCents: Int? = nil) async -> CoverResult {
         guard !busy else { return .canceled }
         busy = true
         defer { busy = false }
         var token: String?
         do {
             let request = try paymentRequestReady()
-            let started = try await guest.startCover(venueID: venueID, tier: tier?.id)
+            let started = try await guest.startCover(venueID: venueID, tier: tier?.id, amountCents: amountCents)
             token = started.claimToken
             store(GuestPurchase(kind: .cover, id: started.record.id, claimToken: started.claimToken,
                                 host: guest.client.configuration.host, venueID: venueID.uuidString,

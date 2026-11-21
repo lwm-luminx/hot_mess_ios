@@ -427,3 +427,43 @@ struct CoverFormattingTests {
         #expect(!EventDetail(event: event, coverCharge: friday).isCoverTonight)
     }
 }
+
+@Suite("Sliding-scale cover")
+struct CoverScaleTests {
+    static let json = """
+    {"amount":{"cents":1500,"currency":"usd"},"fee":{"cents":50,"currency":"usd"},"total":{"cents":1647,"currency":"usd"},
+     "night":"2026-11-21","from":"21:00","until":null,"payable":true,
+     "scale":{"min":{"cents":500,"currency":"usd"},"max":{"cents":3000,"currency":"usd"},"suggested":{"cents":1500,"currency":"usd"}}}
+    """
+
+    @Test("Decodes the range and shows it instead of one price")
+    func decodes() throws {
+        let charge = try decode(CoverCharge.self, from: Self.json)
+        #expect(charge.scale?.min.cents == 500)
+        #expect(charge.scale?.max.cents == 3000)
+        #expect(charge.scale?.suggested.cents == 1500)
+        #expect(charge.price == "$5–$30")
+        #expect(charge.summary(isTonight: true).contains("$5–$30"))
+    }
+
+    @Test("A fixed cover has no scale")
+    func fixed() throws {
+        let charge = try decode(CoverCharge.self, from: """
+        {"amount":{"cents":1000},"fee":{"cents":50},"total":{"cents":1112},"night":"2026-11-21","payable":true}
+        """)
+        #expect(charge.scale == nil)
+        #expect(charge.price == "$11.12")
+    }
+
+    @Test("Steps a dollar at a time and stays in range")
+    func steps() {
+        let scale = CoverScale(min: Money(cents: 550), max: Money(cents: 3000), suggested: Money(cents: 1500))
+        #expect(scale.step(1500, by: 1) == 1600)
+        #expect(scale.step(1500, by: -1) == 1400)
+        #expect(scale.step(1550, by: -1) == 1500)
+        #expect(scale.step(600, by: -1) == 550)
+        #expect(scale.step(2950, by: 1) == 3000)
+        #expect(scale.step(3000, by: 1) == 3000)
+        #expect(scale.clamped(100) == 550)
+    }
+}

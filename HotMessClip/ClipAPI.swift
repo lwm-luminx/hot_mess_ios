@@ -28,9 +28,10 @@ struct ClipAPI: Sendable {
 
     // MARK: Cover
 
-    func buyCover(venueID: UUID, tier: String?) async throws -> CoverPurchase {
+    func buyCover(venueID: UUID, tier: String?, amountCents: Int? = nil) async throws -> CoverPurchase {
         var variables: [String: GraphQLValue] = ["venueId": .string(venueID.uuidString), "quantity": .int(1)]
         if let tier { variables["tier"] = .string(tier) }
+        if let amountCents { variables["amount"] = .object(["cents": .int(amountCents), "currency": .string("usd")]) }
         return try await query(Documents.buyCover, variables: variables, as: PurchaseResponse.self).buyCover
     }
 
@@ -114,6 +115,7 @@ struct ClipAPI: Sendable {
         amount { cents currency } fee { cents currency } total { cents currency }
         night from until payable payment_mechanisms: paymentMechanisms
         tiers { id name amount { cents currency } total { cents currency } description }
+        scale { min { cents currency } max { cents currency } suggested { cents currency } }
         """
         static let venueFields = """
         id name description
@@ -139,8 +141,8 @@ struct ClipAPI: Sendable {
         square_location_id: squareLocationId
         """
         static let buyCover = """
-        mutation ClipBuyCover($venueId: ID!, $quantity: Int, $tier: String) {
-          buyCover(input: {venueId: $venueId, quantity: $quantity, tier: $tier}) { \(purchaseFields) }
+        mutation ClipBuyCover($venueId: ID!, $quantity: Int, $tier: String, $amount: MoneyInput) {
+          buyCover(input: {venueId: $venueId, quantity: $quantity, tier: $tier, amount: $amount}) { \(purchaseFields) }
         }
         """
         static let confirmCover = """
@@ -281,9 +283,10 @@ struct ClipGuestAPI: Sendable {
 
     private var host: String? { client.configuration.host }
 
-    func startCover(venueID: UUID, tier: String?, quantity: Int = 1) async throws -> GuestStart<GuestAdmission> {
+    func startCover(venueID: UUID, tier: String?, quantity: Int = 1, amountCents: Int? = nil) async throws -> GuestStart<GuestAdmission> {
         var body: [String: GraphQLValue] = ["venue_id": .string(venueID.uuidString.lowercased()), "quantity": .int(quantity)]
         if let tier { body["tier"] = .string(tier) }
+        if let amountCents { body["amount_cents"] = .int(amountCents) }
         return try await post("/v1/clip/covers", body)
     }
 
@@ -389,6 +392,16 @@ struct GuestTip: Decodable, Sendable {
 extension ClipOffer.Cover {
     var total: Money { Money(cents: totalCents, currency: currency) }
     var fee: Money { Money(cents: feeCents, currency: currency) }
+    /// Its sliding scale as the app's ``CoverScale``.
+    var coverScale: CoverScale? {
+        scale.map {
+            CoverScale(min: Money(cents: $0.minCents, currency: currency),
+                       max: Money(cents: $0.maxCents, currency: currency),
+                       suggested: Money(cents: $0.suggestedCents, currency: currency))
+        }
+    }
+    /// The all-in price, or the range on a sliding scale.
+    var price: String { coverScale?.range ?? total.formatted }
 }
 
 extension ClipOffer.Tier {

@@ -29,6 +29,16 @@ struct ClipOffer: Decodable, Equatable, Sendable {
         let provider: String?
         let guestCheckout: Bool
         let maxQuantity: Int?
+        /// A sliding scale's range, when the guest picks what to pay;
+        /// `amountCents` is then the suggested amount.
+        let scale: Scale?
+
+        /// The clip view's `scale`: cents, before fees.
+        struct Scale: Decodable, Equatable, Sendable {
+            let minCents: Int
+            let maxCents: Int
+            let suggestedCents: Int
+        }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -45,11 +55,12 @@ struct ClipOffer: Decodable, Equatable, Sendable {
             provider = try container.decodeIfPresent(String.self, forKey: .provider)
             guestCheckout = try container.decodeIfPresent(Bool.self, forKey: .guestCheckout) ?? false
             maxQuantity = try container.decodeIfPresent(Int.self, forKey: .maxQuantity)
+            scale = try container.decodeIfPresent(Scale.self, forKey: .scale)
         }
 
         private enum CodingKeys: String, CodingKey {
             case night, eventId, amountCents, feeCents, totalCents, currency, coverFrom, coverUntil, tiers
-            case payable, provider, guestCheckout, maxQuantity
+            case payable, provider, guestCheckout, maxQuantity, scale
         }
     }
 
