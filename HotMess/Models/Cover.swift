@@ -106,6 +106,31 @@ struct CoatCheckCharge: Decodable, Hashable, Sendable {
     }
 }
 
+/// A sliding-scale cover's range (the API's `CoverScale`): the buyer picks
+/// what to pay from `min` to `max`, starting at `suggested`. Amounts are what
+/// the venue gets, before fees.
+struct CoverScale: Decodable, Hashable, Sendable {
+    let min: Money
+    let max: Money
+    let suggested: Money
+
+    /// The step the picker moves in: a dollar, or the whole range when it's smaller.
+    static let stepCents = 100
+
+    /// `cents` kept inside the range.
+    func clamped(_ cents: Int) -> Int { Swift.min(Swift.max(cents, min.cents), max.cents) }
+
+    /// One step up or down from `cents`, landing on whole dollars and staying in range.
+    func step(_ cents: Int, by direction: Int) -> Int {
+        let step = Self.stepCents
+        let next = direction > 0 ? (cents / step + 1) * step : ((cents + step - 1) / step - 1) * step
+        return clamped(next)
+    }
+
+    /// "$5–$30".
+    var range: String { "\(min.formatted)–\(max.formatted)" }
+}
+
 /// What it costs to get into a venue on a night. The app shows `total`, the
 /// all-in price, and takes it in the app when `payable`; otherwise it's paid
 /// at the door.
@@ -130,12 +155,16 @@ struct CoverCharge: Decodable, Hashable, Sendable {
     let tiers: [CoverTier]?
     /// Optional coat check service for the night.
     let coatCheck: CoatCheckCharge?
+    /// Its sliding scale, when the buyer picks what to pay; `amount` is then
+    /// the suggested amount.
+    let scale: CoverScale?
 
     enum CodingKeys: String, CodingKey {
         case amount, fee, total, night, from, until, payable
         case paymentMechanisms = "payment_mechanisms"
         case tiers
         case coatCheck = "coat_check"
+        case scale
     }
 
     init(
@@ -148,7 +177,8 @@ struct CoverCharge: Decodable, Hashable, Sendable {
         payable: Bool,
         paymentMechanisms: [String]? = nil,
         tiers: [CoverTier]? = nil,
-        coatCheck: CoatCheckCharge? = nil
+        coatCheck: CoatCheckCharge? = nil,
+        scale: CoverScale? = nil
     ) {
         self.amount = amount
         self.fee = fee
@@ -160,6 +190,7 @@ struct CoverCharge: Decodable, Hashable, Sendable {
         self.paymentMechanisms = paymentMechanisms ?? (payable ? ["apple_pay", "card"] : [])
         self.tiers = tiers
         self.coatCheck = coatCheck
+        self.scale = scale
     }
 
     init(from decoder: any Decoder) throws {
@@ -176,9 +207,11 @@ struct CoverCharge: Decodable, Hashable, Sendable {
             ?? (payable ? ["apple_pay", "card"] : [])
         tiers = try container.decodeIfPresent([CoverTier].self, forKey: .tiers)
         coatCheck = try container.decodeIfPresent(CoatCheckCharge.self, forKey: .coatCheck)
+        scale = try container.decodeIfPresent(CoverScale.self, forKey: .scale)
     }
 
-    var price: String { total.formatted }
+    /// The all-in price, or the range on a sliding scale ("$5–$30").
+    var price: String { scale?.range ?? total.formatted }
 
     var hasOtherPaymentMechanisms: Bool {
         paymentMechanisms.contains { $0 != "apple_pay" }
@@ -200,6 +233,13 @@ struct CoverCharge: Decodable, Hashable, Sendable {
     /// "Cover $11.12 tonight · from 9 PM", or with the night instead of
     /// "tonight" for another night.
     func summary(isTonight: Bool) -> String {
+        if let scale {
+            let cover = isTonight
+                ? String(localized: "Cover \(scale.range) tonight, pay what you can")
+                : String(localized: "Cover \(scale.range), pay what you can · \(CoverFormat.night(night))")
+            guard let start = from.flatMap(CoverFormat.time) else { return cover }
+            return String(localized: "\(cover) · from \(start)")
+        }
         let cover = isTonight
             ? String(localized: "Cover \(price) tonight")
             : String(localized: "Cover \(price) · \(CoverFormat.night(night))")

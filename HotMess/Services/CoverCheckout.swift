@@ -13,7 +13,7 @@ import UIKit
 
 /// Shared by the full app and its App Clip; both run the same provider checkout.
 protocol CoverPaymentAPI: Sendable {
-    func buyCover(venueID: UUID, quantity: Int, tier: String?) async throws -> CoverPurchase
+    func buyCover(venueID: UUID, quantity: Int, tier: String?, amountCents: Int?) async throws -> CoverPurchase
     func buyCoatCheck(venueID: UUID, quantity: Int) async throws -> CoverPurchase
     func payCover(admissionID: String, sourceID: String, verificationToken: String?) async throws -> Admission
     func confirmCover(admissionID: String) async throws -> Admission
@@ -62,14 +62,14 @@ final class CoverCheckout {
     func isPaying(for venueID: UUID) -> Bool { payingVenueID == venueID }
 
     /// Pays tonight's cover at a venue and shows the pass once it's paid.
-    func pay(venueID: UUID, venueName: String, quantity: Int = 1, tier: String? = nil) async {
+    func pay(venueID: UUID, venueName: String, quantity: Int = 1, tier: String? = nil, amountCents: Int? = nil) async {
         guard payingVenueID == nil else { return }
 
         payingVenueID = venueID
         defer { payingVenueID = nil }
 
         do {
-            let purchase = try await api.buyCover(venueID: venueID, quantity: quantity, tier: tier)
+            let purchase = try await api.buyCover(venueID: venueID, quantity: quantity, tier: tier, amountCents: amountCents)
 
             switch purchase.nextStep {
             case .showPass:
@@ -109,14 +109,14 @@ final class CoverCheckout {
     }
 
     /// Triggers Apple Pay directly, presenting the native Apple Pay sheet.
-    func payWithApplePay(venueID: UUID, venueName: String, quantity: Int = 1, tier: String? = nil) async {
+    func payWithApplePay(venueID: UUID, venueName: String, quantity: Int = 1, tier: String? = nil, amountCents: Int? = nil) async {
         guard payingVenueID == nil else { return }
 
         payingVenueID = venueID
         defer { payingVenueID = nil }
 
         do {
-            let purchase = try await api.buyCover(venueID: venueID, quantity: quantity, tier: tier)
+            let purchase = try await api.buyCover(venueID: venueID, quantity: quantity, tier: tier, amountCents: amountCents)
 
             switch purchase.nextStep {
             case .showPass:
