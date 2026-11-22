@@ -1,0 +1,45 @@
+name: CodeQL
+
+# Code scanning weekly, on promotion pull requests into main, and by hand, instead of GitHub's default setup on every push and pull request (its Swift scan
+# ran on macOS runners and was about a third of the org's Actions spend). Results go to the Security tab as before.
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: actions, build-mode: none, os: ubuntu-latest }
+          - { language: javascript-typescript, build-mode: none, os: ubuntu-latest }
+          - { language: python, build-mode: none, os: ubuntu-latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v4
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
