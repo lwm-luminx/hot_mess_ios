@@ -1,11 +1,12 @@
+import AudienceKit
 import SwiftUI
 
 struct KaraokeSection: View {
     let karaoke: KaraokeNight
     /// Where the event is, whose page takes AudienceKit's own karaoke signups.
     var venue: Venue? = nil
-    /// Who's hosting, for "Ask Sequoia how to join"; nil says "the host".
-    var hostName: String? = nil
+    /// Who's hosting, for "Sign up in person with Dalton"; empty says "the host".
+    var hostNames: [String] = []
     @State private var showingJoinCode = false
 
     private var joinTitle: String {
@@ -22,12 +23,8 @@ struct KaraokeSection: View {
         return String(localized: "Sign up to sing on the venue's page, or in its chat once you're there.")
     }
 
-    private var askHost: String {
-        if let hostName, !hostName.isEmpty {
-            return String(localized: "Ask \(hostName) how to join the karaoke session.")
-        }
-        return String(localized: "Ask the host how to join the karaoke session.")
-    }
+    /// A partner's night with no code (KaraFun run by the host): no queue in the app, singers sign up with the host.
+    private var signUpInPerson: String { KaraokeSignUpInPerson.text(hostNames: hostNames) }
 
     var body: some View {
         DetailSection(String(localized: "Karaoke")) {
@@ -50,7 +47,8 @@ struct KaraokeSection: View {
                 }
             } else {
                 Label(String(localized: "Karaoke night"), systemImage: "music.mic")
-                Text(askHost).foregroundStyle(.secondary)
+                Label(signUpInPerson, systemImage: "person.wave.2")
+                    .accessibilityIdentifier("karaoke.signUpInPerson")
             }
         }
         .sheet(isPresented: $showingJoinCode) {

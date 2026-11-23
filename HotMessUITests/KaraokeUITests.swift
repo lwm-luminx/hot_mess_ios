@@ -33,14 +33,21 @@ final class KaraokeUITests: XCTestCase {
     func testDisconnectedKaraokeHasBadgeAndInstructionsButNoBrokenLink() {
         let app = open("disconnected")
         XCTAssertTrue(app.descendants(matching: .any)["karaoke.badge"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Ask the host how to join the karaoke session."].exists)
+        XCTAssertTrue(app.staticTexts["Sign up in person with the host"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["karaoke.songSearch"].exists)
+    }
+    func testKaraFunWithNoCodeSignsUpInPersonOnly() {
+        let app = open("karafun-nocode")
+        XCTAssertTrue(app.staticTexts["Sign up in person with the host"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["karaoke.songSearch"].exists)
     }
     func testAudienceKitKaraokePointsToTheVenueToSignUp() {
         let app = open("audiencekit")
         XCTAssertTrue(app.descendants(matching: .any)["karaoke.badge"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["karaoke.signUpPointer"].exists)
-        XCTAssertFalse(app.staticTexts["Ask the host how to join the karaoke session."].exists)
+        XCTAssertFalse(app.staticTexts["Sign up in person with the host"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
     }
     func testOrdinaryEventHasNoKaraokeBadgeOrSession() {

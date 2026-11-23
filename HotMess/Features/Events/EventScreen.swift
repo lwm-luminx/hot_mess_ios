@@ -111,7 +111,7 @@ struct EventScreen: View {
                             )
                             .audiencePreset(model.brand.preset)
                         } else if let karaoke = event.karaoke, lineupModel?.hasLoaded != false {
-                            KaraokeSection(karaoke: karaoke, venue: event.venue)
+                            KaraokeSection(karaoke: karaoke, venue: event.venue, hostNames: detail.hosts.map(\.name))
                         }
 
                         // On the night, song requests too, when the venue takes them.
