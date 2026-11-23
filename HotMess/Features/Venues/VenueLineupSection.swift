@@ -45,6 +45,15 @@ struct VenueLineupSection: View {
                 )
             }
 
+            // Its KJ, DJ or VJ beside the host: "KJ Dalton", "Your KJ tonight".
+            ForEach(lineup.featuredJockeys, id: \.id) { jockey in
+                VenueHostRow(
+                    host: jockey,
+                    onSelect: jockey.personID.map { id in { model.push(.person(id)) } },
+                    caption: lineup.jockeyCaption
+                )
+            }
+
             VenueLineupStrip(lineup: lineup, additions: additions, onSelect: { entry in
                 if let id = entry.personID { model.push(.person(id)) }
             }, onSelectPerson: { person in

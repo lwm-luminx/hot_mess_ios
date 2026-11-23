@@ -2234,6 +2234,11 @@ type Audience implements IRelay & Node {
   posts: IAudiencePosts! @endpoint(in: [AUDIENCE, STAFF])
 
   """
+  The privacy choices its apps show and the privacy pass it sells (doc/PRIVACY_CHOICES.md).
+  """
+  privacyOffer: PrivacyOffer! @endpoint(in: [AUDIENCE, STAFF])
+
+  """
   Whether people may show a tribe to everyone. Off (the default), a tribe shows
   only to the people who share it and apps offer no public choice.
   """
@@ -3997,6 +4002,11 @@ type BannerPhoto implements HasPhotoFocus {
   How much of it has text in it, 0..1; null before it has been looked at.
   """
   textCoverage: Float
+
+  """
+  A copy with its text painted out by an image model, to show behind your own words; null when there is none.
+  """
+  textFreeUrl: PhotoURL
 
   """
   The image.
@@ -8613,6 +8623,37 @@ type EventPeopleView implements IEventPeople {
   ): PersonConnection!
 
   """
+  What its jockeys are billed as, by its kind of night: KJ (karaoke), VJ (video
+  or visuals) or DJ (anything else), as in "KJ Dalton".
+  """
+  jockeyLabel: String!
+
+  """
+  Who runs its music or screens: its KJ, DJ or VJ (jockeyLabel says which). Also on its lineup, not on its hosts.
+  """
+  jockeys(
+    """
+    Returns the elements in the list that come after the specified cursor.
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor.
+    """
+    before: String
+
+    """
+    Returns the first _n_ elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last _n_ elements from the list.
+    """
+    last: Int
+  ): PersonConnection!
+
+  """
   The latest earlier event at its venue with a lineup to copy (its lineupFile):
   one of its series, else one with its name. Null when there's none, and for
   anyone not working the show.
@@ -9042,7 +9083,8 @@ type EventPlaylist {
   Its songs in the playlist's order (up to 500), so the venue can shuffle it
   itself and show what plays next. Null when Spotify's catalog isn't available,
   or for a playlist no connected Spotify account (a performer's, the venue's or
-  the audience's) can read.
+  the audience's) can read and the event's lineup has none of its songs (its
+  playlist or sing-along segment).
   """
   tracks: [PlaylistTrack!]
 
@@ -9380,6 +9422,36 @@ type EventSeriesPeopleView implements IEventSeriesPeople {
   Its default hosts.
   """
   hosts(
+    """
+    Returns the elements in the list that come after the specified cursor.
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor.
+    """
+    before: String
+
+    """
+    Returns the first _n_ elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last _n_ elements from the list.
+    """
+    last: Int
+  ): PersonConnection!
+
+  """
+  What its jockeys are billed as: KJ on a karaoke series, VJ for video or visuals, else DJ.
+  """
+  jockeyLabel: String!
+
+  """
+  Its default jockeys (KJ, DJ or VJ): each occurrence gets them, as its hosts.
+  """
+  jockeys(
     """
     Returns the elements in the list that come after the specified cursor.
     """
@@ -10928,6 +11000,11 @@ interface HasPhotoFocus {
   How much of it has text in it, 0..1; null before it has been looked at.
   """
   textCoverage: Float
+
+  """
+  A copy with its text painted out by an image model, to show behind your own words; null when there is none.
+  """
+  textFreeUrl: PhotoURL
 
   """
   Its width in pixels, upright; null before it has been looked at.
@@ -12484,6 +12561,37 @@ interface IEventPeople @mixin(extensionKey: "people", field: "people", null: fal
   ): PersonConnection!
 
   """
+  What its jockeys are billed as, by its kind of night: KJ (karaoke), VJ (video
+  or visuals) or DJ (anything else), as in "KJ Dalton".
+  """
+  jockeyLabel: String!
+
+  """
+  Who runs its music or screens: its KJ, DJ or VJ (jockeyLabel says which). Also on its lineup, not on its hosts.
+  """
+  jockeys(
+    """
+    Returns the elements in the list that come after the specified cursor.
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor.
+    """
+    before: String
+
+    """
+    Returns the first _n_ elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last _n_ elements from the list.
+    """
+    last: Int
+  ): PersonConnection!
+
+  """
   The latest earlier event at its venue with a lineup to copy (its lineupFile):
   one of its series, else one with its name. Null when there's none, and for
   anyone not working the show.
@@ -12683,13 +12791,43 @@ interface IEventRSVP @mixin(extensionKey: "rsvp", field: "rsvp", null: false, on
 }
 
 """
-Who hosts a series' occurrences.
+Who hosts a series' occurrences, and who's their KJ, DJ or VJ.
 """
 interface IEventSeriesPeople @mixin(extensionKey: "people", field: "people", null: false, on: ["EventSeries"]) {
   """
   Its default hosts.
   """
   hosts(
+    """
+    Returns the elements in the list that come after the specified cursor.
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor.
+    """
+    before: String
+
+    """
+    Returns the first _n_ elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last _n_ elements from the list.
+    """
+    last: Int
+  ): PersonConnection!
+
+  """
+  What its jockeys are billed as: KJ on a karaoke series, VJ for video or visuals, else DJ.
+  """
+  jockeyLabel: String!
+
+  """
+  Its default jockeys (KJ, DJ or VJ): each occurrence gets them, as its hosts.
+  """
+  jockeys(
     """
     Returns the elements in the list that come after the specified cursor.
     """
@@ -14501,6 +14639,18 @@ interface IVenuePeople @mixin(extensionKey: "people", field: "people", null: fal
   hostsTonight: [Person!]!
 
   """
+  What jockeysTonight are billed as, by the kind of night under way: KJ, DJ or VJ. Null with no event under way.
+  """
+  jockeyLabelTonight: String
+
+  """
+  Who's the KJ, DJ or VJ here now, for the apps' host row beside hostsTonight:
+  the jockeys of the event under way (jockeyLabelTonight says which). Signed
+  out, only the Public ones.
+  """
+  jockeysTonight: [Person!]!
+
+  """
   The acts on a night that have a time (or have gone on), in running order.
   """
   lineup(
@@ -15097,6 +15247,16 @@ type Lineup implements Node {
   Its UUID.
   """
   id: ID!
+
+  """
+  What its event's jockeys are billed as (KJ, DJ or VJ); null for a zone's night.
+  """
+  jockeyLabel: String
+
+  """
+  Its event's jockeys (KJ, DJ or VJ): who runs the music or screens. Empty for a zone's night.
+  """
+  jockeys: [Person!]!
 
   """
   What it's billed as: its title, the event's name or the zone's.
@@ -18160,7 +18320,7 @@ Rockbot, Mood Media, TouchTunes).
 """
 type MusicLicenseOrganization {
   """
-  What its staff can do to playback from AudienceKit (controlVenueMusicService): skip, pause, play, volume.
+  What its staff can do to playback from AudienceKit (controlVenueMusicService): skip, pause, play, volume, block.
   """
   controls: [String!]!
 
@@ -19206,6 +19366,18 @@ type Mutation {
   ): ContactPhoneVerificationStartPayload @requires(permissions: ["users:write:self"])
 
   """
+  Starts paying for a privacy pass: no paid cards and every optional use of
+  their data off, for the audience's privacy pass days. Returns a Checkout page
+  to open in the browser. Nothing renews.
+  """
+  startPrivacyPass(
+    """
+    Parameters for PrivacyPassStart
+    """
+    input: PrivacyPassStartInput!
+  ): PrivacyPassStartPayload @requires(permissions: ["users:write:self"])
+
+  """
   Starts tipping a performer in the app, through their own Stripe or Square
   account (the IN_APP option of their tipping mixin). Stripe: finish with
   Stripe's payment sheet (paymentIntentClientSecret, on their account
@@ -19271,6 +19443,16 @@ type Mutation {
     """
     input: LineupTaskUpdateInput!
   ): LineupTaskUpdatePayload @requires(permissions: ["people:write:mine", "people:write:my_troupes", "events:write:venue", "users:write:self"])
+
+  """
+  Sets the signed-in member's privacy choices in this audience. Arguments left out stay as they are.
+  """
+  updatePrivacyChoices(
+    """
+    Parameters for PrivacyChoicesUpdate
+    """
+    input: PrivacyChoicesUpdateInput!
+  ): PrivacyChoicesUpdatePayload @requires(permissions: ["users:write:self"])
 
   """
   Adds where you are and what is going on to your open safety alert. Concerns
@@ -21249,6 +21431,11 @@ type Photo implements HasPhoto & HasPhotoFocus & Node {
   textCoverage: Float
 
   """
+  A copy with its text painted out by an image model, to show behind your own words; null when there is none.
+  """
+  textFreeUrl: PhotoURL
+
+  """
   Its width in pixels, upright; null before it has been looked at.
   """
   width: Int
@@ -22325,6 +22512,184 @@ enum Presence {
   Not in chat, but signed in on a device that gets push notifications.
   """
   PUSH
+}
+
+"""
+A privacy choice an audience's apps show its members (doc/PRIVACY_CHOICES.md). The apps put their own words to each.
+"""
+enum PrivacyChoiceKey {
+  """
+  Count me in sponsors' weekly viewer numbers. Offered unless the audience carries no paid cards.
+  """
+  AD_MEASUREMENT
+
+  """
+  Ads based on my activity (opt-in). Offered only on traditional ads.
+  """
+  PERSONALIZED_ADS
+
+  """
+  Pay for time with no paid cards and every optional use of my data off. Offered when the audience sets a price.
+  """
+  PRIVACY_PASS
+
+  """
+  Do not sell or share my personal information. Always offered, free.
+  """
+  SALE_SHARE_OPT_OUT
+}
+
+"""
+What the signed-in member chose about their data in this audience, and what is
+in force once a privacy pass is counted (doc/PRIVACY_CHOICES.md). Change them
+with updatePrivacyChoices.
+"""
+type PrivacyChoices {
+  """
+  Their choice to be counted in sponsors' weekly viewer numbers. On unless they turned it off.
+  """
+  adMeasurement: Boolean!
+
+  """
+  Whether they are counted now: adMeasurement, and no privacy pass running.
+  """
+  countedInAdMeasurement: Boolean!
+
+  """
+  Whether anything about them may be sold or shared for advertising. Nothing is
+  today; false once they opt out or hold a privacy pass.
+  """
+  mayShare: Boolean!
+
+  """
+  Their agreement to ads based on their activity. Off unless they turned it on; only traditional ads could use it.
+  """
+  personalizedAds: Boolean!
+
+  """
+  When their privacy pass ends (passes bought back to back count as one); null when none is running.
+  """
+  privacyPassUntil: ISO8601DateTime
+
+  """
+  How they opted out; null when they have not.
+  """
+  saleShareOptOutSource: SaleShareOptOutSource
+
+  """
+  Whether they opted out of selling or sharing their personal information.
+  """
+  saleShareOptedOut: Boolean!
+
+  """
+  When they opted out; opting out again keeps the first time.
+  """
+  saleShareOptedOutAt: ISO8601DateTime
+
+  """
+  When they last changed a choice; null if never.
+  """
+  updatedAt: ISO8601DateTime
+}
+
+"""
+Autogenerated input type of PrivacyChoicesUpdate
+"""
+input PrivacyChoicesUpdateInput {
+  """
+  Whether to count them in sponsors' weekly viewer numbers.
+  """
+  adMeasurement: Boolean
+
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+
+  """
+  Whether they agree to ads based on their activity.
+  """
+  personalizedAds: Boolean
+
+  """
+  True opts out of selling or sharing their personal information; false opts back in.
+  """
+  saleShareOptOut: Boolean
+}
+
+"""
+Autogenerated return type of PrivacyChoicesUpdate.
+"""
+type PrivacyChoicesUpdatePayload {
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+
+  """
+  Their choices as they now stand.
+  """
+  privacy: PrivacyChoices!
+}
+
+"""
+The privacy choices an audience's apps show and the privacy pass it sells (doc/PRIVACY_CHOICES.md).
+"""
+type PrivacyOffer {
+  """
+  The choices to show, in order. Opting out of selling or sharing is always first.
+  """
+  choices: [PrivacyChoiceKey!]!
+
+  """
+  What a privacy pass costs, in US cents; null when the audience sells none (or carries no paid cards for one to turn off).
+  """
+  passCents: Int
+
+  """
+  How many days one privacy pass lasts.
+  """
+  passDays: Int!
+
+  """
+  The price its admins set, whether or not a pass is offered now (an ad-free audience offers none); null when none is set.
+  """
+  passPriceCents: Int
+}
+
+"""
+Autogenerated input type of PrivacyPassStart
+"""
+input PrivacyPassStartInput {
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+
+  """
+  Where Checkout comes back to: a web address, or the app's own link (handed back through a page of ours).
+  """
+  returnUrl: String
+}
+
+"""
+Autogenerated return type of PrivacyPassStart.
+"""
+type PrivacyPassStartPayload {
+  """
+  The Stripe Checkout page to open.
+  """
+  checkoutUrl: String!
+
+  """
+  A unique identifier for the client performing the mutation.
+  """
+  clientMutationId: String
+
+  """
+  The pass, unpaid until Checkout completes.
+  """
+  passId: ID!
 }
 
 """
@@ -24748,6 +25113,21 @@ type SafetyPosterPrintPayload {
 }
 
 """
+How a member opted out of selling or sharing their personal information.
+"""
+enum SaleShareOptOutSource {
+  """
+  They chose it in an app or on the website.
+  """
+  CHOICE
+
+  """
+  Their browser or app sent a Global Privacy Control signal (Sec-GPC: 1), honoured as an opt-out.
+  """
+  GLOBAL_PRIVACY_CONTROL
+}
+
+"""
 One number in an act: drag sets are an act of N performances, each maybe by one
 of its performers and on a track from the back-of-house room.
 """
@@ -24877,6 +25257,11 @@ type ScreenBackdrop implements HasPhotoFocus {
   How much of it has text in it, 0..1; null before it has been looked at.
   """
   textCoverage: Float
+
+  """
+  A copy with its text painted out by an image model, to show behind your own words; null when there is none.
+  """
+  textFreeUrl: PhotoURL
 
   """
   The image.
@@ -28373,6 +28758,11 @@ type UserState {
   ping: IUserStatePing @endpoint(in: [AUDIENCE, STAFF])
 
   """
+  Their privacy choices in this audience (updatePrivacyChoices, doc/PRIVACY_CHOICES.md).
+  """
+  privacy: PrivacyChoices!
+
+  """
   Whether they get pushes about new messages in chat rooms they wrote in and
   left in the last 30 minutes (setRecentChatPush). On unless they turned it off.
   """
@@ -29732,6 +30122,18 @@ type VenuePeopleView implements IVenuePeople {
   on it), else none. Signed out, only the Public ones.
   """
   hostsTonight: [Person!]!
+
+  """
+  What jockeysTonight are billed as, by the kind of night under way: KJ, DJ or VJ. Null with no event under way.
+  """
+  jockeyLabelTonight: String
+
+  """
+  Who's the KJ, DJ or VJ here now, for the apps' host row beside hostsTonight:
+  the jockeys of the event under way (jockeyLabelTonight says which). Signed
+  out, only the Public ones.
+  """
+  jockeysTonight: [Person!]!
 
   """
   The acts on a night that have a time (or have gone on), in running order.

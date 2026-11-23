@@ -618,7 +618,7 @@ struct NowScreen: View {
     @ViewBuilder
     private func stageSection(_ now: Now) -> some View {
         if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke
-            || lineup.showsSongRequests || lineup.featuredHost != nil {
+            || lineup.showsSongRequests || lineup.featuredHost != nil || !lineup.featuredJockeys.isEmpty {
             VenueLineupSection(lineupModel: lineupModel, lineup: lineup, singAlongEventID: singAlongEventID(now))
             // A karaoke night the lineup doesn't run (a partner's, or one the host runs off the app): its card
             // still shows, under the host it says to ask.
