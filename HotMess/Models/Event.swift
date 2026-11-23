@@ -286,10 +286,21 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         return "\(jockeyLabel ?? "DJ") \(jockeys.map(\.name).formatted(.list(type: .and)))"
     }
 
-    /// Who to sign up with in person at karaoke: the hosts and the KJ.
+    /// Its jockeys' line on the event page: "KJ Dalton" beside its hosts, and
+    /// "Hosted by KJ Dalton" when the jockey is the only one (Rick, 2026-11-23:
+    /// "if the only linked person is a KJ they are a defacto host").
+    var jockeysLine: String? {
+        guard let jockeysTitle else { return nil }
+        return hosts.isEmpty ? "Hosted by \(jockeysTitle)" : jockeysTitle
+    }
+
+    /// Who to sign up with in person at karaoke: the hosts, then the KJ as
+    /// billed ("KJ Dalton").
     var karaokeContactNames: [String] {
+        let jockeyIDs = Set(jockeys.map(\.id))
         var seen = Set<UUID>()
-        return (hosts + jockeys).filter { seen.insert($0.id).inserted }.map(\.name)
+        let hostNames = hosts.filter { !jockeyIDs.contains($0.id) && seen.insert($0.id).inserted }.map(\.name)
+        return hostNames + jockeys.map { "\(jockeyLabel ?? "DJ") \($0.name)" }
     }
 
     /// Whether the event's cover is the venue's cover tonight, so it can be
