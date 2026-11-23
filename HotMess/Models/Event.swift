@@ -254,6 +254,12 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
     /// Friends' Pings that pick this event, from its ping mixin. Read from
     /// GraphQL only, so it isn't encoded.
     var friendPings: [Ping]
+    /// The festival it's part of ("Part of Utah Pride Festival"), or nil for
+    /// one standing on its own. Read from GraphQL only.
+    let parentEvent: EventLink?
+    /// When it's a festival, the events that are part of it (its parade and
+    /// the bars' parties), soonest first. Read from GraphQL only.
+    let childEvents: [Event]
 
     var id: UUID { event.id }
 
@@ -267,6 +273,8 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case people, tickets, ping
         case venueCover = "venue_cover"
+        case parentEvent = "parent_event"
+        case childEvents = "child_events"
     }
 
     /// `venue_cover` is the event's venue mixin again, holding only the
@@ -299,6 +307,8 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         // The ping mixin is null without a viewer or the ping module, which
         // reads as no Pings.
         friendPings = try container.decodeIfPresent(PingsResponse.self, forKey: .ping)?.friendPings ?? []
+        parentEvent = try container.decodeIfPresent(EventLink.self, forKey: .parentEvent)
+        childEvents = try container.decodeIfPresent(EventNodes.self, forKey: .childEvents)?.nodes ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -317,7 +327,9 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         coverCharge: CoverCharge? = nil,
         venueCoverTonight: CoverCharge? = nil,
         viewerAdmission: Admission? = nil,
-        friendPings: [Ping] = []
+        friendPings: [Ping] = [],
+        parentEvent: EventLink? = nil,
+        childEvents: [Event] = []
     ) {
         self.event = event
         self.organizers = organizers
@@ -327,7 +339,29 @@ struct EventDetail: Codable, Hashable, Sendable, Identifiable {
         self.venueCoverTonight = venueCoverTonight
         self.viewerAdmission = viewerAdmission
         self.friendPings = friendPings
+        self.parentEvent = parentEvent
+        self.childEvents = childEvents
     }
+}
+
+/// Another event an event names: the festival it's part of, as the documents
+/// select it, `parent_event: parentEvent { id name start_at: startAt end_at: endAt }`.
+struct EventLink: Codable, Hashable, Sendable, Identifiable {
+    let id: UUID
+    let name: String
+    let startDate: Date?
+    let endDate: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case startDate = "start_at"
+        case endDate = "end_at"
+    }
+}
+
+/// A connection of events, read as `{ nodes { … } }`.
+private struct EventNodes: Decodable {
+    let nodes: [Event]
 }
 
 /// An event's `rsvp` mixin, as the documents select it: `rsvp { mine }`, the

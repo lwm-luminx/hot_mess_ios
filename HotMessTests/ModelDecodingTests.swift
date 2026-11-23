@@ -1291,4 +1291,23 @@ struct MixinDecodingTests {
         #expect(tba.venueCoverTonight == nil)
         #expect(off.viewerAdmission == nil)
     }
+
+    @Test("Names the festival an event is part of, and lists a festival's events")
+    func eventFestival() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let parent = #"{ "id": "4D4E5F60-7182-4D9E-BFC0-3B4C5D6E7F80", "name": "Utah Pride Festival", "start_at": "2027-06-04T16:00:00Z", "end_at": null }"#
+        let part = try decode(EventDetail.self, from: base + #", "parent_event": \#(parent), "child_events": { "nodes": [] } }"#)
+
+        #expect(part.parentEvent?.name == "Utah Pride Festival")
+        #expect(part.parentEvent?.startDate == (try instant("2027-06-04T16:00:00Z")))
+        #expect(part.childEvents.isEmpty)
+
+        let festival = try decode(EventDetail.self, from: base + #", "parent_event": null, "child_events": { "nodes": [\#(Fixtures.sparseEvent)] } }"#)
+        #expect(festival.parentEvent == nil)
+        #expect(festival.childEvents.count == 1)
+
+        let older = try decode(EventDetail.self, from: base + "}")
+        #expect(older.parentEvent == nil)
+        #expect(older.childEvents.isEmpty)
+    }
 }
