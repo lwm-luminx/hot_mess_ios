@@ -623,7 +623,7 @@ struct NowScreen: View {
             // A karaoke night the lineup doesn't run (a partner's, or one the host runs off the app): its card
             // still shows, under the host it says to ask.
             if singAlongEventID(now) == nil, !lineup.showsKaraoke, let karaoke = now.event?.karaoke {
-                KaraokeSection(karaoke: karaoke, hostName: lineupModel.hostEntry?.displayName)
+                KaraokeSection(karaoke: karaoke, hostNames: lineup.hostNames)
             }
         } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
