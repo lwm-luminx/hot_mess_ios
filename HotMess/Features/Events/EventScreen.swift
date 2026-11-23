@@ -111,7 +111,7 @@ struct EventScreen: View {
                             )
                             .audiencePreset(model.brand.preset)
                         } else if let karaoke = event.karaoke, lineupModel?.hasLoaded != false {
-                            KaraokeSection(karaoke: karaoke, venue: event.venue, hostNames: detail.hosts.map(\.name))
+                            KaraokeSection(karaoke: karaoke, venue: event.venue, hostNames: detail.karaokeContactNames)
                         }
 
                         // On the night, song requests too, when the venue takes them.
@@ -318,6 +318,11 @@ struct EventScreen: View {
 
             if !detail.hosts.isEmpty {
                 hostsLine(detail.hosts)
+            }
+
+            if let jockeysTitle = detail.jockeysTitle {
+                // "KJ Dalton": its KJ, DJ or VJ, beside its hosts.
+                peopleLine(detail.jockeys, text: jockeysTitle)
             }
 
             HeroActionRow {

@@ -1267,6 +1267,26 @@ struct MixinDecodingTests {
         #expect(lineupOnly.people.map(\.name) == ["Kiko Soirée"])
     }
 
+    @Test("Bills an event's KJ apart from its hosts and keeps them out of its lineup")
+    func eventJockeys() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let host = #"{ "id": "1A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Mama Alma", "avatar_url": null }"#
+        let kj = #"{ "id": "2B2C3D4E-5F60-4B7C-9DAE-1F2A3B4C5D6E", "name": "Dalton", "avatar_url": null }"#
+        let detail = try decode(EventDetail.self, from: base + """
+        , "people": { "hosts": { "nodes": [\(host)] }, "lineup": { "nodes": [\(host), \(kj)] },
+          "jockeys": { "nodes": [\(kj)] }, "jockeyLabel": "KJ" } }
+        """)
+
+        #expect(detail.hosts.map(\.name) == ["Mama Alma"])
+        #expect(detail.jockeys.map(\.name) == ["Dalton"])
+        #expect(detail.jockeysTitle == "KJ Dalton")
+        #expect(detail.people.isEmpty)
+        #expect(detail.karaokeContactNames == ["Mama Alma", "Dalton"])
+
+        let older = try decode(EventDetail.self, from: base + #", "people": { "hosts": { "nodes": [\#(host)] } } }"#)
+        #expect(older.jockeys.isEmpty && older.jockeysTitle == nil)
+    }
+
     @Test("Shows who presents an event, apart from its hosts and lineup")
     func eventOrganizers() throws {
         let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
