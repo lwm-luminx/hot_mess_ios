@@ -1289,6 +1289,8 @@ extension HotMessAPI {
             ping { friend_pings: friendPings { \(pingFields) } }
             tickets { cover { cover_charge: charge { \(coverChargeFields) } } }
             venue_cover: venue { venue { \(venueCoverFields) } }
+            parent_event: parentEvent { id name start_at: startAt end_at: endAt }
+            child_events: childEvents { nodes { \(eventFields) } }
           } }
         }
         """

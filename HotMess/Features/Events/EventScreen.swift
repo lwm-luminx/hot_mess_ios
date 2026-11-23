@@ -43,6 +43,29 @@ struct EventScreen: View {
                             heroText(detail)
                         }
 
+                        if let parent = detail.parentEvent {
+                            DetailSection {
+                                NavigationLink(value: AppRoute.event(parent.id)) {
+                                    InfoRow(
+                                        title: String(localized: "Part of \(parent.name)"),
+                                        value: nil,
+                                        systemImage: "sparkles"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("event.parentEvent")
+                            }
+                        }
+
+                        if !detail.childEvents.isEmpty {
+                            CardSection(String(localized: "During \(event.name)")) {
+                                ForEach(detail.childEvents) { child in
+                                    EventCardLink(event: child)
+                                }
+                            }
+                            .accessibilityIdentifier("event.childEvents")
+                        }
+
                         if let venueID = event.venue?.id {
                             ManagedListingNotice(kind: .venue, id: venueID, eventID: event.id)
                         }
@@ -304,11 +327,17 @@ struct EventScreen: View {
         }
     }
 
-    /// "Fri Oct 24 · 9:00 PM to 2:00 AM".
+    /// "Fri Oct 24 · 9:00 PM to 2:00 AM", or "Fri Jun 4 to Sun Jun 6" for a
+    /// festival that runs for days.
     private func whenLine(_ event: Event) -> String {
         let day = event.startDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
         let start = event.startDate.formatted(date: .omitted, time: .shortened)
         guard let endDate = event.endDate, endDate > event.startDate else { return "\(day) · \(start)" }
+        // Past the night (over 24 hours), it's days, not times.
+        if endDate.timeIntervalSince(event.startDate) > 24 * 60 * 60 {
+            let lastDay = endDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+            return String(localized: "\(day) to \(lastDay)")
+        }
         let end = endDate.formatted(date: .omitted, time: .shortened)
         return String(localized: "\(day) · \(start) to \(end)")
     }

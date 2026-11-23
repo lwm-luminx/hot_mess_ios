@@ -837,6 +837,16 @@ type Appearance implements Node {
   maxMinutes: Int
 
   """
+  Activity WATCH: the episode or film the room watches.
+  """
+  mediaItem: MediaItem
+
+  """
+  Activity SING_ALONG: the audience's media playlist it sings, its songs as its scenes; WATCH: the series.
+  """
+  mediaPlaylist: MediaPlaylist
+
+  """
   The shortest it runs when it flexes, as set.
   """
   minMinutes: Int
@@ -991,13 +1001,20 @@ type Appearance implements Node {
 }
 
 """
-What a segment or intermission runs while it's on, which the venue's screens show (Venue.liveActivity).
+What a segment or intermission runs while it's on, which the venue's screens
+show (Venue.liveActivity). An act can run TRIVIA or PROMPTS in the venue chat
+only, while it's on; the screens keep the show.
 """
 enum AppearanceActivity {
   """
   Bingo: a host draws each number and the screens keep the board (Venue.bingo).
   """
   BINGO
+
+  """
+  Karaoke: signups are open while it's on, and it calls the singers up (Venue.requests.karaoke), with no host needed.
+  """
+  KARAOKE
 
   """
   The event's chat prompts carry on.
@@ -1013,6 +1030,11 @@ enum AppearanceActivity {
   Group trivia: the room talks each round over in the chat and votes together (Venue.trivia). No scores.
   """
   TRIVIA
+
+  """
+  The room watches its media: an episode or film (mediaItem), or a series (mediaPlaylist).
+  """
+  WATCH
 }
 
 """
@@ -2528,6 +2550,13 @@ type AudienceEventsView implements IAudienceEvents {
   """
   counts(
     """
+    Also the events that are part of a super-event (a Pride festival's parties).
+    Left out by default so a festival shows once; always in when filtering by
+    venue or searching.
+    """
+    includeChildren: Boolean = false
+
+    """
     Only events in this locale, TBA ones included.
     """
     localeId: ID
@@ -2586,6 +2615,13 @@ type AudienceEventsView implements IAudienceEvents {
     Returns the first _n_ elements from the list.
     """
     first: Int
+
+    """
+    Also the events that are part of a super-event (a Pride festival's parties).
+    Left out by default so a festival shows once; always in when filtering by
+    venue or searching.
+    """
+    includeChildren: Boolean = false
 
     """
     Returns the last _n_ elements from the list.
@@ -7918,6 +7954,33 @@ type Event implements HasBanner & HasCredits & HasReviews & HasTags & HasTaskTem
   chatCommunity: EventChatCommunity
 
   """
+  The events that are part of it, when it is a super-event (a Pride festival's
+  parade and parties, a conference's parties): upcoming and under way, soonest
+  first. Empty for any other.
+  """
+  childEvents(
+    """
+    Returns the elements in the list that come after the specified cursor.
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor.
+    """
+    before: String
+
+    """
+    Returns the first _n_ elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last _n_ elements from the list.
+    """
+    last: Int
+  ): EventConnection!
+
+  """
   Its credits that everyone sees, original source first.
   """
   credits: [Credit!]!
@@ -7993,6 +8056,12 @@ type Event implements HasBanner & HasCredits & HasReviews & HasTags & HasTaskTem
   Display ordering value.
   """
   order: Int!
+
+  """
+  The super-event it is part of, such as the Pride festival a bar's party
+  belongs to ("Part of …"). Null for one standing on its own.
+  """
+  parentEvent: Event
 
   """
   The instance's IEventPeople mixin. Left out of the schema where its module isn't installed.
@@ -9549,6 +9618,12 @@ type EventsView implements ILocaleEvents & IVenueEvents {
     Returns the first _n_ elements from the list.
     """
     first: Int
+
+    """
+    Also the events that are part of a super-event (a Pride festival's parties),
+    which otherwise list under it (Event.childEvents).
+    """
+    includeChildren: Boolean = false
 
     """
     Returns the last _n_ elements from the list.
@@ -11113,6 +11188,13 @@ interface IAudienceEvents @mixin(extensionKey: "events", field: "events", null: 
   """
   counts(
     """
+    Also the events that are part of a super-event (a Pride festival's parties).
+    Left out by default so a festival shows once; always in when filtering by
+    venue or searching.
+    """
+    includeChildren: Boolean = false
+
+    """
     Only events in this locale, TBA ones included.
     """
     localeId: ID
@@ -11171,6 +11253,13 @@ interface IAudienceEvents @mixin(extensionKey: "events", field: "events", null: 
     Returns the first _n_ elements from the list.
     """
     first: Int
+
+    """
+    Also the events that are part of a super-event (a Pride festival's parties).
+    Left out by default so a festival shows once; always in when filtering by
+    venue or searching.
+    """
+    includeChildren: Boolean = false
 
     """
     Returns the last _n_ elements from the list.
@@ -13002,6 +13091,12 @@ interface ILocaleEvents @mixin(extensionKey: "events", field: "events", null: fa
     first: Int
 
     """
+    Also the events that are part of a super-event (a Pride festival's parties),
+    which otherwise list under it (Event.childEvents).
+    """
+    includeChildren: Boolean = false
+
+    """
     Returns the last _n_ elements from the list.
     """
     last: Int
@@ -14330,6 +14425,13 @@ interface IVenueMusic @mixin(extensionKey: "music", field: "music", null: false,
   Latest track while equipment reporting is active.
   """
   nowPlaying: EquipmentTrack
+
+  """
+  Tonight's songs in the order the venue's Mac plays them (its night playlist in
+  the lineup): the one on and the ones still to play. Null without a night
+  playlist tonight.
+  """
+  queue: VenueMusicQueue
 }
 
 """
@@ -15863,8 +15965,9 @@ enum ListingVisibility {
 
 """
 What a venue's screens show as their live activity now: whatever the segment or
-intermission on now has set (its activity), or sing-along while a sing-along
-night's playlist is on. Screens never pick one themselves.
+intermission on now has set (its activity; never an act's chat-only trivia or
+prompts), or sing-along while a sing-along night's playlist is on. Screens never
+pick one themselves.
 """
 type LiveActivity {
   """
@@ -15883,7 +15986,7 @@ type LiveActivity {
   kind: AppearanceActivity!
 
   """
-  The lineup entry on now that set it.
+  The lineup entry on now that set it; WATCH: its mediaItem and mediaPlaylist say what the room watches.
   """
   segment: Appearance!
 
@@ -16311,6 +16414,12 @@ enum LocaleKind {
   COUNTY
 
   """
+  The top of the audience's tree, above every locale: people featured in it are
+  featured everywhere. Audience.locales lists it only when asked for this kind.
+  """
+  EVERYWHERE
+
+  """
   A metro area: a city and its suburbs, as Hot Mess lists them.
   """
   METRO
@@ -16712,7 +16821,7 @@ One kind of thing attached to locales and what it does along the locale tree
 """
 type LocaleTreeRule {
   """
-  What is attached: venues, events, people, posts, chat, time_zone, liquor_rules, access_grants or offices.
+  What is attached: venues, events, people, people_above, posts, chat, time_zone, liquor_rules, access_grants or offices.
   """
   attachment: String!
 
@@ -17035,6 +17144,12 @@ type MarqueePoster {
   Shown only at venues flagged for adult content (Venue.adultVenue).
   """
   adult: Boolean!
+
+  """
+  Approved for screens. Unapproved ones (waiting on review) never reach a
+  venue's screens or picker; only Audience.marqueePosters lists them.
+  """
+  approved: Boolean!
 
   """
   Its stable id, what Venue.marqueeHiddenSlogans names to turn it off.
@@ -18045,6 +18160,11 @@ Rockbot, Mood Media, TouchTunes).
 """
 type MusicLicenseOrganization {
   """
+  What its staff can do to playback from AudienceKit (controlVenueMusicService): skip, pause, play, volume.
+  """
+  controls: [String!]!
+
+  """
   The country a rights organization licenses, e.g. US; null for services.
   """
   country: String
@@ -18065,6 +18185,16 @@ type MusicLicenseOrganization {
   name: String!
 
   """
+  Whether a venue connects it by account ID alone, through AudienceKit's own partner client, with no key of its own.
+  """
+  partnerConnect: Boolean!
+
+  """
+  Where a venue signs up for it: for Soundtrack, AudienceKit's referral link.
+  """
+  signupUrl: String
+
+  """
   Where venues get or manage a license with it.
   """
   url: String
@@ -18076,9 +18206,51 @@ type MusicLicenseOrganization {
 }
 
 """
+What one zone of a venue's licensed business music service is playing
+(Venue.musicNowPlaying), read with the API key the venue linked. Read only: the
+services let no third party queue a song.
+"""
+type MusicNowPlaying {
+  """
+  The service.
+  """
+  provider: MusicLicenseOrganization!
+
+  """
+  The songs queued next, when the service says.
+  """
+  queue: [MusicSong!]!
+
+  """
+  Seconds left in the song, when the service says.
+  """
+  remainingSeconds: Int
+
+  """
+  The song playing; null when nothing plays.
+  """
+  song: MusicSong
+
+  """
+  When the song started, when the service says.
+  """
+  startedAt: ISO8601DateTime
+
+  """
+  The zone's ID at the service.
+  """
+  zoneId: String
+
+  """
+  The zone's name at the service.
+  """
+  zoneName: String
+}
+
+"""
 A venue's linked account at its licensed business music service
-(linkVenueMusicService): a Soundtrack API token, checked with its API, or for
-services without an API the account or zone ID there. Its token is never returned.
+(linkVenueMusicService): a Soundtrack API token or Rockbot venue API key,
+checked with its API, or the account or zone ID there. Its token is never returned.
 """
 type MusicServiceAccount {
   """
@@ -18095,6 +18267,12 @@ type MusicServiceAccount {
   When it was linked.
   """
   connectedAt: ISO8601DateTime
+
+  """
+  How it's linked: api_key (the venue's own key), partner (through AudienceKit's
+  partner client) or reference (an account ID only).
+  """
+  connection: String!
 
   """
   Whether an API token is kept for it.
@@ -18130,6 +18308,31 @@ type MusicServiceAccount {
   Whether the last check reached the service's API with its token.
   """
   verified: Boolean!
+}
+
+"""
+A song a venue's licensed music service is playing or has queued, as the service names it.
+"""
+type MusicSong {
+  """
+  Its album, when the service says.
+  """
+  album: String
+
+  """
+  Its artists.
+  """
+  artists: [String!]!
+
+  """
+  Its cover art.
+  """
+  artworkUrl: String
+
+  """
+  Its title.
+  """
+  title: String!
 }
 
 """
@@ -20280,6 +20483,12 @@ type Person implements HasBanner & HasTags & HasTaskTemplates & Node {
   Whether this person is featured in all locales.
   """
   global: Boolean!
+
+  """
+  Every group they're part of and the groups above those, nearest first: a local
+  Imperial Court, then the International Court Council.
+  """
+  groupChain: [Person!]!
 
   """
   The people they're part of, like their troupes.
@@ -28486,6 +28695,14 @@ type Venue implements HasBanner & HasCredits & HasPhoto & HasTags & HasTaskTempl
   musicLicensing: VenueMusicLicensing @requires(permissions: ["venues:write:mine", "venues:write:venue"])
 
   """
+  What its licensed business music services play right now, each zone of its
+  linked Soundtrack account or its Rockbot zone with the queue, read with the
+  API key it linked (linkVenueMusicService) and cached for 15 seconds. Empty
+  without one. Its managers and Velvet devices only; null for everyone else.
+  """
+  musicNowPlaying: [MusicNowPlaying!] @requires(permissions: ["venues:write:mine", "venues:write:venue", "venues:read:venue"])
+
+  """
   Its own Musixmatch key, which its sing-along screens use before its audience's
   and AudienceKit's (setVenueMusixmatchKey); null without one, and for everyone
   but its managers.
@@ -29281,9 +29498,47 @@ type VenueMusicLicensing {
   status: String!
 
   """
+  The licensed service to switch to while the venue plays a linked Spotify and
+  no music service (Soundtrack, which brings its Spotify playlists across); see
+  its signupUrl. Null otherwise.
+  """
+  suggestedService: MusicLicenseOrganization
+
+  """
   What needs attention, as sentences.
   """
   warnings: [String!]!
+}
+
+"""
+Tonight's songs at a venue: the night's playlist segment of the lineup, in the
+order the venue's Mac plays them (VenueMusic).
+"""
+type VenueMusicQueue {
+  """
+  The songs still to play, in order: the first plays next.
+  """
+  coming: [Scene!]!
+
+  """
+  The night it plays for.
+  """
+  event: Event
+
+  """
+  How many songs have played tonight, not counting the one on.
+  """
+  played: Int!
+
+  """
+  The song on now; null between songs.
+  """
+  playing: Scene
+
+  """
+  The playlist segment (an Appearance) holding the songs.
+  """
+  segmentId: ID!
 }
 
 """
@@ -29355,6 +29610,13 @@ type VenueMusicView implements IVenueMusic {
   Latest track while equipment reporting is active.
   """
   nowPlaying: EquipmentTrack
+
+  """
+  Tonight's songs in the order the venue's Mac plays them (its night playlist in
+  the lineup): the one on and the ones still to play. Null without a night
+  playlist tonight.
+  """
+  queue: VenueMusicQueue
 }
 
 """
