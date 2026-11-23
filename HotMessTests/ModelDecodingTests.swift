@@ -1281,7 +1281,13 @@ struct MixinDecodingTests {
         #expect(detail.jockeys.map(\.name) == ["Dalton"])
         #expect(detail.jockeysTitle == "KJ Dalton")
         #expect(detail.people.isEmpty)
-        #expect(detail.karaokeContactNames == ["Mama Alma", "Dalton"])
+        #expect(detail.karaokeContactNames == ["Mama Alma", "KJ Dalton"])
+        #expect(detail.jockeysLine == "KJ Dalton")
+
+        // A lone KJ hosts the night (Rick, 2026-11-23).
+        let alone = try decode(EventDetail.self, from: base + #", "people": { "lineup": { "nodes": [\#(kj)] }, "jockeys": { "nodes": [\#(kj)] }, "jockeyLabel": "KJ" } }"#)
+        #expect(alone.jockeysLine == "Hosted by KJ Dalton")
+        #expect(alone.karaokeContactNames == ["KJ Dalton"])
 
         let older = try decode(EventDetail.self, from: base + #", "people": { "hosts": { "nodes": [\#(host)] } } }"#)
         #expect(older.jockeys.isEmpty && older.jockeysTitle == nil)

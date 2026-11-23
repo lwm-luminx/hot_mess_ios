@@ -320,9 +320,10 @@ struct EventScreen: View {
                 hostsLine(detail.hosts)
             }
 
-            if let jockeysTitle = detail.jockeysTitle {
-                // "KJ Dalton": its KJ, DJ or VJ, beside its hosts.
-                peopleLine(detail.jockeys, text: jockeysTitle)
+            if let jockeysLine = detail.jockeysLine {
+                // "KJ Dalton": its KJ, DJ or VJ, beside its hosts; "Hosted by
+                // KJ Dalton" when they're the only one.
+                peopleLine(detail.jockeys, text: jockeysLine)
             }
 
             HeroActionRow {
