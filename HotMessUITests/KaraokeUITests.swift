@@ -37,16 +37,11 @@ final class KaraokeUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.songSearch"].exists)
     }
-    func testKaraFunWithNoCodeSignsUpInPersonAndSearchesTheSongbook() {
+    func testKaraFunWithNoCodeSignsUpInPersonOnly() {
         let app = open("karafun-nocode")
-        let search = app.textFields["karaoke.songSearch"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Sign up in person with the host"].exists)
+        XCTAssertTrue(app.staticTexts["Sign up in person with the host"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.descendants(matching: .any)["karaoke.join"].exists)
-        search.tap()
-        search.typeText("Waterloo\n")
-        XCTAssertTrue(app.staticTexts["karaoke.opened"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["karaoke.opened"].label, "https://www.karafun.com/search/?query=Waterloo")
+        XCTAssertFalse(app.descendants(matching: .any)["karaoke.songSearch"].exists)
     }
     func testAudienceKitKaraokePointsToTheVenueToSignUp() {
         let app = open("audiencekit")

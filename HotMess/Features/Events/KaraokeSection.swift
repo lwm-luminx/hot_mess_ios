@@ -8,8 +8,6 @@ struct KaraokeSection: View {
     /// Who's hosting, for "Sign up in person with Dalton"; empty says "the host".
     var hostNames: [String] = []
     @State private var showingJoinCode = false
-    @State private var songQuery = ""
-    @Environment(\.openURL) private var openURL
 
     private var joinTitle: String {
         if let provider = karaoke.providerName, !provider.isEmpty {
@@ -51,20 +49,6 @@ struct KaraokeSection: View {
                 Label(String(localized: "Karaoke night"), systemImage: "music.mic")
                 Label(signUpInPerson, systemImage: "person.wave.2")
                     .accessibilityIdentifier("karaoke.signUpInPerson")
-                if KaraokeSongbook.searches(provider: karaoke.provider) {
-                    // Pick a song without queueing: KaraFun's songbook, then sign up with the host.
-                    HStack {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField(String(localized: "Find a song in \(karaoke.providerName ?? "KaraFun")"), text: $songQuery)
-                            .submitLabel(.search)
-                            .onSubmit {
-                                if let url = KaraokeSongbook.searchURL(provider: karaoke.provider, query: songQuery) {
-                                    openURL(url)
-                                }
-                            }
-                            .accessibilityIdentifier("karaoke.songSearch")
-                    }
-                }
             }
         }
         .sheet(isPresented: $showingJoinCode) {
