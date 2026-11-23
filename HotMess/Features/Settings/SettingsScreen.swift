@@ -3,6 +3,7 @@
 //  HotMess
 //
 
+import AudienceKit
 import AudienceKitUI
 import Kingfisher
 import SwiftUI
@@ -360,6 +361,14 @@ struct SettingsScreen: View {
                 }
                 .accessibilityIdentifier("me.contacts")
             }
+
+            // Do not sell or share, ad measurement and the privacy pass, per audience (enforced on the server).
+            NavigationLink {
+                PrivacyChoicesScreen()
+            } label: {
+                Label(PrivacyChoicesCopy.title, systemImage: "checkmark.shield")
+            }
+            .accessibilityIdentifier("me.privacyChoices")
 
             // Promoted cards the viewer turned off: kept on their devices, never sent.
             NavigationLink {
