@@ -160,6 +160,7 @@ struct DeepLinkTests {
         #expect(AppRoute.locale(id, name: "Seattle").tab == .venues)
         #expect(AppRoute.event(id).tab == .events)
         #expect(AppRoute.person(id).tab == .people)
+        #expect(AppRoute.news(localeID: "l-1", name: "Salt Lake").tab == .now)
     }
 }
 

@@ -168,6 +168,8 @@ struct RouteDestination: View {
             ArticleScreen(articleID: id)
         case let .publication(id):
             PublicationScreen(publicationID: id)
+        case let .news(localeID, name):
+            NewsScreen(localeID: localeID, name: name)
         }
     }
 }
