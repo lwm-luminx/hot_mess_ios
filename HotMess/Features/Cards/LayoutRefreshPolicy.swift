@@ -11,9 +11,9 @@ import Foundation
 /// a stream of `Layout` queries.
 ///
 /// A layout is due when it was never asked for, once the server's
-/// `refreshAfter` has passed since the last good one, at once for another
-/// locale or beacon, or when the device moved at least `minimumDistance` and
-/// the last ask is `minimumSpacing` old.
+/// `refreshAfter` has passed since the last good one, for another locale once
+/// the last ask is `minimumLocaleSpacing` old, or for another beacon or a move
+/// of at least `minimumDistance` once the last ask is `minimumSpacing` old.
 /// After a failure nothing is due until a backoff passes, doubling from
 /// `firstBackoff` up to `maximumBackoff`, however often the screen asks.
 /// Only a person's own refresh (`force`) skips the wait.
@@ -28,6 +28,7 @@ struct LayoutRefreshPolicy: Sendable {
 
     var minimumDistance: CLLocationDistance = 150
     var minimumSpacing: Duration = .seconds(30)
+    var minimumLocaleSpacing: Duration = .seconds(5)
     var minimumRefreshAfter: Duration = .seconds(15)
     var firstBackoff: Duration = .seconds(15)
     var maximumBackoff: Duration = .seconds(600)
@@ -46,9 +47,14 @@ struct LayoutRefreshPolicy: Sendable {
         if let dueAt, now >= dueAt { return true }
         // A failure waits out its backoff wherever the device goes.
         if isBackingOff { return false }
-        if changedPlace(from: lastAsked, to: request) { return true }
-        guard now - lastAskedAt >= minimumSpacing else { return false }
-        return moved(from: lastAsked, to: request)
+        let sinceLastAsk = now - lastAskedAt
+        // Another locale (a person picking a city) asks at once, but never more than once per
+        // `minimumLocaleSpacing`, so a locale that flips back and forth can't stream asks.
+        if lastAsked.localeID != request.localeID { return sinceLastAsk >= minimumLocaleSpacing }
+        guard sinceLastAsk >= minimumSpacing else { return false }
+        // Another beacon waits the same spacing as a move: ranging can hear the nearest beacon flip
+        // between two venues every second, and each flip asked at once on every screen (2026-11-24).
+        return changedPlace(from: lastAsked, to: request) || moved(from: lastAsked, to: request)
     }
 
     mutating func asked(_ request: Request, at now: Instant) {
@@ -79,9 +85,8 @@ struct LayoutRefreshPolicy: Sendable {
         return min(wait, maximumBackoff)
     }
 
-    /// Another locale, another beacon, or a position appearing or going away.
+    /// Another beacon, or a position appearing or going away.
     private func changedPlace(from old: Request, to new: Request) -> Bool {
-        if old.localeID != new.localeID { return true }
         switch (old.coordinates, new.coordinates) {
         case (nil, nil): return false
         case let (old?, new?): return old.beaconMajor != new.beaconMajor

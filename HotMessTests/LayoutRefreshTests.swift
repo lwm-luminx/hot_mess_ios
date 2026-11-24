@@ -63,14 +63,28 @@ struct LayoutRefreshPolicyTests {
         #expect(!policy.isDue(request(north(100)), at: at(30)))
     }
 
-    @Test("Another locale or beacon asks at once")
-    func changedPlace() {
+    @Test("Another locale asks at once, but not more than once per locale spacing")
+    func changedLocale() {
         var policy = LayoutRefreshPolicy()
         policy.asked(request(nyne), at: start)
         policy.succeeded(refreshAfter: 600, at: start)
 
-        #expect(policy.isDue(.init(coordinates: nyne, localeID: UUID()), at: at(1)))
-        #expect(policy.isDue(request(north(0, beaconMajor: 7)), at: at(1)))
+        #expect(!policy.isDue(.init(coordinates: nyne, localeID: UUID()), at: at(1)))
+        #expect(policy.isDue(.init(coordinates: nyne, localeID: UUID()), at: at(5)))
+    }
+
+    @Test("Another beacon asks again only once per spacing, however often ranging flips")
+    func changedBeacon() {
+        var policy = LayoutRefreshPolicy()
+        policy.asked(request(north(0, beaconMajor: 3)), at: start)
+        policy.succeeded(refreshAfter: 600, at: start)
+
+        for second in 1..<30 {
+            let major = second.isMultiple(of: 2) ? 3 : 7
+            #expect(!policy.isDue(request(north(0, beaconMajor: major)), at: at(second)))
+        }
+        #expect(policy.isDue(request(north(0, beaconMajor: 7)), at: at(30)))
+        #expect(!policy.isDue(request(north(0, beaconMajor: 3)), at: at(30)))
     }
 
     @Test("Failures back off, doubling up to the cap, wherever the device goes")
