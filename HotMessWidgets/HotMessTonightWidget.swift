@@ -131,7 +131,8 @@ struct TonightView: View {
     private func content(_ snapshot: TonightSnapshot) -> some View {
         let featured = entry.featured
         VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 6) {
-            header(snapshot.localeName, snapshot: snapshot)
+            // The small widget has no room for the city beside the dots.
+            header(family == .systemSmall ? nil : snapshot.localeName, snapshot: snapshot)
             if let featured {
                 FeaturedEventCard(event: featured, date: entry.date, compact: family == .systemSmall)
             }
@@ -435,8 +436,8 @@ private struct EventRow: View {
             Text(EventTime.label(for: event, at: date))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(TonightView.accent)
-                .lineLimit(1)
-                .frame(width: 72, alignment: .leading)
+                .lineLimit(2)
+                .frame(width: 84, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
                 Text(event.name)
                     .font(.caption.weight(.semibold))
