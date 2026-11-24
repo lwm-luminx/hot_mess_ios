@@ -8,9 +8,9 @@
 #   2. PUT  {api}/v1/app_release   { "app", "channel", "latest_build", "latest_version", "available_at" }
 #
 # `available_at` is half an hour out, roughly when TestFlight has processed the build. Build numbers only compare
-# within the branch that made them, so each branch reports on its own channel: main's archives (App Store candidates,
-# which external testers and App Review install from TestFlight) on `testflight`, betas (next and feature branches,
-# internal testers) on `testflight_beta`. Both go to the next API, which shares its database with production. Set
+# within the branch that made them, so each branch reports on its own channel: production archives (App Store candidates,
+# which external testers and App Review install from TestFlight) on `testflight`, betas (next, internal testers) on
+# `testflight_beta`. Both go to the next API, which shares its database with production. Set
 # AUDIENCEKIT_RELEASE_TOKEN (a service token, `akst_…`) as a secret environment variable in each workflow; without
 # it this logs a line and does nothing. A reporting failure never fails the build.
 set -u
@@ -27,13 +27,12 @@ if [ -z "${AUDIENCEKIT_RELEASE_TOKEN:-}" ]; then
     exit 0
 fi
 
-# The same test as ci_pre_xcodebuild.sh's: every archive but main's is a beta.
+# The same test as ci_pre_xcodebuild.sh's: only a non-release workflow's archive of next is a beta.
 branch="${CI_BRANCH:-${CI_PULL_REQUEST_TARGET_BRANCH:-}}"
-if [ "$branch" = "main" ]; then
-    channel=testflight
-else
-    channel=testflight_beta
-fi
+case "${CI_WORKFLOW:-}" in
+*"App Store"* | *Release* | Default) channel=testflight ;;
+*) if [ "$branch" = next ]; then channel=testflight_beta; else channel=testflight; fi ;;
+esac
 api="https://api.next.audiencekit.com"
 api="${AUDIENCEKIT_API_URL:-$api}" # an override, for trying the script against a local API
 
