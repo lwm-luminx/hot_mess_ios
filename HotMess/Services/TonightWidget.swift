@@ -14,26 +14,23 @@ import WidgetKit
 @MainActor
 enum TonightWidget {
     /// How far ahead counts as tonight.
-    static let tonightWindow: TimeInterval = 12 * 60 * 60
+    static let tonightWindow = TonightSnapshot.tonightWindow
+    /// How far ahead the widget's rotating card looks for events.
+    static let upcomingWindow: TimeInterval = 7 * 24 * 60 * 60
     /// The most events and Pings kept: the large widget shows about this many.
     static let limit = 6
 
-    /// From a freshly loaded Now: tonight's events where the user is, who's
-    /// on at their venue, and friends' Pings.
+    /// From a freshly loaded Now: the next few events where the user is (the
+    /// one they're at first), who's on at their venue, and friends' Pings.
     static func update(from now: Now, at date: Date = .now) {
-        var events: [TonightSnapshot.Event] = []
-        if let event = now.event { events.append(entry(for: event)) }
-        let end = date.addingTimeInterval(tonightWindow)
-        events += now.events
-            .filter { $0.id != now.event?.id && $0.startDate < end }
-            .map(entry(for:))
         let onNow = now.onNow.acts.first.map { $0.title ?? $0.person.name }
         let snapshot = TonightSnapshot(
             updatedAt: date,
             localeName: now.locale?.name,
+            localeID: now.locale.map { $0.id.uuidString.lowercased() },
             venueName: now.venue?.name ?? now.event?.venue?.name,
             onNow: onNow,
-            events: Array(events.filter { $0.isOn(at: date) }.prefix(limit)),
+            events: upcoming(now.events, leading: now.event, myPing: now.myPing, at: date),
             pings: pings(myPing: now.myPing, friendPings: now.friendPings, at: date)
         )
         save(snapshot)
@@ -45,7 +42,58 @@ enum TonightWidget {
         var snapshot = TonightStore.read() ?? .empty
         snapshot.updatedAt = date
         snapshot.pings = pings(myPing: myPing, friendPings: friendPings, at: date)
+        let pinged = pingedEventIDs(myPing, at: date)
+        for index in snapshot.events.indices {
+            snapshot.events[index].pinged = pinged.contains(snapshot.events[index].id)
+        }
         save(snapshot.current(at: date))
+    }
+
+    /// From a background refresh of the city the widget shows, so its
+    /// events keep coming while the app stays closed. Leaves a snapshot
+    /// about a venue (the user was in one when Now last loaded) alone.
+    static func update(events: [Event], in localeID: UUID, at date: Date = .now) {
+        guard var snapshot = TonightStore.read(), snapshot.venueName == nil,
+              snapshot.localeID == localeID.uuidString.lowercased()
+        else { return }
+        let pinged = Set(snapshot.events.filter(\.isPinged).map(\.id))
+        snapshot.updatedAt = date
+        snapshot.events = upcoming(events, myPing: nil, at: date).map { event in
+            var event = event
+            event.pinged = pinged.contains(event.id)
+            return event
+        }
+        save(snapshot.current(at: date))
+    }
+
+    /// The events worth rotating through: `leading` (the one the user is
+    /// at) first, then the rest that aren't over and start within
+    /// ``upcomingWindow``, soonest first; at most ``limit``.
+    static func upcoming(
+        _ events: [Event], leading: Event? = nil, myPing: Ping?, at date: Date
+    ) -> [TonightSnapshot.Event] {
+        let end = date.addingTimeInterval(upcomingWindow)
+        let pinged = pingedEventIDs(myPing, at: date)
+        var seen = Set<UUID>()
+        let rest = events
+            .filter { $0.id != leading?.id && $0.startDate < end }
+            .sorted { $0.startDate < $1.startDate }
+        return ([leading].compactMap { $0 } + rest)
+            .filter { seen.insert($0.id).inserted }
+            .map { event in
+                var entry = entry(for: event)
+                entry.pinged = pinged.contains(entry.id)
+                return entry
+            }
+            .filter { $0.isOn(at: date) }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// The events the user's own Ping names, by id.
+    static func pingedEventIDs(_ myPing: Ping?, at date: Date) -> Set<String> {
+        guard let myPing, myPing.expiresAt > date else { return [] }
+        return Set(myPing.targets.compactMap { $0.event?.id.uuidString })
     }
 
     /// Forgets everything, for signing out.
@@ -85,7 +133,9 @@ enum TonightWidget {
             place: event.venue?.name,
             startsAt: event.startDate,
             endsAt: event.endDate,
-            url: URL(string: "hotmess://events/\(event.id.uuidString)")
+            url: URL(string: "hotmess://events/\(event.id.uuidString)"),
+            address: event.venue?.address.flatMap { $0.isEmpty ? nil : $0 },
+            going: event.rsvp == .attending
         )
     }
 
@@ -119,8 +169,38 @@ enum TonightWidget {
             newQuickieTopic: { venueID, matchID in
                 let state = try await api.skipPairUp(matchID: matchID, partner: false)
                 await LiveActivities.sync(quickie: state, venueID: venueID, venueName: nil)
+            },
+            setGoing: { eventID, going in
+                try await api.setRSVP(going ? .attending : .unsure, forEvent: eventID)
+                await markEvent(eventID.uuidString) { $0.going = going }
+            },
+            pingEvent: { eventID in
+                let current = try await api.pings()
+                let ping = try await api.sendPing(
+                    places: pingPlaces(adding: eventID, to: current.myPing),
+                    note: current.myPing?.note,
+                    localeID: TonightStore.read()?.localeID.flatMap(UUID.init(uuidString:)),
+                    reach: current.myPing?.reach ?? .friends
+                )
+                await markEvent(eventID.uuidString) { $0.pinged = true }
+                await refreshPings(PingsResponse(myPing: ping, friendPings: current.friendPings))
+                await pingsChanged()
             }
         )
+    }
+
+    /// The user's Ping's picks with `eventID` added at the end (a new Ping
+    /// names just the event). Keeps the order they picked in.
+    static func pingPlaces(adding eventID: UUID, to myPing: Ping?) -> [PingPlace] {
+        let places = myPing.map(\.places) ?? []
+        return places.contains(.event(eventID)) ? places : places + [.event(eventID)]
+    }
+
+    /// Changes one event in the saved snapshot and redraws, so a button
+    /// shows its result straight away.
+    private static func markEvent(_ id: String, _ change: (inout TonightSnapshot.Event) -> Void) {
+        guard let snapshot = TonightStore.read() else { return }
+        save(snapshot.updating(event: id, change))
     }
 
     private static func refreshPings(_ pings: PingsResponse?) {
