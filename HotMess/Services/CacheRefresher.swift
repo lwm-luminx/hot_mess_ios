@@ -109,7 +109,9 @@ final class CacheRefresher {
             for localeID in locales {
                 guard !Task.isCancelled else { return false }
                 do {
-                    _ = try await api.eventList(in: localeID, cachePolicy: .refresh)
+                    let events = try await api.eventList(in: localeID, cachePolicy: .refresh)
+                    // The Tonight widget's rotating events, when it shows this city.
+                    TonightWidget.update(events: events, in: localeID)
                 } catch {
                     succeeded = false
                     Log.network.error("Cache refresh failed: \(error.localizedDescription, privacy: .public)")

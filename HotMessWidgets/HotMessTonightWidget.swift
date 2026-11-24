@@ -7,12 +7,15 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// "Tonight" on the Home Screen and Lock Screen: friends' Pings with who's in
-/// (and "I'm in" on ones the user hasn't joined), then what's on tonight.
+/// "Hot Mess - Tonight" on the Home Screen and Lock Screen: a card that
+/// rotates through the next few events, with where each one is and Going
+/// and Ping buttons, then friends' Pings with who's in (and "I'm in" on ones
+/// the user hasn't joined).
 ///
 /// It draws what the app last saved (``TonightSnapshot``) and never calls the
 /// API itself; the app saves whenever it loads Now, after a button, and in its
-/// background refresh. Ended Pings and events drop off on their own. Names are
+/// background refresh. Ended Pings and events drop off on their own, and the
+/// card moves to the next event every ``TonightSnapshot/rotation``. Names are
 /// as the API gave them and are hidden while the phone is locked.
 struct HotMessTonightWidget: Widget {
     var body: some WidgetConfiguration {
@@ -20,8 +23,8 @@ struct HotMessTonightWidget: Widget {
             TonightView(entry: entry)
                 .containerBackground(for: .widget) { TonightView.background }
         }
-        .configurationDisplayName("Tonight")
-        .description("Friends' Pings and who's in, and what's on tonight.")
+        .configurationDisplayName("Hot Mess - Tonight")
+        .description("What's coming up and where, with Going and Ping buttons, and friends' Pings.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }
@@ -30,9 +33,17 @@ struct TonightEntry: TimelineEntry {
     let date: Date
     /// Nil before the app has saved anything (signed out, or never opened).
     let snapshot: TonightSnapshot?
+
+    /// The event the rotating card shows.
+    var featured: TonightSnapshot.Event? { snapshot?.featuredEvent(at: date) }
 }
 
 struct TonightProvider: TimelineProvider {
+    /// How far ahead one timeline rotates before WidgetKit asks for another.
+    static let horizon: TimeInterval = 4 * 60 * 60
+    /// WidgetKit keeps a timeline's entries in memory; this keeps it small.
+    static let maxEntries = 24
+
     func placeholder(in context: Context) -> TonightEntry {
         TonightEntry(date: .now, snapshot: .sample)
     }
@@ -48,16 +59,31 @@ struct TonightProvider: TimelineProvider {
             completion(Timeline(entries: [TonightEntry(date: now, snapshot: nil)], policy: .never))
             return
         }
-        // One entry now and one each time a Ping or event ends, so they drop
-        // off without the app running. The app reloads it when anything else
-        // changes.
-        var entries = [TonightEntry(date: now, snapshot: saved.current(at: now))]
+        let dates = Self.entryDates(for: saved, from: now)
+        let entries = dates.map { TonightEntry(date: $0, snapshot: saved.current(at: $0)) }
+        // Rotating: ask again once this run is used up. Otherwise the app
+        // reloads it when anything changes.
+        let rotates = saved.current(at: now).events.count > 1
+        completion(Timeline(entries: entries, policy: rotates ? .atEnd : .never))
+    }
+
+    /// Now, each time the card moves to the next event (while there's more
+    /// than one), and each time a Ping or event ends, so they drop off
+    /// without the app running.
+    static func entryDates(for snapshot: TonightSnapshot, from now: Date) -> [Date] {
+        var dates: Set<Date> = [now]
         var date = now
-        while entries.count < 8, let next = saved.nextChange(after: date) {
+        while dates.count < maxEntries / 2, let next = snapshot.nextChange(after: date) {
             date = next.addingTimeInterval(1)
-            entries.append(TonightEntry(date: date, snapshot: saved.current(at: date)))
+            dates.insert(date)
         }
-        completion(Timeline(entries: entries, policy: .never))
+        var rotation = now
+        while snapshot.current(at: rotation).events.count > 1 {
+            rotation = TonightSnapshot.nextRotation(after: rotation)
+            guard rotation < now.addingTimeInterval(horizon) else { break }
+            dates.insert(rotation)
+        }
+        return Array(dates.sorted().prefix(maxEntries))
     }
 }
 
@@ -74,17 +100,8 @@ struct TonightView: View {
 
     private var pingLimit: Int {
         switch family {
-        case .systemSmall, .accessoryRectangular: 1
-        case .systemMedium: 2
-        default: 3
-        }
-    }
-
-    private var eventLimit: Int {
-        switch family {
-        case .systemSmall, .accessoryRectangular: 1
-        case .systemMedium: 2
-        default: 4
+        case .systemSmall, .accessoryRectangular, .systemMedium: 1
+        default: 2
         }
     }
 
@@ -94,11 +111,11 @@ struct TonightView: View {
                 accessory(snapshot)
             } else {
                 content(snapshot)
-                    .widgetURL(snapshot.pings.first?.url ?? URL(string: "hotmess://now"))
+                    .widgetURL(entry.featured?.url ?? snapshot.pings.first?.url ?? URL(string: "hotmess://now"))
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                header(nil)
+                header(nil, snapshot: nil)
                 Spacer(minLength: 0)
                 Text("Open Hot Mess to see what's on and who's going out.")
                     .font(.footnote)
@@ -110,34 +127,47 @@ struct TonightView: View {
 
     // MARK: - Home Screen
 
+    @ViewBuilder
     private func content(_ snapshot: TonightSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header(snapshot.localeName)
-            if snapshot.pings.isEmpty && snapshot.events.isEmpty && snapshot.onNow == nil {
+        let featured = entry.featured
+        VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 6) {
+            header(snapshot.localeName, snapshot: snapshot)
+            if let featured {
+                FeaturedEventCard(event: featured, date: entry.date, compact: family == .systemSmall)
+            }
+            if snapshot.pings.isEmpty && featured == nil && snapshot.onNow == nil {
                 Spacer(minLength: 0)
                 Text("Quiet so far. Send a Ping to get the night going.")
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.75))
             }
-            ForEach(snapshot.pings.prefix(pingLimit)) { ping in
-                PingRow(ping: ping, showsButton: family != .systemSmall)
-            }
-            if let onNow = snapshot.onNow, family != .systemSmall {
-                Label {
-                    Text(snapshot.venueName.map { String(localized: "On now at \($0): \(onNow)") }
-                        ?? String(localized: "On now: \(onNow)"))
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "music.mic")
-                        .foregroundStyle(Self.accent)
+            if family != .systemSmall || featured == nil {
+                ForEach(snapshot.pings.prefix(pingLimit)) { ping in
+                    PingRow(ping: ping, showsButton: family != .systemSmall)
                 }
-                .font(.caption)
-                .foregroundStyle(.white)
             }
-            let events = snapshot.events.prefix(snapshot.pings.isEmpty ? eventLimit + 1 : eventLimit)
-            if !events.isEmpty, family != .systemSmall || snapshot.pings.isEmpty {
-                ForEach(events) { event in
-                    EventRow(event: event)
+            if family == .systemLarge {
+                if let onNow = snapshot.onNow {
+                    Label {
+                        Text(snapshot.venueName.map { String(localized: "On now at \($0): \(onNow)") }
+                            ?? String(localized: "On now: \(onNow)"))
+                            .lineLimit(1)
+                    } icon: {
+                        Image(systemName: "music.mic")
+                            .foregroundStyle(Self.accent)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                }
+                let others = snapshot.events.filter { $0.id != featured?.id }.prefix(3)
+                if !others.isEmpty {
+                    Text("Coming up")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .textCase(.uppercase)
+                    ForEach(others) { event in
+                        EventRow(event: event, date: entry.date)
+                    }
                 }
             }
             Spacer(minLength: 0)
@@ -145,12 +175,16 @@ struct TonightView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func header(_ locale: String?) -> some View {
+    private func header(_ locale: String?, snapshot: TonightSnapshot?) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "sparkles")
                 .foregroundStyle(Self.accent)
             Text(locale.map { String(localized: "Tonight in \($0)") } ?? String(localized: "Tonight"))
                 .lineLimit(1)
+            Spacer(minLength: 4)
+            if let snapshot, let featured = entry.featured, snapshot.events.count > 1 {
+                RotationDots(events: snapshot.events, featuredID: featured.id)
+            }
         }
         .font(.caption.weight(.bold))
         .foregroundStyle(.white)
@@ -170,12 +204,16 @@ struct TonightView: View {
                 Text(ping.peopleLine.map { String(localized: "\($0) in") } ?? String(localized: "Nobody in yet"))
                     .lineLimit(1)
                     .privacySensitive()
-            } else if let event = snapshot.events.first {
-                Text("Tonight")
-                    .font(.headline)
+            } else if let event = entry.featured {
                 Text(event.name)
+                    .font(.headline)
                     .lineLimit(1)
-                Text(event.startsAt, style: .time)
+                Text(EventTime.label(for: event, at: entry.date))
+                    .lineLimit(1)
+                if let location = event.location {
+                    Text(location)
+                        .lineLimit(1)
+                }
             } else {
                 Text("Tonight")
                     .font(.headline)
@@ -183,7 +221,160 @@ struct TonightView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .widgetURL(snapshot.pings.first?.url ?? snapshot.events.first?.url)
+        .widgetURL(snapshot.pings.first?.url ?? entry.featured?.url)
+    }
+}
+
+/// The rotating card: when, what, where, and the Going and Ping buttons
+/// (Ping only for something tonight, since a Ping ends at 5am).
+private struct FeaturedEventCard: View {
+    let event: TonightSnapshot.Event
+    let date: Date
+    /// The small widget: buttons as icons under the text.
+    let compact: Bool
+
+    var body: some View {
+        if compact {
+            VStack(alignment: .leading, spacing: 3) {
+                details(nameLines: 2)
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    goingButton(iconOnly: true)
+                    if event.isPingable(at: date) { pingButton(iconOnly: true) }
+                }
+            }
+        } else {
+            HStack(alignment: .center, spacing: 8) {
+                details(nameLines: 1)
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    goingButton(iconOnly: false)
+                    if event.isPingable(at: date) { pingButton(iconOnly: false) }
+                }
+                .fixedSize()
+            }
+            .padding(8)
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func details(nameLines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(EventTime.label(for: event, at: date))
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(TonightView.accent)
+                .lineLimit(1)
+            Text(event.name)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(nameLines)
+            if let location = event.location {
+                Label {
+                    Text(location)
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "mappin.and.ellipse")
+                }
+                .labelStyle(TightLabel())
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+    }
+
+    private func goingButton(iconOnly: Bool) -> some View {
+        Button(intent: SetGoingIntent(eventID: event.id, going: !event.isGoing)) {
+            if iconOnly {
+                Image(systemName: event.isGoing ? "checkmark.circle.fill" : "plus.circle")
+                    .accessibilityLabel(event.isGoing ? Text("Going") : Text("I'm going"))
+            } else {
+                Label("Going", systemImage: event.isGoing ? "checkmark" : "plus")
+            }
+        }
+        .modifier(WidgetButtonStyle(filled: event.isGoing))
+    }
+
+    private func pingButton(iconOnly: Bool) -> some View {
+        Button(intent: PingEventIntent(eventID: event.id)) {
+            if iconOnly {
+                Image(systemName: event.isPinged ? "hand.wave.fill" : "hand.wave")
+                    .accessibilityLabel(event.isPinged ? Text("Pinged") : Text("Ping friends"))
+            } else {
+                Label(
+                    event.isPinged ? LocalizedStringKey("Pinged") : LocalizedStringKey("Ping"),
+                    systemImage: event.isPinged ? "hand.wave.fill" : "hand.wave"
+                )
+            }
+        }
+        .modifier(WidgetButtonStyle(filled: event.isPinged))
+        .disabled(event.isPinged)
+    }
+}
+
+/// Accent-filled once done (Going, Pinged), outlined before.
+private struct WidgetButtonStyle: ViewModifier {
+    let filled: Bool
+
+    func body(content: Content) -> some View {
+        if filled {
+            content
+                .font(.caption.weight(.bold))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(TonightView.accent)
+        } else {
+            content
+                .font(.caption.weight(.bold))
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(TonightView.accent)
+        }
+    }
+}
+
+/// An icon close to its text, for the small location line.
+private struct TightLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon
+            configuration.title
+        }
+    }
+}
+
+/// One dot per event, the featured one lit, so it reads as rotating.
+private struct RotationDots: View {
+    let events: [TonightSnapshot.Event]
+    let featuredID: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(events) { event in
+                Circle()
+                    .fill(event.id == featuredID ? TonightView.accent : .white.opacity(0.3))
+                    .frame(width: 5, height: 5)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// When an event is, said against the entry's date: "On now", "9:00 PM",
+/// "Tomorrow 9:00 PM", "Fri 9:00 PM", or "Fri, Dec 5".
+enum EventTime {
+    static func label(for event: TonightSnapshot.Event, at date: Date, calendar: Calendar = .current) -> String {
+        if event.startsAt <= date { return String(localized: "On now") }
+        let time = event.startsAt.formatted(date: .omitted, time: .shortened)
+        if calendar.isDate(event.startsAt, inSameDayAs: date) { return time }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: date),
+           calendar.isDate(event.startsAt, inSameDayAs: tomorrow) {
+            return String(localized: "Tomorrow \(time)")
+        }
+        if event.startsAt < date.addingTimeInterval(6 * 24 * 60 * 60) {
+            let day = event.startsAt.formatted(.dateTime.weekday(.abbreviated))
+            return "\(day) \(time)"
+        }
+        return event.startsAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
     }
 }
 
@@ -234,27 +425,35 @@ private struct PingRow: View {
     }
 }
 
-/// Something on tonight.
+/// Another event coming up, in the large widget's list.
 private struct EventRow: View {
     let event: TonightSnapshot.Event
+    let date: Date
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(event.startsAt, style: .time)
+            Text(EventTime.label(for: event, at: date))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(TonightView.accent)
-                .frame(width: 52, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 72, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
                 Text(event.name)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                if let place = event.place {
-                    Text(place)
+                if let location = event.location {
+                    Text(location)
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.65))
                         .lineLimit(1)
                 }
+            }
+            Spacer(minLength: 0)
+            if event.isGoing {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(TonightView.accent)
             }
         }
         .modifier(LinkTo(url: event.url, enabled: true))
@@ -285,11 +484,13 @@ extension TonightSnapshot {
         return TonightSnapshot(
             updatedAt: now,
             localeName: "Seattle",
-            venueName: "Purr",
-            onNow: "Karaoke",
             events: [
-                Event(id: "1", name: "Drag Bingo", place: "Purr", startsAt: now.addingTimeInterval(3600), endsAt: nil),
-                Event(id: "2", name: "Disco Night", place: "Neighbours", startsAt: now.addingTimeInterval(7200), endsAt: nil),
+                Event(id: "1", name: "Drag Bingo", place: "Purr", startsAt: now.addingTimeInterval(3600),
+                      address: "1518 11th Ave, Seattle", going: true),
+                Event(id: "2", name: "Disco Night", place: "Neighbours", startsAt: now.addingTimeInterval(7200),
+                      address: "1509 Broadway, Seattle"),
+                Event(id: "3", name: "Bear Brunch", place: "The Cuff", startsAt: now.addingTimeInterval(26 * 3600),
+                      address: "1533 13th Ave, Seattle"),
             ],
             pings: [
                 Ping(id: "1", sender: "Sam", place: "Purr", people: ["Alex", "Jo", "Kai"], joined: false, isMine: false,
