@@ -8,10 +8,14 @@ import SwiftUI
 
 /// Soapbox articles about a page: "In the news" on a venue, event or person, "News" on a locale. Loads on its own and
 /// draws nothing while loading, when there are none, or for an audience without Soapbox.
+///
+/// With `showMore`, it asks for one more than it shows, and a "Show more" link opens the full list when there is more.
 struct NewsSection: View {
     let title: String
     let topic: ArticleTopic
     var limit = 3
+    /// Where "Show more" goes: a locale's ``NewsScreen``.
+    var showMore: AppRoute?
 
     @Environment(AppModel.self) private var model
     @Environment(\.detailRefreshes) private var refreshes
@@ -23,14 +27,24 @@ struct NewsSection: View {
         VStack(alignment: .leading, spacing: 0) {
             if !articles.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.hotMess(.subheadline, semibold: true))
-                        .foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.isHeader)
-                        .padding(.horizontal, 20)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(title)
+                            .font(.hotMess(.subheadline, semibold: true))
+                            .foregroundStyle(.secondary)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        if let showMore, articles.count > limit {
+                            NavigationLink(value: showMore) {
+                                Text("Show more")
+                                    .font(.hotMess(.subheadline, semibold: true))
+                            }
+                            .accessibilityIdentifier("news.showMore")
+                        }
+                    }
+                    .padding(.horizontal, 20)
 
                     VStack(spacing: 12) {
-                        ForEach(articles) { article in
+                        ForEach(articles.prefix(limit)) { article in
                             ArticleLink(article: article)
                         }
                     }
@@ -41,7 +55,9 @@ struct NewsSection: View {
             }
         }
         .task(id: SectionLoadKey(subject: topic, refreshes: refreshes)) {
-            articles = (try? await model.audienceKit.articles(about: topic, first: limit)) ?? []
+            // One more than it shows tells it whether there is more.
+            articles = (try? await model.audienceKit.articles(about: topic, first: showMore == nil ? limit : limit + 1))
+                ?? []
         }
     }
 }
@@ -52,9 +68,11 @@ extension NewsSection {
         NewsSection(title: SoapboxCopy.inTheNews, topic: topic)
     }
 
-    /// A locale's "News".
-    static func news(localeID: UUID) -> NewsSection {
-        NewsSection(title: SoapboxCopy.news, topic: .locale(localeID.uuidString.lowercased()), limit: 5)
+    /// A locale's "News", with "Show more" for all of it.
+    static func news(localeID: UUID, name: String) -> NewsSection {
+        let id = localeID.uuidString.lowercased()
+        return NewsSection(title: SoapboxCopy.news, topic: .locale(id), limit: 5,
+                           showMore: .news(localeID: id, name: name))
     }
 }
 

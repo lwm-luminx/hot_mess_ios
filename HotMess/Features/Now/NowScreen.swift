@@ -817,7 +817,8 @@ struct NowScreen: View {
             NewsSection(
                 title: now.locale.map { String(localized: "News in \($0.name)") } ?? SoapboxCopy.news,
                 topic: .locale(localeID),
-                limit: 3
+                limit: 3,
+                showMore: .news(localeID: localeID, name: now.locale?.name ?? SoapboxCopy.news)
             )
         }
     }
