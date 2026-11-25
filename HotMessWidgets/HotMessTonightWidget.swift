@@ -251,7 +251,7 @@ struct TonightView: View {
 }
 
 /// Lets a line truncate without counting toward the width `ViewThatFits`
-/// measures, so only the event name decides which Lock Screen layout is used.
+/// measures, so only the event name decides which layout is used.
 private struct NoIdealWidth: ViewModifier {
     func body(content: Content) -> some View {
         content.frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -277,17 +277,26 @@ private struct FeaturedEventCard: View {
                 }
             }
         } else {
-            HStack(alignment: .center, spacing: 8) {
-                details(nameLines: 2)
-                Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    goingButton(iconOnly: false)
-                    if event.isPingable(at: date) { pingButton(iconOnly: false) }
-                }
-                .fixedSize()
+            // Labelled buttons when the name fits on one line beside them;
+            // otherwise icon buttons, which leave the name room for two lines.
+            ViewThatFits(in: .horizontal) {
+                row(nameLines: 1, iconOnly: false)
+                row(nameLines: 2, iconOnly: true)
             }
             .padding(8)
             .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func row(nameLines: Int, iconOnly: Bool) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            details(nameLines: nameLines)
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                goingButton(iconOnly: iconOnly)
+                if event.isPingable(at: date) { pingButton(iconOnly: iconOnly) }
+            }
+            .fixedSize()
         }
     }
 
@@ -297,8 +306,7 @@ private struct FeaturedEventCard: View {
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(TonightView.accent)
                 .lineLimit(1)
-            // Two lines everywhere: beside the buttons on the medium and
-            // large widgets one line cut most names off.
+                .modifier(NoIdealWidth())
             Text(event.name)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
@@ -312,6 +320,7 @@ private struct FeaturedEventCard: View {
                     Image(systemName: "mappin.and.ellipse")
                 }
                 .labelStyle(TightLabel())
+                .modifier(NoIdealWidth())
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.7))
             }
