@@ -87,20 +87,18 @@ struct GetHelpSheet: View {
                     .accessibilityIdentifier("help.tellStaff")
                 }
                 HelpEscapeRows(model: model, showSupport: { isShowingSupport = true })
-                // Away from a venue there's no staff to tell, so the city's
-                // food, shelter, health and support lines come forward here.
-                if model.venue == nil {
-                    Button {
-                        isFindingHelp = true
-                    } label: {
-                        HelpRow(
-                            title: String(localized: "Find help nearby"),
-                            subtitle: String(localized: "Food, shelter, health and support in your city."),
-                            systemImage: "hand.raised"
-                        )
-                    }
-                    .accessibilityIdentifier("help.findNearby")
+                // The city's food, shelter, health and support lines, at a
+                // venue or away from one.
+                Button {
+                    isFindingHelp = true
+                } label: {
+                    HelpRow(
+                        title: String(localized: "Find help nearby"),
+                        subtitle: String(localized: "Food, shelter, health and support in your city."),
+                        systemImage: "hand.raised"
+                    )
                 }
+                .accessibilityIdentifier("help.findNearby")
             } footer: {
                 Text("Nothing here shows in chat or on your profile.")
             }
