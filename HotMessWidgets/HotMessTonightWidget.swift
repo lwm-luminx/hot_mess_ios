@@ -206,15 +206,7 @@ struct TonightView: View {
                     .lineLimit(1)
                     .privacySensitive()
             } else if let event = entry.featured {
-                Text(event.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text(EventTime.label(for: event, at: entry.date))
-                    .lineLimit(1)
-                if let location = event.location {
-                    Text(location)
-                        .lineLimit(1)
-                }
+                accessoryEvent(event)
             } else {
                 Text("Tonight")
                     .font(.headline)
@@ -223,6 +215,46 @@ struct TonightView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .widgetURL(snapshot.pings.first?.url ?? entry.featured?.url)
+    }
+
+    /// The Lock Screen card is only about half the screen wide, so most event
+    /// names don't fit on one line. A name that fits gets one line with the
+    /// time and place under it; a longer one gets two lines (shrinking a
+    /// little if it must) and the time, and the place gives way.
+    private func accessoryEvent(_ event: TonightSnapshot.Event) -> some View {
+        ViewThatFits(in: .horizontal) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(EventTime.label(for: event, at: entry.date))
+                    .lineLimit(1)
+                    .modifier(NoIdealWidth())
+                if let location = event.location {
+                    Text(location)
+                        .lineLimit(1)
+                        .modifier(NoIdealWidth())
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.name)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(EventTime.label(for: event, at: entry.date))
+                    .lineLimit(1)
+                    .modifier(NoIdealWidth())
+            }
+        }
+    }
+}
+
+/// Lets a line truncate without counting toward the width `ViewThatFits`
+/// measures, so only the event name decides which Lock Screen layout is used.
+private struct NoIdealWidth: ViewModifier {
+    func body(content: Content) -> some View {
+        content.frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -246,7 +278,7 @@ private struct FeaturedEventCard: View {
             }
         } else {
             HStack(alignment: .center, spacing: 8) {
-                details(nameLines: 1)
+                details(nameLines: 2)
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
                     goingButton(iconOnly: false)
@@ -265,10 +297,13 @@ private struct FeaturedEventCard: View {
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(TonightView.accent)
                 .lineLimit(1)
+            // Two lines everywhere: beside the buttons on the medium and
+            // large widgets one line cut most names off.
             Text(event.name)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
                 .lineLimit(nameLines)
+                .minimumScaleFactor(0.85)
             if let location = event.location {
                 Label {
                     Text(location)
