@@ -1509,7 +1509,7 @@ extension HotMessAPI {
           me {
             terms_accepted_at: termsAcceptedAt blocked_users: blockedUsers { \(blockedUserFields) }
             can_pretend_location: canPretendLocation
-            self { has_facebook: hasFacebook }
+            self { has_facebook: hasFacebook has_google: signedInWithGoogle }
           }
         }
         """

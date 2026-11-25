@@ -1159,7 +1159,18 @@ struct SafetyDecodingTests {
         """)
 
         #expect(!state.hasFacebook)
+        #expect(state.hasGoogle, "an API without the field offers nothing to connect")
         #expect(state.canPretendLocation)
+    }
+
+    @Test("Reads whether the account can sign in with Google")
+    func googleAccount() throws {
+        let state = try decode(SafetyState.self, from: """
+        { "terms_accepted_at": null, "blocked_users": [], "self": { "has_facebook": true, "has_google": false } }
+        """)
+
+        #expect(state.hasFacebook)
+        #expect(!state.hasGoogle)
     }
 }
 

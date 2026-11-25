@@ -41,6 +41,7 @@ struct SettingsScreen: View {
             chatPhotoSection
             tribesSection
             facebookSection
+            googleSection
             staffAppsSection
             coverSection
             calendarSection
@@ -172,6 +173,19 @@ struct SettingsScreen: View {
                 ConnectFacebookButton()
             } footer: {
                 ConnectFacebookFooter()
+            }
+        }
+    }
+
+    /// For an account that can't sign in with Google yet, in a build that
+    /// has Google's client.
+    @ViewBuilder
+    private var googleSection: some View {
+        if model.safety.isLoaded, !model.safety.hasGoogle, model.session.canSignInWithGoogle {
+            Section {
+                ConnectGoogleButton()
+            } footer: {
+                ConnectGoogleFooter()
             }
         }
     }

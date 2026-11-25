@@ -292,6 +292,28 @@ final class SessionStore {
         }
     }
 
+    /// Connects Google to the signed-in account through Google's page, so the
+    /// person can sign in with Google from then on. When the Google account
+    /// already had its own Hot Mess account, the API makes the two one, so
+    /// the session that comes back can name a different account. False when
+    /// the person cancels. A refusal (that Google account belongs to another
+    /// account with its own Facebook, say) throws the API's reason and keeps
+    /// the current session.
+    func connectGoogle(using webAuthenticationSession: WebAuthenticationSession) async throws -> Bool {
+        guard let google = configuration.google else { throw SessionError.googleUnavailable }
+        let device = DeviceInfo.description(for: configuration)
+        guard let session = try await webAuthenticationSession.signInWithGoogle(
+            google, client: audienceKit, device: device, connect: true)
+        else { return false }
+
+        if let refreshed = try? await currentUser() {
+            user = refreshed
+        } else if let switched = User(id: session.userId, name: user?.name), switched.id != user?.id {
+            user = switched
+        }
+        return true
+    }
+
     /// The ways the audience lets people sign in, or nil when the API can't
     /// say (an API from before the setting, or no connection): the login
     /// screen then offers what it always has.
