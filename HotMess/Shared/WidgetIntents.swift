@@ -22,6 +22,11 @@ enum WidgetActions {
         var acceptQuickie: @Sendable (_ venueID: UUID, _ matchID: UUID) async throws -> Void
         /// Asks for a new topic for the two of them (both say yes again).
         var newQuickieTopic: @Sendable (_ venueID: UUID, _ matchID: UUID) async throws -> Void
+        /// "Going" on an event, or takes it back.
+        var setGoing: @Sendable (_ eventID: UUID, _ going: Bool) async throws -> Void
+        /// Adds an event tonight to the user's Ping, sending one when they
+        /// have none running.
+        var pingEvent: @Sendable (_ eventID: UUID) async throws -> Void
     }
 
     static var handlers: Handlers?
@@ -102,6 +107,55 @@ struct NewQuickieTopicIntent: LiveActivityIntent {
               let venue = UUID(uuidString: venueID), let match = UUID(uuidString: matchID)
         else { throw WidgetActionUnavailable() }
         try await handlers.newQuickieTopic(venue, match)
+        return .result()
+    }
+}
+
+struct SetGoingIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource { "Going to an event" }
+    static var description: IntentDescription { IntentDescription("Says you're going to an event, or takes it back.") }
+    static var isDiscoverable: Bool { false }
+
+    @Parameter(title: "Event")
+    var eventID: String
+    @Parameter(title: "Going")
+    var going: Bool
+
+    init() {}
+
+    init(eventID: String, going: Bool) {
+        self.eventID = eventID
+        self.going = going
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let handlers = await WidgetActions.handlers, let event = UUID(uuidString: eventID)
+        else { throw WidgetActionUnavailable() }
+        try await handlers.setGoing(event, going)
+        return .result()
+    }
+}
+
+struct PingEventIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource { "Ping friends about an event" }
+    static var description: IntentDescription {
+        IntentDescription("Adds an event tonight to your Ping, or sends a Ping for it.")
+    }
+    static var isDiscoverable: Bool { false }
+
+    @Parameter(title: "Event")
+    var eventID: String
+
+    init() {}
+
+    init(eventID: String) {
+        self.eventID = eventID
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let handlers = await WidgetActions.handlers, let event = UUID(uuidString: eventID)
+        else { throw WidgetActionUnavailable() }
+        try await handlers.pingEvent(event)
         return .result()
     }
 }

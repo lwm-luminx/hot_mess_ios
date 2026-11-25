@@ -618,12 +618,12 @@ struct NowScreen: View {
     @ViewBuilder
     private func stageSection(_ now: Now) -> some View {
         if let lineupModel, let lineup = lineupModel.lineup, !lineup.entries.isEmpty || lineup.showsKaraoke
-            || lineup.showsSongRequests || lineup.featuredHost != nil {
+            || lineup.showsSongRequests || lineup.featuredHost != nil || !lineup.featuredJockeys.isEmpty {
             VenueLineupSection(lineupModel: lineupModel, lineup: lineup, singAlongEventID: singAlongEventID(now))
             // A karaoke night the lineup doesn't run (a partner's, or one the host runs off the app): its card
             // still shows, under the host it says to ask.
             if singAlongEventID(now) == nil, !lineup.showsKaraoke, let karaoke = now.event?.karaoke {
-                KaraokeSection(karaoke: karaoke, hostName: lineupModel.hostEntry?.displayName)
+                KaraokeSection(karaoke: karaoke, hostNames: lineup.hostNames)
             }
         } else if now.venues == nil, now.venue != nil {
             if now.onNow.hasAnything {
@@ -817,7 +817,8 @@ struct NowScreen: View {
             NewsSection(
                 title: now.locale.map { String(localized: "News in \($0.name)") } ?? SoapboxCopy.news,
                 topic: .locale(localeID),
-                limit: 3
+                limit: 3,
+                showMore: .news(localeID: localeID, name: now.locale?.name ?? SoapboxCopy.news)
             )
         }
     }

@@ -33,6 +33,9 @@ struct SafetyState: Decodable, Sendable {
     /// False for an account that signed in with Apple and hasn't connected
     /// Facebook, so has no friends to show.
     var hasFacebook: Bool
+    /// False for an account that can't sign in with Google yet, so Me can
+    /// offer to connect it. True when the API doesn't say.
+    var hasGoogle: Bool
     /// True only for the designated App Review account while the audience is
     /// in App Review: the reviewer can pretend to be at a venue, like a test
     /// build.
@@ -48,17 +51,20 @@ struct SafetyState: Decodable, Sendable {
 
     private enum ProfileKeys: String, CodingKey {
         case hasFacebook = "has_facebook"
+        case hasGoogle = "has_google"
     }
 
     init(
         termsAcceptedAt: Date? = nil,
         blockedUsers: [BlockedUser] = [],
         hasFacebook: Bool = true,
+        hasGoogle: Bool = true,
         canPretendLocation: Bool = false
     ) {
         self.termsAcceptedAt = termsAcceptedAt
         self.blockedUsers = blockedUsers
         self.hasFacebook = hasFacebook
+        self.hasGoogle = hasGoogle
         self.canPretendLocation = canPretendLocation
     }
 
@@ -70,8 +76,10 @@ struct SafetyState: Decodable, Sendable {
         if (try? container.decodeNil(forKey: .profile)) == false {
             let profile = try container.nestedContainer(keyedBy: ProfileKeys.self, forKey: .profile)
             hasFacebook = try profile.decodeIfPresent(Bool.self, forKey: .hasFacebook) ?? true
+            hasGoogle = try profile.decodeIfPresent(Bool.self, forKey: .hasGoogle) ?? true
         } else {
             hasFacebook = true
+            hasGoogle = true
         }
         canPretendLocation = try container.decodeIfPresent(Bool.self, forKey: .canPretendLocation) ?? false
     }

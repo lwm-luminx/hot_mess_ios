@@ -31,6 +31,9 @@ enum AppRoute: Hashable, Sendable {
     case article(String)
     /// A Soapbox publication's page: its articles and "Write an op-ed".
     case publication(String)
+    /// A locale's news in full ("Show more" under its news): its publishers, then all their articles. By the locale's
+    /// id as the API has it, and its name.
+    case news(localeID: String, name: String)
 
     /// Which tab the route belongs in.
     var tab: AppTab {
@@ -38,7 +41,7 @@ enum AppRoute: Hashable, Sendable {
         case .venue, .venueChat, .karaokeList, .locale: .venues
         case .event: .events
         case .person: .people
-        case .localeChat, .eventChat, .ping, .updates, .article, .publication: .now
+        case .localeChat, .eventChat, .ping, .updates, .article, .publication, .news: .now
         case let .posts(subject, _):
             switch subject {
             case .venue: .venues

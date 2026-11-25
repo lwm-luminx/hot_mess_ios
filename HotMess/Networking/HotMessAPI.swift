@@ -252,8 +252,18 @@ struct HotMessAPI: CoverPaymentAPI {
                      as: LocaleEventsResponse.self)?.locale?.events
     }
 
+    /// An event with its KJ, DJ or VJ; an API from before the jockey role
+    /// refuses that document, so the plain one is the fallback.
     func event(_ id: UUID) async throws -> EventDetail {
-        let response = try await query(Documents.event, variables: ["id": .string(id.uuidString)], as: EventResponse.self)
+        let variables: [String: GraphQLValue] = ["id": .string(id.uuidString)]
+        let response: EventResponse
+        do {
+            response = try await query(Documents.eventWithJockeys, variables: variables, as: EventResponse.self)
+        } catch APIError.transport {
+            // A GraphQL refusal (`undefinedField` on an older API) reads as
+            // transport; offline, signed out and not found throw as they are.
+            response = try await query(Documents.event, variables: variables, as: EventResponse.self)
+        }
         guard let event = response.event else { throw APIError.notFound }
         return event
     }
@@ -977,6 +987,7 @@ struct SignInMethods: Decodable, Sendable, Equatable {
 
     var facebook: Bool { methods.contains("facebook") }
     var apple: Bool { methods.contains("apple") }
+    var google: Bool { methods.contains("google") }
     var reviewCode: Bool { methods.contains("review_code") }
 
     init(methods: [String], warnings: [String: String] = [:], deviceAttestation: DeviceAttestation? = nil) {
@@ -1278,20 +1289,31 @@ extension HotMessAPI {
         }
         """
 
-        static let event = """
+        static let event = eventDocument(jockeys: false)
+
+        /// ``event`` with its KJ, DJ or VJ: an API from audience_kit_api #881 on.
+        static let eventWithJockeys = eventDocument(jockeys: true)
+
+        static func eventDocument(jockeys: Bool) -> String {
+            let jockeyFields = jockeys ? "jockeys { nodes { \(personFields) } } jockeyLabel" : ""
+            return """
         query Event($id: ID!) {
           events { event(id: $id) {
             \(eventFields) people {
               hosts { nodes { \(personFields) } }
               organizers { nodes { \(personFields) } }
               lineup { nodes { \(personFields) } }
+              \(jockeyFields)
             }
             ping { friend_pings: friendPings { \(pingFields) } }
             tickets { cover { cover_charge: charge { \(coverChargeFields) } } }
             venue_cover: venue { venue { \(venueCoverFields) } }
+            parent_event: parentEvent { id name start_at: startAt end_at: endAt }
+            child_events: childEvents { nodes { \(eventFields) } }
           } }
         }
         """
+        }
 
         static let buyCover = """
         mutation BuyCover($venueId: ID!, $quantity: Int, $tier: String, $amount: MoneyInput) {
@@ -1487,7 +1509,7 @@ extension HotMessAPI {
           me {
             terms_accepted_at: termsAcceptedAt blocked_users: blockedUsers { \(blockedUserFields) }
             can_pretend_location: canPretendLocation
-            self { has_facebook: hasFacebook }
+            self { has_facebook: hasFacebook has_google: signedInWithGoogle }
           }
         }
         """

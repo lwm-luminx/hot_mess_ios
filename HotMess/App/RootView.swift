@@ -116,6 +116,10 @@ struct MainTabView: View {
             }
             .audiencePreset(model.brand.preset)
         }
+        .sheet(item: $model.spotifyShare) { share in
+            SpotifyRequestSheet(share: share)
+                .environment(model)
+        }
         .sheet(item: $model.privateChat) { link in
             Group {
                 switch link {
@@ -164,6 +168,8 @@ struct RouteDestination: View {
             ArticleScreen(articleID: id)
         case let .publication(id):
             PublicationScreen(publicationID: id)
+        case let .news(localeID, name):
+            NewsScreen(localeID: localeID, name: name)
         }
     }
 }

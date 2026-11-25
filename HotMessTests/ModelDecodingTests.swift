@@ -1159,7 +1159,18 @@ struct SafetyDecodingTests {
         """)
 
         #expect(!state.hasFacebook)
+        #expect(state.hasGoogle, "an API without the field offers nothing to connect")
         #expect(state.canPretendLocation)
+    }
+
+    @Test("Reads whether the account can sign in with Google")
+    func googleAccount() throws {
+        let state = try decode(SafetyState.self, from: """
+        { "terms_accepted_at": null, "blocked_users": [], "self": { "has_facebook": true, "has_google": false } }
+        """)
+
+        #expect(state.hasFacebook)
+        #expect(!state.hasGoogle)
     }
 }
 
@@ -1267,6 +1278,32 @@ struct MixinDecodingTests {
         #expect(lineupOnly.people.map(\.name) == ["Kiko Soirée"])
     }
 
+    @Test("Bills an event's KJ apart from its hosts and keeps them out of its lineup")
+    func eventJockeys() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let host = #"{ "id": "1A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Mama Alma", "avatar_url": null }"#
+        let kj = #"{ "id": "2B2C3D4E-5F60-4B7C-9DAE-1F2A3B4C5D6E", "name": "Dalton", "avatar_url": null }"#
+        let detail = try decode(EventDetail.self, from: base + """
+        , "people": { "hosts": { "nodes": [\(host)] }, "lineup": { "nodes": [\(host), \(kj)] },
+          "jockeys": { "nodes": [\(kj)] }, "jockeyLabel": "KJ" } }
+        """)
+
+        #expect(detail.hosts.map(\.name) == ["Mama Alma"])
+        #expect(detail.jockeys.map(\.name) == ["Dalton"])
+        #expect(detail.jockeysTitle == "KJ Dalton")
+        #expect(detail.people.isEmpty)
+        #expect(detail.karaokeContactNames == ["Mama Alma", "KJ Dalton"])
+        #expect(detail.jockeysLine == "KJ Dalton")
+
+        // A lone KJ hosts the night (Rick, 2026-11-23).
+        let alone = try decode(EventDetail.self, from: base + #", "people": { "lineup": { "nodes": [\#(kj)] }, "jockeys": { "nodes": [\#(kj)] }, "jockeyLabel": "KJ" } }"#)
+        #expect(alone.jockeysLine == "Hosted by KJ Dalton")
+        #expect(alone.karaokeContactNames == ["KJ Dalton"])
+
+        let older = try decode(EventDetail.self, from: base + #", "people": { "hosts": { "nodes": [\#(host)] } } }"#)
+        #expect(older.jockeys.isEmpty && older.jockeysTitle == nil)
+    }
+
     @Test("Shows who presents an event, apart from its hosts and lineup")
     func eventOrganizers() throws {
         let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
@@ -1290,5 +1327,24 @@ struct MixinDecodingTests {
         #expect(tba.coverCharge == nil)
         #expect(tba.venueCoverTonight == nil)
         #expect(off.viewerAdmission == nil)
+    }
+
+    @Test("Names the festival an event is part of, and lists a festival's events")
+    func eventFestival() throws {
+        let base = String(Fixtures.sparseEvent.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+        let parent = #"{ "id": "4D4E5F60-7182-4D9E-BFC0-3B4C5D6E7F80", "name": "Utah Pride Festival", "start_at": "2027-06-04T16:00:00Z", "end_at": null }"#
+        let part = try decode(EventDetail.self, from: base + #", "parent_event": \#(parent), "child_events": { "nodes": [] } }"#)
+
+        #expect(part.parentEvent?.name == "Utah Pride Festival")
+        #expect(part.parentEvent?.startDate == (try instant("2027-06-04T16:00:00Z")))
+        #expect(part.childEvents.isEmpty)
+
+        let festival = try decode(EventDetail.self, from: base + #", "parent_event": null, "child_events": { "nodes": [\#(Fixtures.sparseEvent)] } }"#)
+        #expect(festival.parentEvent == nil)
+        #expect(festival.childEvents.count == 1)
+
+        let older = try decode(EventDetail.self, from: base + "}")
+        #expect(older.parentEvent == nil)
+        #expect(older.childEvents.isEmpty)
     }
 }

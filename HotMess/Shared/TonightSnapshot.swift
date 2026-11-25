@@ -9,11 +9,15 @@
 
 import Foundation
 
-/// What the Tonight widget shows: what's on tonight and who's in on friends'
-/// Pings. Names are as the API gives them (a friend's full name, "First L."
+/// What the Tonight widget shows: the next few events (with where they are,
+/// for its rotating card and its Going and Ping buttons) and who's in on
+/// friends' Pings. Names are as the API gives them (a friend's full name, "First L."
 /// for anyone else), and only Pings a friend sent (or the user's own) are kept.
 struct TonightSnapshot: Codable, Hashable, Sendable {
-    /// Something on tonight in the user's city, or at the venue they're in.
+    /// Something coming up in the user's city, or at the venue they're in.
+    ///
+    /// The fields added after the first version are optional so a file the
+    /// last version saved still reads.
     struct Event: Codable, Hashable, Sendable, Identifiable {
         var id: String
         var name: String
@@ -22,6 +26,50 @@ struct TonightSnapshot: Codable, Hashable, Sendable {
         var startsAt: Date
         var endsAt: Date?
         var url: URL?
+        /// The venue's street address ("1201 E Pike St, Seattle"), when listed.
+        var address: String?
+        /// The user said they're going.
+        var going: Bool?
+        /// The user's own Ping names this event.
+        var pinged: Bool?
+
+        init(
+            id: String, name: String, place: String? = nil, startsAt: Date, endsAt: Date? = nil, url: URL? = nil,
+            address: String? = nil, going: Bool? = nil, pinged: Bool? = nil
+        ) {
+            self.id = id
+            self.name = name
+            self.place = place
+            self.startsAt = startsAt
+            self.endsAt = endsAt
+            self.url = url
+            self.address = address
+            self.going = going
+            self.pinged = pinged
+        }
+
+        var isGoing: Bool { going ?? false }
+        var isPinged: Bool { pinged ?? false }
+
+        /// Where it is, for the widget: "Purr · 1518 11th Ave" (the address
+        /// up to its first comma), the venue alone, or the address alone.
+        var location: String? {
+            let street = address?
+                .split(separator: ",", maxSplits: 1).first
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+            switch (place, street) {
+            case let (place?, street?) where street != place: return "\(place) · \(street)"
+            case let (place?, _): return place
+            case let (nil, street): return street
+            }
+        }
+
+        /// Whether a Ping (which lasts until 5am) can name it at `date`: it's
+        /// on now or starts within `window`.
+        func isPingable(at date: Date, window: TimeInterval = TonightSnapshot.tonightWindow) -> Bool {
+            isOn(at: date) && startsAt < date.addingTimeInterval(window)
+        }
 
         /// Still worth showing at `date`: not over (or, with no end, started
         /// less than 4 hours ago).
@@ -57,16 +105,59 @@ struct TonightSnapshot: Codable, Hashable, Sendable {
         var canJoin: Bool { !isMine && !joined }
     }
 
+    /// How far ahead counts as tonight, for the Ping button.
+    static let tonightWindow: TimeInterval = 12 * 60 * 60
+    /// How long the widget's featured event stays before the next one.
+    static let rotation: TimeInterval = 15 * 60
+
     var updatedAt: Date
     /// The city, for the header ("Tonight in Seattle").
     var localeName: String?
+    /// The city's id, for a Ping the widget sends.
+    var localeID: String?
     /// The venue the user is in, and who's on there now.
     var venueName: String?
     var onNow: String?
     var events: [Event]
     var pings: [Ping]
 
+    init(
+        updatedAt: Date, localeName: String? = nil, localeID: String? = nil, venueName: String? = nil,
+        onNow: String? = nil, events: [Event], pings: [Ping]
+    ) {
+        self.updatedAt = updatedAt
+        self.localeName = localeName
+        self.localeID = localeID
+        self.venueName = venueName
+        self.onNow = onNow
+        self.events = events
+        self.pings = pings
+    }
+
     static let empty = TonightSnapshot(updatedAt: .distantPast, events: [], pings: [])
+
+    /// The event the widget features at `date`. It moves on to the next one
+    /// every ``rotation``, counted from a fixed point so a redraw (after a
+    /// button, or when the app saves) keeps the same one up.
+    func featuredEvent(at date: Date) -> Event? {
+        let events = current(at: date).events
+        guard !events.isEmpty else { return nil }
+        let slot = Int((date.timeIntervalSince1970 / Self.rotation).rounded(.down))
+        return events[((slot % events.count) + events.count) % events.count]
+    }
+
+    /// The start of the rotation slot after `date`.
+    static func nextRotation(after date: Date) -> Date {
+        let slot = (date.timeIntervalSince1970 / rotation).rounded(.down) + 1
+        return Date(timeIntervalSince1970: slot * rotation)
+    }
+
+    /// The same, with `event` changed by `change` (after a button).
+    func updating(event id: String, _ change: (inout Event) -> Void) -> TonightSnapshot {
+        var copy = self
+        if let index = copy.events.firstIndex(where: { $0.id == id }) { change(&copy.events[index]) }
+        return copy
+    }
 
     /// As it stands at `date`: ended Pings and events dropped.
     func current(at date: Date) -> TonightSnapshot {

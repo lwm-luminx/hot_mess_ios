@@ -5,6 +5,7 @@
 
 import AudienceKit
 import AudienceKitUI
+import AuthenticationServices
 import Foundation
 import Observation
 import SwiftUI
@@ -72,6 +73,16 @@ final class AppModel {
     /// A Ping or Quickie chat over every tab, opened from the push about a new
     /// line in it.
     var privateChat: PrivateChatLink?
+    /// A Spotify song shared to Hot Mess (or pasted), on its way to the bar
+    /// as a song request.
+    var spotifyShare: SpotifyShare?
+
+    /// Picks up a song shared from Spotify's share sheet while the app was
+    /// closed. Only once signed in: a request needs an account.
+    func takeSpotifyShare() {
+        guard session.isSignedIn, spotifyShare == nil, let share = SpotifyShare.fromInbox() else { return }
+        spotifyShare = share
+    }
 
     /// One navigation path per tab, so a deep link can push onto the right
     /// stack without disturbing the others.
@@ -362,6 +373,16 @@ final class AppModel {
     /// re-reads what depends on it. False when the person cancels.
     func connectFacebook() async throws -> Bool {
         guard try await session.connectFacebook() else { return false }
+
+        friends.forget()
+        await safety.load(force: true)
+        return true
+    }
+
+    /// Connects Google to the signed-in account (Me's "Connect Google"), so
+    /// it can sign in with Google too. False when the person cancels.
+    func connectGoogle(using webAuthenticationSession: WebAuthenticationSession) async throws -> Bool {
+        guard try await session.connectGoogle(using: webAuthenticationSession) else { return false }
 
         friends.forget()
         await safety.load(force: true)
