@@ -63,8 +63,11 @@ jobs:
         run: |
           npm install --silent --no-save --no-package-lock --prefix .api-check graphql@16
           cp scripts/graphql/check.mjs .api-check/check.mjs
+          # Only the SDK modules Hot Mess links: since SDK 0.97.0 the package also carries StaffKit's modules, which
+          # query staffql, not the consumer schema.
+          sdk=.api-check/audience-kit-sdk/swift/Sources
           if ! node .api-check/check.mjs --schema .api-check/schema.graphql --endpoint consumer \
-               --allow-deprecated HotMess .api-check/audience-kit-sdk/swift/Sources; then
+               --allow-deprecated HotMess "$sdk/AudienceCore" "$sdk/AudienceKit" "$sdk/AudienceKitUI"; then
             echo "::error title=Needs an API change that isn't deployed::Deploy the audience_kit_api change these fields come from to $API (merge to next, or promote to main), then re-run this check."
             exit 1
           fi

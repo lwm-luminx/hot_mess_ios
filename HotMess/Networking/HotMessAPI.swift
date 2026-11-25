@@ -987,6 +987,7 @@ struct SignInMethods: Decodable, Sendable, Equatable {
 
     var facebook: Bool { methods.contains("facebook") }
     var apple: Bool { methods.contains("apple") }
+    var google: Bool { methods.contains("google") }
     var reviewCode: Bool { methods.contains("review_code") }
 
     init(methods: [String], warnings: [String: String] = [:], deviceAttestation: DeviceAttestation? = nil) {

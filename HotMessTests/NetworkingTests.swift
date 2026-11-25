@@ -161,6 +161,8 @@ struct EndpointTests {
         )
         #expect(!methods.facebook)
         #expect(methods.apple)
+        #expect(!methods.google)
+        #expect(SignInMethods(methods: ["facebook", "apple", "google"]).google)
         #expect(methods.reviewCode)
         #expect(methods.warning(for: "apple") == nil)
 
@@ -389,6 +391,20 @@ struct GraphQLTests {
 
 @Suite("App configuration")
 struct AppConfigurationTests {
+    @Test("Offers Google only with a real iOS OAuth client")
+    func googleClient() throws {
+        let base = try #require(URL(string: "https://api.hotmess.social"))
+        #expect(AppConfiguration(baseURL: base).google == nil)
+        #expect(AppConfiguration(baseURL: base, googleClientID: "$(GOOGLE_IOS_CLIENT_ID)").google == nil)
+
+        let google = try #require(AppConfiguration(
+            baseURL: base, googleClientID: "1-ios.apps.googleusercontent.com",
+            googleServerClientID: "1-web.apps.googleusercontent.com"
+        ).google)
+        #expect(google.callbackScheme == "com.googleusercontent.apps.1-ios")
+        #expect(google.serverClientID == "1-web.apps.googleusercontent.com")
+    }
+
     @Test("Derives the websocket URL from the HTTP base")
     func realtimeURL() {
         let https = AppConfiguration(baseURL: URL(string: "https://api.hotmess.social")!)

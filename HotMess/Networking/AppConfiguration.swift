@@ -15,6 +15,12 @@ struct AppConfiguration: Sendable, Hashable {
     let baseURL: URL
     let beaconUUID: UUID?
     let facebookAppID: String?
+    /// Sign in with Google: the Hot Mess iOS OAuth client and the web
+    /// ("server") client the API accepts ID tokens for, from
+    /// `GOOGLE_IOS_CLIENT_ID` and `GOOGLE_SERVER_CLIENT_ID`. Without a
+    /// client ID the login screen leaves Google out.
+    let googleClientID: String?
+    let googleServerClientID: String?
     /// Names the Hot Mess audience to the AudienceKit API, for sign-in and
     /// branding. See `AUDIENCE_HOST` in the xcconfig files.
     let audienceHost: String?
@@ -158,6 +164,8 @@ struct AppConfiguration: Sendable, Hashable {
         beaconUUID = (bundle.object(forInfoDictionaryKey: "HotMessBeaconID") as? String)
             .flatMap(UUID.init(uuidString:))
         facebookAppID = (bundle.object(forInfoDictionaryKey: "FacebookAppID") as? String).nonEmpty
+        googleClientID = (bundle.object(forInfoDictionaryKey: "GoogleClientID") as? String).nonEmpty
+        googleServerClientID = (bundle.object(forInfoDictionaryKey: "GoogleServerClientID") as? String).nonEmpty
         audienceHost = host
         audienceID = (bundle.object(forInfoDictionaryKey: "AudienceKitAudienceID") as? String).nonEmpty
         environment = env
@@ -176,6 +184,8 @@ struct AppConfiguration: Sendable, Hashable {
         baseURL: URL,
         beaconUUID: UUID? = nil,
         facebookAppID: String? = nil,
+        googleClientID: String? = nil,
+        googleServerClientID: String? = nil,
         audienceHost: String? = defaultAudienceHost,
         audienceID: String? = nil,
         environment: AudienceKitEnvironment = .production,
@@ -190,6 +200,8 @@ struct AppConfiguration: Sendable, Hashable {
         self.baseURL = baseURL
         self.beaconUUID = beaconUUID
         self.facebookAppID = facebookAppID
+        self.googleClientID = googleClientID
+        self.googleServerClientID = googleServerClientID
         self.audienceHost = audienceHost
         self.audienceID = audienceID
         self.environment = environment
@@ -315,5 +327,14 @@ private extension Optional where Wrapped == String {
     var nonEmpty: String? {
         guard let value = self?.trimmingCharacters(in: .whitespaces), !value.isEmpty else { return nil }
         return value
+    }
+}
+
+extension AppConfiguration {
+    /// The Google OAuth client sign-in uses, or nil when the build has none.
+    var google: GoogleOAuthClient? {
+        guard let googleClientID else { return nil }
+        let client = GoogleOAuthClient(clientID: googleClientID, serverClientID: googleServerClientID)
+        return client.isConfigured ? client : nil
     }
 }

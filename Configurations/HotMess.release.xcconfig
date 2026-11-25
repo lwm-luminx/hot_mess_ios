@@ -19,6 +19,13 @@ AUDIENCE_ID = b0f8b66a-e636-495d-9475-0f5317ea08e0
 
 FACEBOOK_APP_ID = 1168782378316790
 
+// Sign in with Google (GCP project hot-mess-production, which the API's
+// google.client_ids covers on production and next): the "Hot Mess iOS"
+// OAuth client, and the "Hot Mess Web (server)" client the ID token is
+// issued for, the same one Android uses. Neither is a secret.
+GOOGLE_IOS_CLIENT_ID = 689253921795-j34inahsr2m1vjnn4nq86t9tbbdnioek.apps.googleusercontent.com
+GOOGLE_SERVER_CLIENT_ID = 689253921795-pt1trs3ss1fk61jmnoce5425m5t8pt7d.apps.googleusercontent.com
+
 AUDIENCEKIT_ENVIRONMENT = production
 
 // Required by Facebook SDK 13 and later. The client token ships in the app's

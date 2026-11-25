@@ -4,6 +4,7 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import AuthenticationServices
 import FacebookCore
 import FacebookLogin
@@ -11,6 +12,7 @@ import Foundation
 import Observation
 import os
 import StoreKit
+import SwiftUI
 import UIKit
 
 enum AuthenticationState: Equatable, Sendable {
@@ -30,6 +32,7 @@ enum SessionError: Error, LocalizedError {
     case facebookSheetUnavailable
     case missingFacebookToken
     case missingAppleToken
+    case googleUnavailable
     case invalidReviewCode
     case facebook(String)
 
@@ -45,6 +48,8 @@ enum SessionError: Error, LocalizedError {
             String(localized: "Facebook didn't return an access token.")
         case .missingAppleToken:
             String(localized: "Apple didn't return a sign-in token.")
+        case .googleUnavailable:
+            String(localized: "Google sign-in isn't set up for Hot Mess yet.")
         case .invalidReviewCode:
             String(localized: "That App Review code isn't valid. Check the code in the review notes and try again.")
         case let .facebook(reason):
@@ -264,6 +269,29 @@ final class SessionStore {
         }
     }
 
+    /// Whether this build can sign in with Google (it names an OAuth client).
+    var canSignInWithGoogle: Bool { configuration.google != nil }
+
+    /// Sign in with Google: Google's page in a web authentication session,
+    /// then the SDK trades its code for an ID token and the ID token for a
+    /// session (`POST /v1/token/google`). Closing Google's page signs nobody
+    /// in. The account has no Facebook until the person connects it, like
+    /// one that signed in with Apple; the API links it to an existing account
+    /// by the Google account's verified email.
+    func signInWithGoogle(using webAuthenticationSession: WebAuthenticationSession) async {
+        guard let google = configuration.google else {
+            state = .failed(SessionError.googleUnavailable.localizedDescription)
+            return
+        }
+        state = .signingIn
+        await exchange { device in
+            guard let result = try await webAuthenticationSession.signInWithGoogle(
+                google, client: self.audienceKit, device: device)
+            else { throw SessionError.cancelled }
+            return result
+        }
+    }
+
     /// The ways the audience lets people sign in, or nil when the API can't
     /// say (an API from before the setting, or no connection): the login
     /// screen then offers what it always has.
@@ -426,6 +454,9 @@ final class SessionStore {
             if let refreshed = try? await currentUser() { user = refreshed }
 
             await PushNotifications.requestAuthorizationAndRegister()
+        } catch SessionError.cancelled {
+            Log.session.info("Sign-in cancelled")
+            state = .signedOut
         } catch {
             Log.session.error("Sign-in failed: \(error.localizedDescription, privacy: .public)")
             state = .failed(error.localizedDescription)
