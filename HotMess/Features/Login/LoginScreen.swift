@@ -4,13 +4,15 @@
 //
 
 import AudienceKit
+import AudienceKitUI
 import AuthenticationServices
 import SwiftUI
 
 /// What `RootView` shows when there is no session: the Hot Mess silhouette in
 /// the audience's colours, its name and tagline, and Facebook sign-in, with
-/// Sign in with Apple beside it. AudienceKit says which of them the audience
-/// offers (`GET /v1/token/methods`); until it answers, or if it can't, both.
+/// Sign in with Apple and Google beside it. AudienceKit says which of them the
+/// audience offers (`GET /v1/token/methods`); until it answers, or if it
+/// can't, all three (Google only when the build names its OAuth client).
 ///
 /// A method AudienceKit has a warning for ("Facebook login is only for
 /// testers") shows it with Cancel and Continue first. Every sign-in (Facebook,
@@ -21,6 +23,7 @@ struct LoginScreen: View {
     private enum PendingSignIn {
         case facebook
         case apple(Result<ASAuthorization, any Error>)
+        case google
         case reviewCode
 
         /// Its name in `GET /v1/token/methods`.
@@ -28,12 +31,14 @@ struct LoginScreen: View {
             switch self {
             case .facebook: "facebook"
             case .apple: "apple"
+            case .google: "google"
             case .reviewCode: "review_code"
             }
         }
     }
 
     @Environment(AppModel.self) private var model
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var hasAgreedToEULA = false
     @State private var isShowingEULA = false
     /// Whether the terms sheet on screen also asks "I confirm I am 18 or older".
@@ -241,6 +246,10 @@ struct LoginScreen: View {
                 appleButton
             }
 
+            if offersGoogle {
+                googleButton
+            }
+
             Text(signInNote)
                 .font(.hotMess(.footnote))
                 .multilineTextAlignment(.center)
@@ -264,15 +273,52 @@ struct LoginScreen: View {
 
     private var offersApple: Bool { signInMethods?.apple ?? true }
 
+    private var offersGoogle: Bool { model.session.canSignInWithGoogle && (signInMethods?.google ?? true) }
+
     private var signInNote: String {
-        switch (offersFacebook, offersApple) {
-        case (true, true):
+        switch (offersFacebook, offersApple, offersGoogle) {
+        case (true, true, true):
+            String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you. With Apple or Google, you can connect Facebook later.")
+        case (true, true, false):
             String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you. With Apple, you can connect Facebook later.")
-        case (true, false):
+        case (true, false, true):
+            String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you. With Google, you can connect Facebook later.")
+        case (true, false, false):
             String(localized: "Hot Mess uses your Facebook profile to find your friends and the events near you.")
+        case (false, false, true):
+            String(localized: "Sign in with Google to find the events near you. You can connect Facebook later to find your friends.")
+        case (false, true, true):
+            String(localized: "Sign in with Apple or Google to find the events near you. You can connect Facebook later to find your friends.")
         default:
             String(localized: "Sign in with Apple to find the events near you. You can connect Facebook later to find your friends.")
         }
+    }
+
+    /// "Continue with Google", in Google's light style (white, the four-colour
+    /// G), matching the Facebook and Apple buttons above it.
+    private var googleButton: some View {
+        Button {
+            attempt(.google)
+        } label: {
+            HStack(spacing: 12) {
+                Image("Google")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .accessibilityHidden(true)
+
+                Text(GoogleSignInCopy.signIn)
+                    .font(.hotMess(.headline, semibold: true))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(.white, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isSigningIn || !hasAskedSignInMethods)
+        .accessibilityIdentifier("login.google")
+        .accessibilityLabel(GoogleSignInCopy.signIn)
     }
 
     private var facebookButton: some View {
@@ -386,6 +432,8 @@ struct LoginScreen: View {
             Task { await model.session.signIn() }
         case let .apple(result):
             model.session.signInWithApple(result)
+        case .google:
+            Task { await model.session.signInWithGoogle(using: webAuthenticationSession) }
         case .reviewCode:
             isEnteringReviewCode = true
         }
