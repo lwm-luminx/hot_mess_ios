@@ -5,6 +5,7 @@
 
 import AudienceKit
 import AudienceKitUI
+import AuthenticationServices
 import Foundation
 import Observation
 import SwiftUI
@@ -372,6 +373,16 @@ final class AppModel {
     /// re-reads what depends on it. False when the person cancels.
     func connectFacebook() async throws -> Bool {
         guard try await session.connectFacebook() else { return false }
+
+        friends.forget()
+        await safety.load(force: true)
+        return true
+    }
+
+    /// Connects Google to the signed-in account (Me's "Connect Google"), so
+    /// it can sign in with Google too. False when the person cancels.
+    func connectGoogle(using webAuthenticationSession: WebAuthenticationSession) async throws -> Bool {
+        guard try await session.connectGoogle(using: webAuthenticationSession) else { return false }
 
         friends.forget()
         await safety.load(force: true)

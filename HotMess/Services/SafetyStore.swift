@@ -24,6 +24,9 @@ final class SafetyStore {
     /// Assumed until the API says otherwise, so nobody who signed in with
     /// Facebook is asked to connect it.
     private(set) var hasFacebook = true
+    /// Whether the account can sign in with Google; assumed until the API
+    /// says otherwise, so Me never offers it to someone who has it.
+    private(set) var hasGoogle = true
     private(set) var canPretendLocation = false
 
     private let api: HotMessAPI
@@ -50,6 +53,7 @@ final class SafetyStore {
             blockedUsers = state.blockedUsers
             termsAcceptedAt = state.termsAcceptedAt
             hasFacebook = state.hasFacebook
+            hasGoogle = state.hasGoogle
             canPretendLocation = state.canPretendLocation
             isLoaded = true
         } catch {
@@ -114,6 +118,7 @@ final class SafetyStore {
         blockedUsers = []
         termsAcceptedAt = nil
         hasFacebook = true
+        hasGoogle = true
         canPretendLocation = false
         isLoaded = false
     }
