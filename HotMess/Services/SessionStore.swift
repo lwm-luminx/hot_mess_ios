@@ -12,6 +12,7 @@ import Foundation
 import Observation
 import os
 import StoreKit
+import SwiftUI
 import UIKit
 
 enum AuthenticationState: Equatable, Sendable {
