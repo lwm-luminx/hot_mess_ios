@@ -168,6 +168,7 @@ struct SafetyAlertStatusView: View {
                             message.fromStaff ? Color.hotMessControlFill : Color.hotMessAccentSoft,
                             in: RoundedRectangle(cornerRadius: HotMessRadius.bubble)
                         )
+                    if let resource = message.resource { SharedResourceLinks(resource: resource) }
                 }
                 .frame(maxWidth: .infinity, alignment: message.fromStaff ? .leading : .trailing)
                 .listRowSeparator(.hidden)
