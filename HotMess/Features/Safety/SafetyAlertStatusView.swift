@@ -17,8 +17,20 @@ struct SafetyAlertStatusView: View {
     @State private var isAddingMore = false
     @State private var isConfirmingCancel = false
     @State private var reply = ""
+    private static let threadBottom = "help.thread.bottom"
 
     var body: some View {
+        ScrollViewReader { proxy in
+            list
+                // Opens at the newest line of the thread and follows new ones, like any chat.
+                .onAppear { if !alert.messages.isEmpty { proxy.scrollTo(Self.threadBottom, anchor: .bottom) } }
+                .onChange(of: alert.messages.last?.id) { _, _ in
+                    withAnimation { proxy.scrollTo(Self.threadBottom, anchor: .bottom) }
+                }
+        }
+    }
+
+    private var list: some View {
         List {
             if alert.isUnanswered(at: model.now), !model.keepsWaiting {
                 unanswered
@@ -188,6 +200,10 @@ struct SafetyAlertStatusView: View {
                     .accessibilityLabel(String(localized: "Send"))
                 }
             }
+            Color.clear.frame(height: 1)
+                .id(Self.threadBottom)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         } header: {
             Text("Private thread")
         } footer: {
