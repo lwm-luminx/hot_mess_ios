@@ -72,17 +72,22 @@ struct GetHelpSheet: View {
         return String(localized: "Get help")
     }
 
-    /// The Get help sheet: tell staff, a friend, a ride, support, then 911.
+    /// The Get help sheet: contact staff (at a venue), a friend, a ride,
+    /// support, then 911.
     private var options: some View {
         List {
             Section {
-                if model.venue != nil, model.staffOnShift || model.venue?.posterCode != nil {
+                // Always offered at a venue: with nobody on shift the alert
+                // goes to the managers (and the area's safety responders).
+                if model.venue != nil {
                     Button {
                         isTellingStaff = true
                     } label: {
                         HelpRow(
-                            title: String(localized: "Tell staff I feel unsafe"),
-                            subtitle: String(localized: "The staff on shift hear it quietly and can come find you."),
+                            title: String(localized: "Contact staff"),
+                            subtitle: model.staffOnShift || model.venue?.posterCode != nil
+                                ? String(localized: "Tell them quietly you feel unsafe. The staff on shift can come find you.")
+                                : String(localized: "Nobody has alerts on right now, so it goes to the managers. Finding staff in person may be faster."),
                             systemImage: "shield.lefthalf.filled"
                         )
                     }
