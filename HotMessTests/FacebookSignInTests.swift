@@ -31,13 +31,13 @@ struct FacebookSignInTests {
         #expect(items.contains(URLQueryItem(name: "scope", value: "public_profile,email")))
     }
 
-    @Test("Asks for the approved permissions, plus email and friends only in debug or the simulator")
+    @Test("Asks for the approved permissions, email included, plus friends only in debug or the simulator")
     func requestedPermissions() {
-        #expect(Array(SessionStore.requestedPermissions.prefix(2)) == ["public_profile", "openid"])
+        #expect(Array(SessionStore.requestedPermissions.prefix(3)) == ["public_profile", "openid", "email"])
         #if DEBUG || targetEnvironment(simulator)
         #expect(SessionStore.requestedPermissions == ["public_profile", "openid", "email", "user_friends"])
         #else
-        #expect(SessionStore.requestedPermissions == ["public_profile", "openid"])
+        #expect(SessionStore.requestedPermissions == ["public_profile", "openid", "email"])
         #endif
     }
 
