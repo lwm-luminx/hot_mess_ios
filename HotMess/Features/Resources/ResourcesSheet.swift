@@ -268,9 +268,12 @@ private struct NeedGrid: View {
                     .font(.body)
                     .frame(width: 24)
                     .accessibilityHidden(true)
+                // One line in every tile: the labels are short (18 characters
+                // at most), and shrink a little rather than wrap.
                 Text(label)
                     .font(.hotMess(.subheadline, semibold: isSelected))
-                    .multilineTextAlignment(.leading)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
