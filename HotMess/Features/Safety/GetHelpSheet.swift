@@ -16,7 +16,6 @@ struct GetHelpSheet: View {
     @State private var model: SafetyAlertModel
     @State private var isTellingStaff = false
     @State private var isShowingSupport = false
-    @State private var isFindingHelp = false
 
     init(presentation: HelpPresentation, api: HotMessAPI) {
         _model = State(initialValue: SafetyAlertModel(api: api, presentation: presentation))
@@ -41,8 +40,11 @@ struct GetHelpSheet: View {
             .navigationDestination(isPresented: $isTellingStaff) {
                 TellStaffForm(model: model, mode: .send) { isTellingStaff = false }
             }
-            .navigationDestination(isPresented: $isShowingSupport) {
-                SupportScreen(sharedNote: model.alert?.supportSharedAt != nil ? model.alert?.supportNote : nil)
+            .fullScreenCover(isPresented: $isShowingSupport) {
+                ResourcesSheet(
+                    focusResourceID: nil,
+                    sharedNote: model.alert?.supportSharedAt != nil ? model.alert?.supportNote : nil
+                )
             }
             .alert(
                 String(localized: "Couldn't reach staff"),
@@ -87,18 +89,6 @@ struct GetHelpSheet: View {
                     .accessibilityIdentifier("help.tellStaff")
                 }
                 HelpEscapeRows(model: model, showSupport: { isShowingSupport = true })
-                // The city's food, shelter, health and support lines, at a
-                // venue or away from one.
-                Button {
-                    isFindingHelp = true
-                } label: {
-                    HelpRow(
-                        title: String(localized: "Find help nearby"),
-                        subtitle: String(localized: "Food, shelter, health and support in your city."),
-                        systemImage: "hand.raised"
-                    )
-                }
-                .accessibilityIdentifier("help.findNearby")
             } footer: {
                 Text("Nothing here shows in chat or on your profile.")
             }
@@ -106,9 +96,6 @@ struct GetHelpSheet: View {
             EmergencySection()
         }
         .listStyle(.insetGrouped)
-        .fullScreenCover(isPresented: $isFindingHelp) {
-            ResourcesSheet(focusResourceID: nil)
-        }
     }
 }
 
@@ -142,7 +129,9 @@ struct HelpRow: View {
 }
 
 /// "Message a friend", "Get a ride" and "Need support?": what's left when
-/// nobody on shift can help, and what the no-answer screen offers.
+/// nobody on shift can help, and what the no-answer screen offers. "Get a
+/// ride" is one row that opens the ride apps, transit and sharing; "Need
+/// support?" opens the support lines and the city's resources together.
 struct HelpEscapeRows: View {
     let model: SafetyAlertModel
     let showSupport: () -> Void
@@ -159,12 +148,12 @@ struct HelpEscapeRows: View {
         }
         .accessibilityIdentifier("help.friend")
 
-        RideRows(rides: model.rides, pickup: model.pickup, shareMessage: rideMessage)
+        GetARideRow(rides: model.rides, pickup: model.pickup, place: place)
 
         Button(action: showSupport) {
             HelpRow(
                 title: String(localized: "Need support?"),
-                subtitle: String(localized: "Free, confidential lines, any time."),
+                subtitle: String(localized: "Someone to talk to, and food, shelter and health nearby."),
                 systemImage: "heart.text.square"
             )
         }
@@ -176,52 +165,11 @@ struct HelpEscapeRows: View {
         return String(localized: "\(here) Can you come find me?").trimmingCharacters(in: .whitespaces)
     }
 
-    private var rideMessage: String {
-        guard let venue else { return String(localized: "Pick me up here.") }
+    /// The venue's name and address, for the ride messages.
+    private var place: String? {
+        guard let venue else { return nil }
         if let address = venue.address, !address.isEmpty { return "\(venue.name), \(address)" }
         return venue.name
-    }
-}
-
-/// "Get a ride": a row for each ride app the API lists for the region, with
-/// the pickup set at the venue or where the phone is, then sharing the
-/// pickup for any other app or a friend who can drive over. Plain links: the
-/// app opens if it's installed, its site if not.
-struct RideRows: View {
-    let rides: [SupportResources.Ride]
-    let pickup: RidePickup?
-    let shareMessage: String
-
-    var body: some View {
-        ForEach(rides) { ride in
-            if let url = ride.link(pickup: pickup) {
-                Link(destination: url) {
-                    HelpRow(
-                        title: String(localized: "Get a ride with \(ride.name)"),
-                        subtitle: pickupLine,
-                        systemImage: "car"
-                    )
-                }
-                .accessibilityIdentifier("help.ride.\(ride.id)")
-            }
-        }
-
-        ShareLink(item: shareMessage) {
-            HelpRow(
-                title: rides.isEmpty ? String(localized: "Get a ride") : String(localized: "Share where to pick me up"),
-                subtitle: rides.isEmpty
-                    ? String(localized: "Share where to pick you up with a ride app.")
-                    : String(localized: "For another ride app, or a friend who can drive."),
-                systemImage: rides.isEmpty ? "car" : "square.and.arrow.up"
-            )
-        }
-        .accessibilityIdentifier("help.ride")
-    }
-
-    private var pickupLine: String {
-        guard let pickup else { return String(localized: "Opens the app to set your pickup.") }
-        if let name = pickup.name { return String(localized: "Pickup at \(name).") }
-        return String(localized: "Pickup where you are now.")
     }
 }
 

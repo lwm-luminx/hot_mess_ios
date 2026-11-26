@@ -6,8 +6,9 @@
 import AudienceKit
 import SwiftUI
 
-/// Food, shelter, health, support and safety resources in the city, from the
-/// directory fetched whole for the city. "I need…" and the search filter it
+/// "Need support?": the support lines for where the user is (they work with
+/// no city chosen), then the food, shelter, health, support and safety
+/// resources in the city, from the directory fetched whole for the city. "I need…" and the search filter it
 /// on this phone, so choosing a need or typing sends nothing anywhere and
 /// nothing is logged.
 ///
@@ -24,6 +25,8 @@ import SwiftUI
 /// dead end: an empty search still offers the crisis lines and a way back.
 struct ResourcesSheet: View {
     let focusResourceID: String?
+    /// What staff wrote when they shared this from an alert.
+    var sharedNote: String?
 
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -32,11 +35,14 @@ struct ResourcesSheet: View {
     @State private var need: ResourceNeed?
     @State private var search = ""
     @State private var opened: CommunityResource?
+    /// The crisis and support lines for the region (`supportResources`).
+    @State private var support: SupportResources?
+    @State private var rides: [SupportResources.Ride] = []
 
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(String(localized: "Find help nearby"))
+                .navigationTitle(String(localized: "Need support?"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -55,6 +61,7 @@ struct ResourcesSheet: View {
                 Color(.systemBackground).ignoresSafeArea()
             }
         }
+        .task { await loadSupport() }
         .task {
             model.flyers.prefetchDirectory(localeID: model.location.locale?.id)
             await model.flyers.awaitDirectory()
@@ -62,6 +69,43 @@ struct ResourcesSheet: View {
                 opened = model.flyers.directory?.resources.first { $0.id == focusResourceID }
             }
         }
+    }
+
+    /// The support lines and ride apps for where the phone is: only the
+    /// region (US-UT) is sent, as "Need support?" always has.
+    private func loadSupport() async {
+        let region = await SupportRegion.region(near: model.location.coordinates)
+        support = try? await model.api.supportResources(region: region)
+        rides = (try? await model.api.supportRides(region: region)) ?? []
+    }
+
+    private var pickup: RidePickup? {
+        model.location.coordinates.map { RidePickup(coordinates: $0, name: nil) }
+    }
+
+    /// Staff's note when they shared this from an alert, first in every state.
+    @ViewBuilder
+    private var noteSection: some View {
+        if let sharedNote, !sharedNote.isEmpty {
+            Section {
+                Text(sharedNote).font(.hotMess(.body))
+            } header: {
+                Text("A note from the venue")
+            }
+        }
+    }
+
+    /// The support lines, the way home and the emergency number: what every
+    /// state ends with, so none is a dead end.
+    @ViewBuilder
+    private func alwaysThere(lines: Bool = true) -> some View {
+        if lines, let support, !support.lines.isEmpty { SupportLinesSection(resources: support) }
+        Section {
+            GetARideRow(rides: rides, pickup: pickup, place: nil)
+        } header: {
+            Text("Get home safe")
+        }
+        if let support { EmergencySection(number: support.emergency) } else { EmergencySection() }
     }
 
     private var leaveNow: some View {
@@ -87,10 +131,20 @@ struct ResourcesSheet: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
         } else if model.location.locale == nil {
-            ContentUnavailableView(String(localized: "Choose a city first"), systemImage: "mappin.slash",
-                                   description: Text("Resources are listed by city."))
+            List {
+                noteSection
+                Section {
+                    Label(String(localized: "Choose a city to see food, shelter and health near you."),
+                          systemImage: "mappin.slash")
+                        .font(.hotMess(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+                alwaysThere()
+            }
+            .listStyle(.insetGrouped)
         } else if model.flyers.directoryFailed {
             List {
+                noteSection
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Label(String(localized: "Couldn't load resources"), systemImage: "wifi.exclamationmark")
@@ -104,11 +158,12 @@ struct ResourcesSheet: View {
                         model.flyers.prefetchDirectory(localeID: model.location.locale?.id)
                     }
                 }
-                EmergencySection()
+                alwaysThere()
             }
             .listStyle(.insetGrouped)
         } else {
             List {
+                noteSection
                 Section {
                     HStack(spacing: 12) {
                         ProgressView()
@@ -116,7 +171,7 @@ struct ResourcesSheet: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-                EmergencySection()
+                alwaysThere()
             }
             .listStyle(.insetGrouped)
         }
@@ -126,6 +181,7 @@ struct ResourcesSheet: View {
         let results = ResourceBrowser.results(in: directory, need: need, search: search)
         let browsing = need == nil && ResourceBrowser.words(search).isEmpty
         return List {
+            noteSection
             Section {
                 NeedGrid(needs: ResourceBrowser.offeredNeeds(directory), selected: need) { need = $0 }
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -159,6 +215,8 @@ struct ResourcesSheet: View {
                 }
             } else if browsing, !results.urgent.isEmpty {
                 Section(String(localized: "Help right now")) { rows(results.urgent) }
+                // The lines that work anywhere sit with the city's crisis lines.
+                if let support, !support.lines.isEmpty { SupportLinesSection(resources: support) }
                 if !results.rest.isEmpty {
                     Section(String(localized: "More in \(directory.locale.name)")) { rows(results.rest) }
                 }
@@ -166,7 +224,13 @@ struct ResourcesSheet: View {
                 Section(need?.label ?? String(localized: "Results")) { rows(results.urgent + results.rest) }
             }
 
-            EmergencySection()
+            if browsing || results.isEmpty {
+                alwaysThere(lines: !(browsing && !results.urgent.isEmpty))
+            } else if let support {
+                EmergencySection(number: support.emergency)
+            } else {
+                EmergencySection()
+            }
         }
         .listStyle(.insetGrouped)
     }

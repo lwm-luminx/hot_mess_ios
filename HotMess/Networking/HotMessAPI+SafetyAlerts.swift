@@ -126,7 +126,8 @@ extension SafetyAlertDraft {
 enum SafetyAlertDocuments {
     private static let alert = """
     id state place concerns description summary seen acknowledgedByName acknowledgedAt escalatedAt closedAt \
-    supportSharedAt supportNote createdAt venue { id name } messages { id body fromStaff senderName createdAt }
+    supportSharedAt supportNote createdAt venue { id name } messages { id body fromStaff senderName createdAt \
+    resource { id title phone textNumber address url intakeNote sensitive } }
     """
 
     static let venueSafety = """

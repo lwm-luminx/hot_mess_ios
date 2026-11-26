@@ -112,7 +112,7 @@ final class SafetyAlertModel {
         } else if let coordinates {
             pickup = RidePickup(coordinates: coordinates, name: nil)
         }
-        let region = await SupportScreen.region(near: pickup?.coordinates ?? coordinates)
+        let region = await SupportRegion.region(near: pickup?.coordinates ?? coordinates)
         rides = (try? await api.supportRides(region: region)) ?? []
     }
 
@@ -178,6 +178,7 @@ final class SafetyAlertModel {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         }
         alert = fresh
+        HelpHistory.shared.record(fresh)
         if venue == nil, let id = UUID(uuidString: fresh.venue.id) {
             venue = HelpVenue(id: id, name: fresh.venue.name ?? String(localized: "the venue"), address: nil)
         }

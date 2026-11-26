@@ -81,6 +81,29 @@ struct SafetyAlertTests {
         #expect(ride.link(pickup: nil)?.absoluteString == "https://m.uber.com/ul/")
     }
 
+    @Test("Get a ride is one row that names the region's apps, then transit and a friend")
+    func rideSummary() throws {
+        let uber = try JSONDecoder.hotMess.decode(SupportResources.Ride.self, from: Data(#"{"id":"uber","name":"Uber","url":"https://m.uber.com/ul/"}"#.utf8))
+        let lyft = try JSONDecoder.hotMess.decode(SupportResources.Ride.self, from: Data(#"{"id":"lyft","name":"Lyft","url":"https://lyft.com/ride"}"#.utf8))
+
+        #expect(RideOptions.summary([]) == "Transit, or share where to pick you up.")
+        #expect(RideOptions.summary([uber]) == "Uber, transit, or a friend.")
+        #expect(RideOptions.summary([uber, lyft]) == "Uber, Lyft, transit, or a friend.")
+    }
+
+    @Test("Transit directions start at the pickup, and the messages say where it is")
+    func rideTransitAndMessages() {
+        let pickup = RidePickup(coordinates: Coordinates(latitude: 40.7608, longitude: -111.891), name: "Club Try-Angles")
+
+        #expect(RideOptions.transitURL(from: pickup)?.absoluteString == "https://maps.apple.com/?saddr=40.760800,-111.891000&dirflg=r")
+        #expect(RideOptions.transitURL(from: nil)?.absoluteString == "https://maps.apple.com/?dirflg=r")
+        #expect(RideOptions.pickMeUp(place: "Club Try-Angles, 251 W 900 S", pickup: pickup) ==
+            "Can you pick me up? I'm here: Club Try-Angles, 251 W 900 S https://maps.apple.com/?ll=40.760800,-111.891000")
+        #expect(RideOptions.pickMeUp(place: nil, pickup: nil) == "Can you pick me up?")
+        #expect(RideOptions.sendMeARide(place: nil, pickup: pickup).contains("I'm here: https://maps.apple.com/?ll=40.760800,-111.891000."))
+        #expect(RideOptions.sendMeARide(place: nil, pickup: nil).hasPrefix("Can you send me a ride home?"))
+    }
+
     @Test("The emergency number follows the phone's region")
     func emergencyNumberByRegion() {
         #expect(EmergencyNumber.forRegion("US") == "911")
@@ -91,5 +114,39 @@ struct SafetyAlertTests {
         #expect(EmergencyNumber.forRegion("AU") == "000")
         #expect(EmergencyNumber.forRegion("FR") == "112")
         #expect(EmergencyNumber.forRegion(nil) == "911")
+    }
+
+    @Test("Help history keeps shared places on the phone, never a sensitive one, and clears")
+    @MainActor
+    func helpHistory() throws {
+        let json = """
+        {"id":"a1","state":"CLOSED","place":null,"concerns":["UNWELL"],"description":null,"summary":"They don't feel well",
+         "seen":true,"acknowledgedByName":"Dee","acknowledgedAt":null,"escalatedAt":null,"closedAt":null,
+         "supportSharedAt":null,"supportNote":null,"createdAt":"2026-11-26T03:00:00Z","venue":{"id":"v1","name":"Club Try-Angles"},
+         "messages":[
+          {"id":"m1","body":"Food Bank","fromStaff":true,"senderName":"Dee","createdAt":"2026-11-26T03:01:00Z",
+           "resource":{"id":"r1","title":"Food Bank","phone":"555-0100","textNumber":null,"address":"1 Main St",
+                       "url":null,"intakeNote":"No ID needed.","sensitive":false}},
+          {"id":"m2","body":"Safe place","fromStaff":true,"senderName":"Dee","createdAt":"2026-11-26T03:02:00Z",
+           "resource":{"id":"r2","title":"Safe place","phone":null,"textNumber":null,"address":null,
+                       "url":null,"intakeNote":null,"sensitive":true}},
+          {"id":"m3","body":"Thanks","fromStaff":false,"senderName":"You","createdAt":"2026-11-26T03:03:00Z"}]}
+        """
+        let alert = try JSONDecoder.hotMess.decode(SafetyAlert.self, from: Data(json.utf8))
+        #expect(alert.messages.first?.resource?.callURL?.absoluteString == "tel:5550100")
+        #expect(alert.messages.last?.resource == nil)
+
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("help-history-\(UUID().uuidString).json")
+        let history = HelpHistory(fileURL: file)
+        history.record(alert)
+        history.record(alert)
+        #expect(history.entries.count == 1)
+        #expect(history.entries.first?.resources.map(\.id) == ["r1"])
+        #expect(history.entries.first?.venueName == "Club Try-Angles")
+        #expect(HelpHistory(fileURL: file).entries == history.entries)
+
+        history.clear()
+        #expect(history.entries.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 }
