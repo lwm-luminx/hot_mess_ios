@@ -333,6 +333,7 @@ final class AppModel {
         findingFriends = false
         privateChat = nil
         safety.forget()
+        HelpHistory.shared.clear()
         listings.forget()
         tribes.forget()
         notifications.reset()
