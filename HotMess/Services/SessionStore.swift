@@ -69,14 +69,14 @@ enum SessionError: Error, LocalizedError {
 @MainActor
 @Observable
 final class SessionStore {
-    /// Whether sign-in also asks for `email` and `user_friends` (friends who
-    /// also use the app at the same venue). Meta's App Review approved only
-    /// `public_profile` and `openid` on the production Hot Mess app (it turned
-    /// down `email` and `user_friends`), so App Store, TestFlight and Play
-    /// builds ask for just those two; without the others everyone's friends
-    /// list is empty and no email comes from Facebook. Debug builds and the
-    /// simulator still ask for all four, so the friends features can be worked
-    /// on (and recorded for the next review) by the app's admins and testers.
+    /// Whether sign-in also asks for `user_friends` (friends who also use the
+    /// app at the same venue). Meta's App Review approved `public_profile`,
+    /// `openid` and `email` on the production Hot Mess app but turned down
+    /// `user_friends`, so App Store, TestFlight and Play builds ask for just
+    /// those three; without it everyone's friends list is empty. Debug builds
+    /// and the simulator still ask for it, so the friends features can be
+    /// worked on (and recorded for the next review) by the app's admins and
+    /// testers.
     static var asksForReviewedPermissions: Bool {
         #if DEBUG || targetEnvironment(simulator)
         true
@@ -86,10 +86,10 @@ final class SessionStore {
     }
 
     /// Permissions approved for everyone on the production Hot Mess app.
-    static let approvedPermissions = ["public_profile", "openid"]
+    static let approvedPermissions = ["public_profile", "openid", "email"]
 
     /// Permissions requested at sign-in when branding doesn't say, on the Hot Mess Consumer app.
-    static let requestedPermissions = approvedPermissions + (asksForReviewedPermissions ? ["email", "user_friends"] : [])
+    static let requestedPermissions = approvedPermissions + (asksForReviewedPermissions ? ["user_friends"] : [])
 
     /// What sign-in asks Facebook for: the list AudienceKit's branding gives this kind of build (`facebook_scopes`:
     /// production for App Store and TestFlight builds, non-production for debug and simulator builds), so it changes
