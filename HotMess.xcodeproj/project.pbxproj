@@ -720,7 +720,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.11;
+				MARKETING_VERSION = 2.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -743,7 +743,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.11;
+				MARKETING_VERSION = 2.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -766,7 +766,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.11;
+				MARKETING_VERSION = 2.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -961,7 +961,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -983,7 +983,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1005,7 +1005,7 @@
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     INFOPLIST_KEY_UILaunchScreen_Generation = YES;
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Clip";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1026,7 +1026,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1049,7 +1049,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1072,7 +1072,7 @@
     INFOPLIST_FILE = HotMessWidgets/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Widgets";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1095,7 +1095,7 @@
     INFOPLIST_FILE = HotMessShare/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1118,7 +1118,7 @@
     INFOPLIST_FILE = HotMessShare/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
@@ -1141,7 +1141,7 @@
     INFOPLIST_FILE = HotMessShare/Info.plist;
     INFOPLIST_KEY_CFBundleDisplayName = "$(HOTMESS_DISPLAY_NAME)";
     LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks",);
-    MARKETING_VERSION = 2.11;
+    MARKETING_VERSION = 2.10;
     PRODUCT_BUNDLE_IDENTIFIER = "social.hotmess.HotMess$(BUNDLE_SUFFIX).Share";
     PRODUCT_NAME = "$(TARGET_NAME)";
     SKIP_INSTALL = YES;
