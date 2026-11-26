@@ -31,6 +31,34 @@ struct SafetyAlert: Decodable, Hashable, Sendable, Identifiable {
         let fromStaff: Bool
         let senderName: String
         let createdAt: Date
+        /// A place a responder or the staff on shift shared from the
+        /// community resources (`shareSafetyAlertResource`); its details are
+        /// in `body` too.
+        var resource: SharedResource? = nil
+    }
+
+    /// A shelter, a food bank, a clinic or a line, shared in the thread.
+    /// `sensitive` ones (DV and stalking) are never kept in Help history.
+    struct SharedResource: Codable, Hashable, Sendable, Identifiable {
+        let id: String
+        let title: String
+        let phone: String?
+        let textNumber: String?
+        let address: String?
+        let url: String?
+        let intakeNote: String?
+        let sensitive: Bool
+
+        var callURL: URL? { phone.flatMap { URL(string: "tel:\($0.filter { $0.isNumber || $0 == "+" })") } }
+        var textURL: URL? { textNumber.flatMap { URL(string: "sms:\($0.filter { $0.isNumber || $0 == "+" })") } }
+        var websiteURL: URL? { url.flatMap(URL.init(string:)) }
+        /// The address in Maps, without the place's name.
+        var mapsURL: URL? {
+            guard let address, !address.isEmpty else { return nil }
+            var components = URLComponents(string: "https://maps.apple.com/")
+            components?.queryItems = [URLQueryItem(name: "q", value: address)]
+            return components?.url
+        }
     }
 
     struct VenueRef: Decodable, Hashable, Sendable {

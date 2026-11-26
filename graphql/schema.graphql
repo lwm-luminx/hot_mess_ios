@@ -3748,6 +3748,12 @@ type AudienceSoapboxView implements IAudienceSoapbox {
   """
   publications(
     """
+    Only those covering a locale: its own and those of every locale it's in, so
+    a statewide publication is local to each city below it.
+    """
+    localeId: ID
+
+    """
     Admins only: these trusts instead (the audience's pending requests, its suspended ones).
     """
     trust: [PublicationTrust!]
@@ -7894,9 +7900,19 @@ type EquipmentTrack {
   artworkUrl: String
 
   """
+  The song's length in ms, when the player says (a Soundtrack zone does): screens pick the lyrics timed to this version.
+  """
+  durationMs: Int
+
+  """
   When the report becomes stale.
   """
   expiresAt: ISO8601DateTime!
+
+  """
+  The recording's ISRC, when the player knows it (a Soundtrack zone does): screens find its lyrics by it.
+  """
+  isrc: String
 
   """
   Player selected by the equipment agent.
@@ -11013,7 +11029,7 @@ interface HasPhotoFocus {
 }
 
 """
-Something people write reviews of (Review): a media title or an event.
+Something people write reviews of (Review): a media title, an event, a venue or a person.
 """
 interface HasReviews {
   """
@@ -12211,6 +12227,12 @@ interface IAudienceSoapbox @mixin(extensionKey: "soapbox", field: "soapbox", nul
   Publications readers can follow: trusted ones, by name. Admins can ask for others by trust.
   """
   publications(
+    """
+    Only those covering a locale: its own and those of every locale it's in, so
+    a statewide publication is local to each city below it.
+    """
+    localeId: ID
+
     """
     Admins only: these trusts instead (the audience's pending requests, its suspended ones).
     """
@@ -14292,6 +14314,16 @@ interface IVenueCover @mixin(extensionKey: "cover", field: "cover", null: false,
   canWorkDoor: Boolean!
 
   """
+  Its MagTek card reader account, which door staff take cards on. Admins and its listing managers only.
+  """
+  cardReaderAccount(
+    """
+    Defaults to the caller's: SANDBOX (Magensa Pilot) for staging builds.
+    """
+    environment: PaymentEnvironment
+  ): PaymentAccount @requires(permissions: ["payments:read:mine"])
+
+  """
   Its usual cover in cents, on the nights in days.
   """
   cents: Int
@@ -14366,6 +14398,11 @@ interface IVenueCover @mixin(extensionKey: "cover", field: "cover", null: false,
     """
     environment: PaymentEnvironment
   ): PaymentAccount @requires(permissions: ["payments:read:mine"])
+
+  """
+  Whether door staff can sell cover on a card reader (chargeCoverAtDoor): it has a MagTek account connected.
+  """
+  takesCardsAtDoor: Boolean!
 
   """
   The IANA time zone its nights are counted in: its cover zone, else its locale's.
@@ -17296,6 +17333,36 @@ type LyricTimingSyllable {
 }
 
 """
+How many of a playlist's Spotify songs a sing-along screen can follow, by SongLyricsState.
+"""
+type LyricsCoverage {
+  """
+  Songs without lyrics.
+  """
+  none: Int!
+
+  """
+  Songs Musixmatch has in time.
+  """
+  synced: Int!
+
+  """
+  Songs a venue shared a timing for.
+  """
+  timed: Int!
+
+  """
+  Songs not checked yet.
+  """
+  unknown: Int!
+
+  """
+  Songs with only plain words.
+  """
+  words: Int!
+}
+
+"""
 A standard poster a venue's TV rotates in between looks at the lineup (a slogan
 slide), from its audience's set or AudienceKit's own.
 """
@@ -17520,6 +17587,12 @@ type MediaItem {
   Shared lyric timings for its Spotify track (times and digests, never words); null when untimed.
   """
   lyricTiming: LyricTiming
+
+  """
+  What a sing-along screen would have for its Spotify track: timed, synced,
+  words, none, or unknown while unchecked; null without a Spotify track.
+  """
+  lyrics: SongLyricsState
 
   """
   Kept from a media title, episode or clip: its title, year, IMDb id, tags and the like save to that record too.
@@ -17781,6 +17854,11 @@ type MediaPlaylist {
   What it is.
   """
   kind: MediaPlaylistKind!
+
+  """
+  How many of its Spotify songs a sing-along screen can follow (Musixmatch is checked in the background as songs are added).
+  """
+  lyricsCoverage: LyricsCoverage!
 
   """
   Kept from a media title (a series): its title, years, IMDb id, tags and the like save to that record too.
@@ -19116,7 +19194,9 @@ type Mutation {
   ): EventRSVPPayload @requires(permissions: ["rsvp:write:self"])
 
   """
-  Writes or changes your review of a film, a show or an event; publish: true publishes it.
+  Writes or changes your review of a film, a show, an event, a venue or a
+  person; publish: true publishes it. With publicationId it is written for that
+  publication, which is credited on it.
   """
   saveReview(
     """
@@ -19201,7 +19281,7 @@ type Mutation {
     Parameters for SafetyAlertMessageSend
     """
     input: SafetyAlertMessageSendInput!
-  ): SafetyAlertMessageSendPayload @requires(permissions: ["users:write:self", "chat:moderate:mine", "chat:moderate:venue", "audience:moderate:*"])
+  ): SafetyAlertMessageSendPayload @requires(permissions: ["users:write:self", "chat:moderate:mine", "chat:moderate:venue", "audience:moderate:*", "safety:moderate:responder"])
 
   """
   Follows a venue in the signed-in user's calendar subscription
@@ -20483,7 +20563,8 @@ type PairUpTopic {
 }
 
 """
-A venue's Stripe or Square account, which takes its cover charges.
+A venue's Stripe or Square account, which takes its cover charges in the apps,
+or its MagTek card reader account, which its door staff take cards on.
 """
 type PaymentAccount implements Node {
   """
@@ -20502,7 +20583,7 @@ type PaymentAccount implements Node {
   environment: PaymentEnvironment!
 
   """
-  The provider's ID for the account (Square's merchant ID).
+  The provider's ID for the account (Square's merchant ID, MagTek's Magensa customer code).
   """
   externalId: String!
 
@@ -20525,6 +20606,11 @@ type PaymentAccount implements Node {
   Stripe: Stripe pays out to its bank account.
   """
   payoutsEnabled: Boolean!
+
+  """
+  MagTek: the processor Magensa routes its payments to, e.g. TSYS.
+  """
+  processorName: String
 
   """
   The provider serving this record.
@@ -20562,6 +20648,11 @@ enum PaymentEnvironment {
 Who takes a payment.
 """
 enum PaymentProvider {
+  """
+  MagTek card readers (or Tap to Pay on iPhone) at the door, through Magensa's Unigate gateway to the venue's own processor.
+  """
+  MAGTEK
+
   """
   Square; the apps pay with Square's In-App Payments SDK.
   """
@@ -20616,7 +20707,7 @@ type PeopleCard implements ICard {
 """
 A performer, host or group featured in an audience.
 """
-type Person implements HasBanner & HasTags & HasTaskTemplates & Node {
+type Person implements HasBanner & HasReviews & HasTags & HasTaskTemplates & Node {
   """
   The instance's IArticles mixin. Left out of the schema where its module isn't installed.
   """
@@ -20743,6 +20834,11 @@ type Person implements HasBanner & HasTags & HasTaskTemplates & Node {
   profile: IListingProfile!
 
   """
+  Its published reviews, newest first.
+  """
+  reviews: [Review!]!
+
+  """
   Items linked to it or to anything under it (a venue's events and series, a
   locale's venues), one row per item, newest first. Only linked items, unless an
   admin asks for suggested or rejected ones too.
@@ -20763,6 +20859,12 @@ type Person implements HasBanner & HasTags & HasTaskTemplates & Node {
     """
     statuses: [EntityLinkStatus!] = [LINKED]
   ): [EntityLink!]!
+
+  """
+  Their banner for laying type over (Velvet's tip posters): the copy with its
+  text painted out (PhotoTextRemoval), else the banner when it has little text, else null.
+  """
+  screenBannerUrl: PhotoURL
 
   """
   Their tags that are tribes you identify with too: in the DNC app, a
@@ -21950,6 +22052,16 @@ type PlaylistTrack {
   Its length in milliseconds.
   """
   durationMs: Int
+
+  """
+  The recording's ISRC, when Spotify gives it.
+  """
+  isrc: String
+
+  """
+  What a sing-along screen would have for it: timed, synced, words, none, or unknown while unchecked.
+  """
+  lyrics: SongLyricsState!
 
   """
   Its title.
@@ -24152,6 +24264,105 @@ type RecentChatPushSetPayload {
 }
 
 """
+A vendor's product offered to a venue's managers as a Velvet card, where it
+answers what the venue is missing (Soundtrack when no music service is linked,
+say). The vendor pays Love Wins Media a referral fee; the venue pays the
+vendor's usual price and nothing comes out of its sales. Always show the
+disclosure with it (doc/REFERRAL_OFFERS.md).
+"""
+type ReferralOffer {
+  """
+  A sentence or two on what it does for the venue.
+  """
+  body: String!
+
+  """
+  What it is: music, point_of_sale, karaoke, and so on.
+  """
+  category: String!
+
+  """
+  The button's label, e.g. See Soundtrack plans.
+  """
+  cta: String!
+
+  """
+  The referral fee disclosure, shown with it every time.
+  """
+  disclosure: String!
+
+  """
+  Its headline.
+  """
+  headline: String!
+
+  """
+  The offer, for recordReferralOfferClick and dismissReferralOffer.
+  """
+  id: ID!
+
+  """
+  The partner's logo or picture for the card (https), if any.
+  """
+  imageUrl: String
+
+  """
+  Its key, e.g. soundtrack.
+  """
+  key: String!
+
+  """
+  The vendor's name, e.g. Toast.
+  """
+  partner: String!
+
+  """
+  Where Velvet shows it.
+  """
+  placement: ReferralOfferPlacement!
+
+  """
+  The vendor's referral link. Open it after recordReferralOfferClick; it carries nothing about the venue or the person.
+  """
+  url: String!
+}
+
+"""
+Where Velvet shows a referral offer card, beside what it answers (doc/REFERRAL_OFFERS.md).
+"""
+enum ReferralOfferPlacement {
+  """
+  Karaoke.
+  """
+  KARAOKE
+
+  """
+  Music: licensing and music services.
+  """
+  MUSIC
+
+  """
+  Ordering and point of sale.
+  """
+  ORDERING
+
+  """
+  Screens: Velvet Display and its devices.
+  """
+  SCREENS
+
+  """
+  Staff and the lineup.
+  """
+  STAFF
+
+  """
+  Tonight, the venue home.
+  """
+  TONIGHT
+}
+
+"""
 What kind of thing a report is about (Mutation.reportContent).
 """
 enum ReportTarget {
@@ -24264,7 +24475,8 @@ type ResourceNeed {
 }
 
 """
-A written take on a film, a show or an event, by a member or a publication. There is no rating.
+A written take on a film, a show, an event, a venue or a person (talent or an
+organization), by a member or a publication. There is no rating.
 """
 type Review implements HasCredits {
   """
@@ -24298,6 +24510,11 @@ type Review implements HasCredits {
   mediaTitle: MediaTitle
 
   """
+  The person it's about: talent or an organization.
+  """
+  person: Person
+
+  """
   When it was published.
   """
   publishedAt: ISO8601DateTime
@@ -24306,12 +24523,22 @@ type Review implements HasCredits {
   Draft, published or removed.
   """
   status: ReviewStatus!
+
+  """
+  The venue it's about.
+  """
+  venue: Venue
 }
 
 """
 Autogenerated input type of ReviewSave
 """
 input ReviewSaveInput {
+  """
+  The writer's persona credited as its author (with publicationId): one you manage, or a member of the publication's.
+  """
+  authorPersonId: ID
+
   """
   What you have to say, in Markdown.
   """
@@ -24338,9 +24565,24 @@ input ReviewSaveInput {
   mediaTitleId: ID
 
   """
+  The person, talent or an organization (to start a review of one).
+  """
+  personId: ID
+
+  """
+  The Soapbox publication it is written for (one whose person you manage), credited as its original source.
+  """
+  publicationId: ID
+
+  """
   Publish it now.
   """
   publish: Boolean = false
+
+  """
+  The venue (to start a review of one).
+  """
+  venueId: ID
 }
 
 """
@@ -24644,6 +24886,11 @@ type SafetyAlert {
   acknowledgedByName: String
 
   """
+  A safety responder picked it up, not the venue's staff: they are here to help in the thread, not on their way.
+  """
+  acknowledgedByResponder: Boolean!
+
+  """
   When it was closed or cancelled.
   """
   closedAt: ISO8601DateTime
@@ -24818,6 +25065,11 @@ type SafetyAlertMessage {
   Its UUID.
   """
   id: ID!
+
+  """
+  A community resource staff or a responder shared (shareSafetyAlertResource); the body says the same in text.
+  """
+  resource: CommunityResource
 
   """
   Who sent it: the guest's name, or the staff member's first name.
@@ -25918,6 +26170,37 @@ type SongLyrics {
   The words, one lyric line per line.
   """
   words: String!
+}
+
+"""
+What a sing-along screen would have for a song (LyricAvailability): Musixmatch's
+catalog is checked ahead of the night, by ISRC, in the background.
+"""
+enum SongLyricsState {
+  """
+  No lyrics: Musixmatch has none, or it is instrumental.
+  """
+  NONE
+
+  """
+  Musixmatch has its lyrics in time (line or word timing).
+  """
+  SYNCED
+
+  """
+  A venue shared a lyric timing for it.
+  """
+  TIMED
+
+  """
+  Not checked yet.
+  """
+  UNKNOWN
+
+  """
+  Musixmatch has only plain words: the screen cannot follow it.
+  """
+  WORDS
 }
 
 """
@@ -28896,7 +29179,7 @@ type UserStatePingView implements IUserStatePing {
 """
 A venue in the audience.
 """
-type Venue implements HasBanner & HasCredits & HasPhoto & HasTags & HasTaskTemplates & HasTimestamps & Node {
+type Venue implements HasBanner & HasCredits & HasPhoto & HasReviews & HasTags & HasTaskTemplates & HasTimestamps & Node {
   """
   How busy it is right now, approximately. Admins and its managers only.
   """
@@ -29160,6 +29443,20 @@ type Venue implements HasBanner & HasCredits & HasPhoto & HasTags & HasTaskTempl
   profile: IListingProfile!
 
   """
+  Velvet's referral offer cards for it: vendors' products where they answer what
+  it is missing (Soundtrack with no music service linked, Toast with no Toast
+  ordering page, KaraFun for karaoke on something else), each with its referral
+  link and the disclosure to show with it. Not for guests: empty for everyone
+  but its managers, and without the ones it dismissed.
+  """
+  referralOffers(
+    """
+    Only the offers for this placement.
+    """
+    placement: ReferralOfferPlacement
+  ): [ReferralOffer!]! @requires(permissions: ["venues:write:mine", "venues:write:venue"])
+
+  """
   Whether it was reported closed and that isn't decided yet: left out of tonight's views, its page kept.
   """
   reportedClosed: Boolean!
@@ -29168,6 +29465,11 @@ type Venue implements HasBanner & HasCredits & HasPhoto & HasTags & HasTaskTempl
   The instance's IVenueRequests mixin. Left out of the schema where its module isn't installed.
   """
   requests: IVenueRequests!
+
+  """
+  Its published reviews, newest first.
+  """
+  reviews: [Review!]!
 
   """
   Items linked to it or to anything under it (a venue's events and series, a
@@ -29377,6 +29679,16 @@ type VenueCoverView implements IVenueCover {
   canWorkDoor: Boolean!
 
   """
+  Its MagTek card reader account, which door staff take cards on. Admins and its listing managers only.
+  """
+  cardReaderAccount(
+    """
+    Defaults to the caller's: SANDBOX (Magensa Pilot) for staging builds.
+    """
+    environment: PaymentEnvironment
+  ): PaymentAccount @requires(permissions: ["payments:read:mine"])
+
+  """
   Its usual cover in cents, on the nights in days.
   """
   cents: Int
@@ -29451,6 +29763,11 @@ type VenueCoverView implements IVenueCover {
     """
     environment: PaymentEnvironment
   ): PaymentAccount @requires(permissions: ["payments:read:mine"])
+
+  """
+  Whether door staff can sell cover on a card reader (chargeCoverAtDoor): it has a MagTek account connected.
+  """
+  takesCardsAtDoor: Boolean!
 
   """
   The IANA time zone its nights are counted in: its cover zone, else its locale's.
