@@ -112,7 +112,7 @@ final class SafetyAlertModel {
         } else if let coordinates {
             pickup = RidePickup(coordinates: coordinates, name: nil)
         }
-        let region = await SupportScreen.region(near: pickup?.coordinates ?? coordinates)
+        let region = await SupportRegion.region(near: pickup?.coordinates ?? coordinates)
         rides = (try? await api.supportRides(region: region)) ?? []
     }
 

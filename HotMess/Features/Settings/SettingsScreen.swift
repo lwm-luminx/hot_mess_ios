@@ -319,23 +319,16 @@ struct SettingsScreen: View {
     }
 
     /// "Need support?" is here whether or not the user is out; the venue's
-    /// Get help is only on the venue they're at.
+    /// Get help is only on the venue they're at. One entry: the support lines
+    /// and the city's food, shelter and health resources, filtered on the phone.
     private var helpSection: some View {
         Section(String(localized: "Help and Safety")) {
-            NavigationLink {
-                SupportScreen()
+            Button {
+                findingHelp = true
             } label: {
                 Label(String(localized: "Need Support?"), systemImage: "heart.text.square")
             }
             .accessibilityIdentifier("me.support")
-
-            // Food, shelter, health and support in the city, filtered on the phone.
-            Button {
-                findingHelp = true
-            } label: {
-                Label(String(localized: "Find Help Nearby"), systemImage: "hand.raised")
-            }
-            .accessibilityIdentifier("me.findHelp")
             .fullScreenCover(isPresented: $findingHelp) {
                 ResourcesSheet(focusResourceID: nil)
             }
