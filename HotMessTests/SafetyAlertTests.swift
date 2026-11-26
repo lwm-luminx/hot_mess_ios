@@ -81,6 +81,29 @@ struct SafetyAlertTests {
         #expect(ride.link(pickup: nil)?.absoluteString == "https://m.uber.com/ul/")
     }
 
+    @Test("Get a ride is one row that names the region's apps, then transit and a friend")
+    func rideSummary() throws {
+        let uber = try JSONDecoder.hotMess.decode(SupportResources.Ride.self, from: Data(#"{"id":"uber","name":"Uber","url":"https://m.uber.com/ul/"}"#.utf8))
+        let lyft = try JSONDecoder.hotMess.decode(SupportResources.Ride.self, from: Data(#"{"id":"lyft","name":"Lyft","url":"https://lyft.com/ride"}"#.utf8))
+
+        #expect(RideOptions.summary([]) == "Transit, or share where to pick you up.")
+        #expect(RideOptions.summary([uber]) == "Uber, transit, or a friend.")
+        #expect(RideOptions.summary([uber, lyft]) == "Uber, Lyft, transit, or a friend.")
+    }
+
+    @Test("Transit directions start at the pickup, and the messages say where it is")
+    func rideTransitAndMessages() {
+        let pickup = RidePickup(coordinates: Coordinates(latitude: 40.7608, longitude: -111.891), name: "Club Try-Angles")
+
+        #expect(RideOptions.transitURL(from: pickup)?.absoluteString == "https://maps.apple.com/?saddr=40.760800,-111.891000&dirflg=r")
+        #expect(RideOptions.transitURL(from: nil)?.absoluteString == "https://maps.apple.com/?dirflg=r")
+        #expect(RideOptions.pickMeUp(place: "Club Try-Angles, 251 W 900 S", pickup: pickup) ==
+            "Can you pick me up? I'm here: Club Try-Angles, 251 W 900 S https://maps.apple.com/?ll=40.760800,-111.891000")
+        #expect(RideOptions.pickMeUp(place: nil, pickup: nil) == "Can you pick me up?")
+        #expect(RideOptions.sendMeARide(place: nil, pickup: pickup).contains("I'm here: https://maps.apple.com/?ll=40.760800,-111.891000."))
+        #expect(RideOptions.sendMeARide(place: nil, pickup: nil).hasPrefix("Can you send me a ride home?"))
+    }
+
     @Test("The emergency number follows the phone's region")
     func emergencyNumberByRegion() {
         #expect(EmergencyNumber.forRegion("US") == "911")
