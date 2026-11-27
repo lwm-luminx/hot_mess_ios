@@ -73,7 +73,7 @@ struct ReviewRow: View {
 
     private func card(source article: Article?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(article == nil ? review.body : "“\(review.body)”")
+            Text(review.body)
                 .font(.hotMess(.body))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
