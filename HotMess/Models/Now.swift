@@ -21,8 +21,9 @@ import MapKit
 /// you are, show your friends", while an empty array means "we do know, and
 /// there is nothing nearby". The two cases render differently.
 struct Now: Decodable, Hashable, Sendable {
-    /// How many of the locale's upcoming events the screen lists.
-    /// The document asks for this many (`HotMessAPI.Documents.localeEventLimit`).
+    /// How many of the locale's upcoming events the screen lists. The
+    /// document asks for more (`HotMessAPI.Documents.widgetEventLimit`), for
+    /// the Tonight widget.
     static let localeEventLimit = Int(HotMessAPI.Documents.localeEventLimit) ?? 5
 
     let title: String
@@ -54,6 +55,10 @@ struct Now: Decodable, Hashable, Sendable {
     /// aren't in a venue yourself.
     let friendVenues: [FriendVenue]
     let events: [Event]
+    /// The locale's upcoming events, soonest first, all the document asked
+    /// for (more than ``events`` lists), even while the user is in a venue:
+    /// the Tonight widget's list of what's on around town.
+    let cityEvents: [Event]
     let imageURL: URL?
     /// The user's own Ping, while it runs.
     var myPing: Ping?
@@ -153,6 +158,7 @@ struct Now: Decodable, Hashable, Sendable {
             imageURL = localeBanner
         }
 
+        cityEvents = localeEvents
         if venue != nil {
             // The event the user is at leads the screen, so it isn't listed again.
             events = venueEvents.filter { $0.id != event?.id }
@@ -194,6 +200,7 @@ struct Now: Decodable, Hashable, Sendable {
         localeMessages: [VenueMessage] = [],
         friendVenues: [FriendVenue] = [],
         events: [Event] = [],
+        cityEvents: [Event] = [],
         imageURL: URL? = nil,
         myPing: Ping? = nil,
         friendPings: [Ping] = []
@@ -213,6 +220,7 @@ struct Now: Decodable, Hashable, Sendable {
         self.localeMessages = localeMessages
         self.friendVenues = friendVenues
         self.events = events
+        self.cityEvents = cityEvents
         self.imageURL = imageURL
         self.myPing = myPing
         self.friendPings = friendPings
