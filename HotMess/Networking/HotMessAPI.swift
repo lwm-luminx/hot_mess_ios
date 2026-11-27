@@ -1215,9 +1215,14 @@ extension HotMessAPI {
         } }
         """
 
-        /// How many of a locale's upcoming events Now shows (`Now.localeEventLimit`,
-        /// as the document's literal so it can be checked against the schema).
+        /// How many of a locale's upcoming events Now shows (`Now.localeEventLimit`).
         static let localeEventLimit = "5"
+
+        /// How many of a locale's upcoming events reportLocation asks for: the
+        /// screen's few, and enough more to fill the large Tonight widget
+        /// (`Now.cityEvents`). The document's literal, so it can be checked
+        /// against the schema.
+        static let widgetEventLimit = "12"
 
         static let venueFences = """
         query VenueFences($near: CoordinatesInput!) {
@@ -1241,7 +1246,7 @@ extension HotMessAPI {
             locale {
               id name banner_url: bannerUrl
               chat { open recent_messages: recentMessages(limit: 3) { nodes { \(messageFields) } } }
-              events { upcoming(first: \(localeEventLimit)) { nodes { \(eventFields) } } }
+              events { upcoming(first: \(widgetEventLimit)) { nodes { \(eventFields) } } }
               friends {
                 list { nodes { \(friendFields) } }
                 venues {

@@ -136,14 +136,49 @@ struct TonightSnapshot: Codable, Hashable, Sendable {
 
     static let empty = TonightSnapshot(updatedAt: .distantPast, events: [], pings: [])
 
-    /// The event the widget features at `date`. It moves on to the next one
-    /// every ``rotation``, counted from a fixed point so a redraw (after a
-    /// button, or when the app saves) keeps the same one up.
-    func featuredEvent(at date: Date) -> Event? {
+    /// The events the widget's card takes turns featuring at `date`: those
+    /// on tonight (on now, or starting within ``tonightWindow``), else just
+    /// the next one, so a Thursday evening never features Sunday's karaoke
+    /// ahead of Friday's party. The list under the card has the rest, in order.
+    func featuredEvents(at date: Date) -> [Event] {
         let events = current(at: date).events
+        let tonight = events.filter { $0.isPingable(at: date) }
+        return tonight.isEmpty ? Array(events.prefix(1)) : tonight
+    }
+
+    /// The event the widget features at `date`. While more than one is on
+    /// tonight it moves on to the next every ``rotation``, counted from a
+    /// fixed point so a redraw (after a button, or when the app saves) keeps
+    /// the same one up.
+    func featuredEvent(at date: Date) -> Event? {
+        let events = featuredEvents(at: date)
         guard !events.isEmpty else { return nil }
         let slot = Int((date.timeIntervalSince1970 / Self.rotation).rounded(.down))
         return events[((slot % events.count) + events.count) % events.count]
+    }
+
+    /// Whether the card rotates at `date`: more than one event on tonight.
+    func rotates(at date: Date) -> Bool { featuredEvents(at: date).count > 1 }
+
+    /// The event the card shows at `date`: the one the user stepped to with
+    /// the large widget's previous and next buttons while that lasts (and the
+    /// event is still on), else the rotation's.
+    func featuredEvent(at date: Date, browsing: TonightBrowse?) -> Event? {
+        if let browsing, browsing.until > date,
+           let picked = current(at: date).events.first(where: { $0.id == browsing.eventID }) {
+            return picked
+        }
+        return featuredEvent(at: date)
+    }
+
+    /// The event `step` places from `featured` among all the events still on
+    /// at `date` (soonest first, wrapping around): the previous and next
+    /// buttons go through every one, tonight's and later.
+    func event(_ step: Int, from featured: Event?, at date: Date) -> Event? {
+        let events = current(at: date).events
+        guard !events.isEmpty else { return nil }
+        let index = featured.flatMap { featured in events.firstIndex { $0.id == featured.id } } ?? 0
+        return events[((index + step) % events.count + events.count) % events.count]
     }
 
     /// The start of the rotation slot after `date`.
@@ -173,6 +208,16 @@ struct TonightSnapshot: Codable, Hashable, Sendable {
         let ends = pings.map(\.expiresAt) + events.map { $0.endsAt ?? $0.startsAt.addingTimeInterval(4 * 60 * 60) }
         return ends.filter { $0 > date }.min()
     }
+}
+
+/// The event the user stepped to with the large widget's previous and next
+/// buttons. It holds for ``hold``, then the card goes back to rotating.
+struct TonightBrowse: Codable, Hashable, Sendable {
+    /// How long a step keeps its event up.
+    static let hold: TimeInterval = 30 * 60
+
+    var eventID: String
+    var until: Date
 }
 
 /// Reads and writes the snapshot in the app group the app and its widget
@@ -212,5 +257,28 @@ enum TonightStore {
     static func clear() {
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
+        if let browseURL { try? FileManager.default.removeItem(at: browseURL) }
+    }
+
+    // MARK: - Previous and next
+
+    private static var browseURL: URL? {
+        fileURL?.deletingLastPathComponent().appending(path: "tonight-browse.json")
+    }
+
+    /// Where the user last stepped the card to, written by the widget itself.
+    static func readBrowse() -> TonightBrowse? {
+        guard let browseURL, let data = try? Data(contentsOf: browseURL) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(TonightBrowse.self, from: data)
+    }
+
+    static func writeBrowse(_ browse: TonightBrowse) {
+        guard let browseURL else { return }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(browse) else { return }
+        try? data.write(to: browseURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 }

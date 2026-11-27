@@ -33,9 +33,41 @@ struct TonightEntry: TimelineEntry {
     let date: Date
     /// Nil before the app has saved anything (signed out, or never opened).
     let snapshot: TonightSnapshot?
+    /// Where the user stepped the card with the previous and next buttons.
+    var browsing: TonightBrowse?
 
     /// The event the rotating card shows.
-    var featured: TonightSnapshot.Event? { snapshot?.featuredEvent(at: date) }
+    var featured: TonightSnapshot.Event? { snapshot?.featuredEvent(at: date, browsing: browsing) }
+}
+
+/// The large widget's previous and next buttons: show the event before or
+/// after the one on the card, for a while (``TonightBrowse/hold``). It runs in
+/// the widget extension and only touches the app group, so it needs no app or
+/// sign-in; WidgetKit redraws the widget once it returns.
+struct StepTonightEventIntent: AppIntent {
+    static var title: LocalizedStringResource { "Show another event" }
+    static var description: IntentDescription { IntentDescription("Shows the previous or next event on the Tonight widget.") }
+    static var isDiscoverable: Bool { false }
+
+    /// -1 for previous, 1 for next.
+    @Parameter(title: "Step")
+    var step: Int
+
+    init() {}
+
+    init(step: Int) {
+        self.step = step
+    }
+
+    func perform() async throws -> some IntentResult {
+        let now = Date.now
+        guard let snapshot = TonightStore.read() else { return .result() }
+        let featured = snapshot.featuredEvent(at: now, browsing: TonightStore.readBrowse())
+        if let next = snapshot.event(step, from: featured, at: now) {
+            TonightStore.writeBrowse(TonightBrowse(eventID: next.id, until: now.addingTimeInterval(TonightBrowse.hold)))
+        }
+        return .result()
+    }
 }
 
 struct TonightProvider: TimelineProvider {
@@ -50,7 +82,10 @@ struct TonightProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (TonightEntry) -> Void) {
         let saved = TonightStore.read()
-        completion(TonightEntry(date: .now, snapshot: context.isPreview && saved == nil ? .sample : saved?.current(at: .now)))
+        completion(TonightEntry(
+            date: .now, snapshot: context.isPreview && saved == nil ? .sample : saved?.current(at: .now),
+            browsing: TonightStore.readBrowse()
+        ))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TonightEntry>) -> Void) {
@@ -59,12 +94,16 @@ struct TonightProvider: TimelineProvider {
             completion(Timeline(entries: [TonightEntry(date: now, snapshot: nil)], policy: .never))
             return
         }
-        let dates = Self.entryDates(for: saved, from: now)
-        let entries = dates.map { TonightEntry(date: $0, snapshot: saved.current(at: $0)) }
+        let browsing = TonightStore.readBrowse().flatMap { $0.until > now ? $0 : nil }
+        // The card goes back to rotating when a step's hold runs out.
+        let dates = (Self.entryDates(for: saved, from: now) + [browsing?.until].compactMap { $0 }).sorted()
+        let entries = dates.map { TonightEntry(date: $0, snapshot: saved.current(at: $0), browsing: browsing) }
         // Rotating: ask again once this run is used up. Otherwise the app
         // reloads it when anything changes.
-        let rotates = saved.current(at: now).events.count > 1
-        completion(Timeline(entries: entries, policy: rotates ? .atEnd : .never))
+        // The card may start rotating later (tonight's events come within
+        // the window), so a timeline with events always asks again.
+        let hasEvents = !saved.current(at: now).events.isEmpty
+        completion(Timeline(entries: entries, policy: hasEvents ? .atEnd : .never))
     }
 
     /// Now, each time the card moves to the next event (while there's more
@@ -77,8 +116,11 @@ struct TonightProvider: TimelineProvider {
             date = next.addingTimeInterval(1)
             dates.insert(date)
         }
+        // Every rotation slot within the horizon while there are events: the
+        // card rotates once more than one is on tonight, and the time labels
+        // ("Tomorrow 9:00 PM") move on with the clock.
         var rotation = now
-        while snapshot.current(at: rotation).events.count > 1 {
+        while !snapshot.current(at: rotation).events.isEmpty {
             rotation = TonightSnapshot.nextRotation(after: rotation)
             guard rotation < now.addingTimeInterval(horizon) else { break }
             dates.insert(rotation)
@@ -135,6 +177,9 @@ struct TonightView: View {
             header(family == .systemSmall ? nil : snapshot.localeName, snapshot: snapshot)
             if let featured {
                 FeaturedEventCard(event: featured, date: entry.date, compact: family == .systemSmall)
+                if family == .systemLarge, snapshot.events.count > 1 {
+                    EventStepper(events: snapshot.events, featuredID: featured.id)
+                }
             }
             if snapshot.pings.isEmpty && featured == nil && snapshot.onNow == nil {
                 Spacer(minLength: 0)
@@ -147,31 +192,28 @@ struct TonightView: View {
                     PingRow(ping: ping, showsButton: family != .systemSmall)
                 }
             }
-            if family == .systemLarge {
-                if let onNow = snapshot.onNow {
-                    Label {
-                        Text(snapshot.venueName.map { String(localized: "On now at \($0): \(onNow)") }
-                            ?? String(localized: "On now: \(onNow)"))
-                            .lineLimit(1)
-                    } icon: {
-                        Image(systemName: "music.mic")
-                            .foregroundStyle(Self.accent)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.white)
+            if family == .systemLarge, let onNow = snapshot.onNow {
+                Label {
+                    Text(snapshot.venueName.map { String(localized: "On now at \($0): \(onNow)") }
+                        ?? String(localized: "On now: \(onNow)"))
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "music.mic")
+                        .foregroundStyle(Self.accent)
                 }
-                let others = snapshot.events.filter { $0.id != featured?.id }.prefix(3)
-                if !others.isEmpty {
-                    Text("Coming up")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .textCase(.uppercase)
-                    ForEach(others) { event in
-                        EventRow(event: event, date: entry.date)
-                    }
-                }
+                .font(.caption)
+                .foregroundStyle(.white)
             }
-            Spacer(minLength: 0)
+            if family == .systemLarge || family == .systemMedium {
+                // As many of the rest as fit the space left, soonest first.
+                ComingUpList(
+                    events: snapshot.events.filter { $0.id != featured?.id },
+                    date: entry.date,
+                    showsTitle: family == .systemLarge
+                )
+            } else {
+                Spacer(minLength: 0)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -183,8 +225,9 @@ struct TonightView: View {
             Text(locale.map { String(localized: "Tonight in \($0)") } ?? String(localized: "Tonight"))
                 .lineLimit(1)
             Spacer(minLength: 4)
-            if let snapshot, let featured = entry.featured, snapshot.events.count > 1 {
-                RotationDots(events: snapshot.events, featuredID: featured.id)
+            // The large widget has its dots beside the previous and next buttons.
+            if family != .systemLarge, let snapshot, let featured = entry.featured, snapshot.rotates(at: entry.date) {
+                RotationDots(events: snapshot.featuredEvents(at: entry.date), featuredID: featured.id)
             }
         }
         .font(.caption.weight(.bold))
@@ -387,6 +430,36 @@ private struct TightLabel: LabelStyle {
     }
 }
 
+/// The large widget's previous and next buttons, with a dot per event (the
+/// one on the card lit) between them. Widgets can't take swipes, so these are
+/// how to look through everything coming up.
+private struct EventStepper: View {
+    let events: [TonightSnapshot.Event]
+    let featuredID: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(intent: StepTonightEventIntent(step: -1)) {
+                Label("Previous", systemImage: "chevron.left")
+                    .labelStyle(.iconOnly)
+                    .frame(maxWidth: .infinity)
+            }
+            .accessibilityLabel(Text("Previous event"))
+            RotationDots(events: events, featuredID: featuredID)
+                .layoutPriority(1)
+            Button(intent: StepTonightEventIntent(step: 1)) {
+                Label("Next", systemImage: "chevron.right")
+                    .labelStyle(.iconOnly)
+                    .frame(maxWidth: .infinity)
+            }
+            .accessibilityLabel(Text("Next event"))
+        }
+        .font(.subheadline.weight(.bold))
+        .buttonStyle(.bordered)
+        .tint(TonightView.accent)
+    }
+}
+
 /// One dot per event, the featured one lit, so it reads as rotating.
 private struct RotationDots: View {
     let events: [TonightSnapshot.Event]
@@ -470,7 +543,53 @@ private struct PingRow: View {
     }
 }
 
-/// Another event coming up, in the large widget's list.
+/// The events after the featured one, as many as fit the space the widget
+/// has left: the large widget fills its lower half (more on a taller phone,
+/// fewer when Pings take room), the medium one adds a row when the card leaves
+/// space for it.
+private struct ComingUpList: View {
+    let events: [TonightSnapshot.Event]
+    let date: Date
+    let showsTitle: Bool
+
+    var body: some View {
+        if events.isEmpty {
+            Color.clear
+        } else {
+            // ViewThatFits takes the first that fits, so the longest goes first.
+            ViewThatFits(in: .vertical) {
+                list(8)
+                list(7)
+                list(6)
+                list(5)
+                list(4)
+                list(3)
+                list(2)
+                list(1)
+                Color.clear.frame(height: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// The title and the first `count` rows (all of them when there are fewer).
+    private func list(_ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if showsTitle {
+                Text("Coming up")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .textCase(.uppercase)
+            }
+            ForEach(events.prefix(count)) { event in
+                EventRow(event: event, date: date)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Another event coming up, in the medium and large widgets' list.
 private struct EventRow: View {
     let event: TonightSnapshot.Event
     let date: Date

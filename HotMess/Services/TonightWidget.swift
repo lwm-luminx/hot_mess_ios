@@ -17,11 +17,13 @@ enum TonightWidget {
     static let tonightWindow = TonightSnapshot.tonightWindow
     /// How far ahead the widget's rotating card looks for events.
     static let upcomingWindow: TimeInterval = 7 * 24 * 60 * 60
-    /// The most events and Pings kept: the large widget shows about this many.
-    static let limit = 6
+    /// The most events and Pings kept: enough to fill the large widget on the
+    /// tallest phone.
+    static let limit = 12
 
-    /// From a freshly loaded Now: the next few events where the user is (the
-    /// one they're at first), who's on at their venue, and friends' Pings.
+    /// From a freshly loaded Now: the next few events (the one they're at
+    /// first, then their venue's and the rest of the city's, soonest first),
+    /// who's on at their venue, and friends' Pings.
     static func update(from now: Now, at date: Date = .now) {
         let onNow = now.onNow.acts.first.map { $0.title ?? $0.person.name }
         let snapshot = TonightSnapshot(
@@ -30,7 +32,7 @@ enum TonightWidget {
             localeID: now.locale.map { $0.id.uuidString.lowercased() },
             venueName: now.venue?.name ?? now.event?.venue?.name,
             onNow: onNow,
-            events: upcoming(now.events, leading: now.event, myPing: now.myPing, at: date),
+            events: upcoming(now.events + now.cityEvents, leading: now.event, myPing: now.myPing, at: date),
             pings: pings(myPing: now.myPing, friendPings: now.friendPings, at: date)
         )
         save(snapshot)

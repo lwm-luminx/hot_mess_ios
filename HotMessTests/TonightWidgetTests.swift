@@ -134,7 +134,7 @@ struct TonightWidgetTests {
         #expect(!TonightWidget.entry(for: event("A", in: 1, rsvp: .maybe)).isGoing)
     }
 
-    @Test("Upcoming keeps the event you're at first, then the next week's soonest first, at most six")
+    @Test("Upcoming keeps the event you're at first, then the next week's soonest first, at most the limit")
     func upcomingEvents() {
         let at = event("Here", in: -1)
         let later = event("Later", in: 30)
@@ -144,7 +144,7 @@ struct TonightWidgetTests {
         let names = TonightWidget.upcoming([later, soon, at, nextMonth, over], leading: at, myPing: nil, at: base)
             .map(\.name)
         #expect(names == ["Here", "Soon", "Later"])
-        let many = (1...9).map { event("E\($0)", in: Double($0)) }
+        let many = (1...(TonightWidget.limit + 3)).map { event("E\($0)", in: Double($0)) }
         #expect(TonightWidget.upcoming(many, myPing: nil, at: base).count == TonightWidget.limit)
     }
 
@@ -201,6 +201,57 @@ struct TonightWidgetTests {
         #expect(snapshot.featuredEvent(at: start + TonightSnapshot.rotation - 1)?.id == first)
         #expect(TonightSnapshot.nextRotation(after: start + 1) == start + TonightSnapshot.rotation)
         #expect(TonightSnapshot.empty.featuredEvent(at: start) == nil)
+    }
+
+    @Test("The card features tonight's events, else the next one, never one days away")
+    func featuredPrefersTonight() {
+        let start = Date(timeIntervalSince1970: (base.timeIntervalSince1970 / TonightSnapshot.rotation).rounded(.down)
+            * TonightSnapshot.rotation)
+        let friday = TonightSnapshot.Event(id: "fri", name: "Hyper Pop", startsAt: start + 27 * 3600)
+        let saturday = TonightSnapshot.Event(id: "sat", name: "No Theme", startsAt: start + 51 * 3600)
+        let sunday = TonightSnapshot.Event(id: "sun", name: "Karaoke", startsAt: start + 75 * 3600)
+        let nothingTonight = TonightSnapshot(updatedAt: start, events: [friday, saturday, sunday], pings: [])
+        let featured = (0..<6).compactMap {
+            nothingTonight.featuredEvent(at: start + Double($0) * TonightSnapshot.rotation)?.id
+        }
+        #expect(Set(featured) == ["fri"])
+        #expect(!nothingTonight.rotates(at: start))
+
+        let bingo = TonightSnapshot.Event(id: "bingo", name: "Bingo", startsAt: start + 2 * 3600)
+        let karaoke = TonightSnapshot.Event(id: "karaoke", name: "Karaoke", startsAt: start + 3 * 3600)
+        let twoTonight = TonightSnapshot(updatedAt: start, events: [bingo, karaoke, friday, sunday], pings: [])
+        let rotating = (0..<4).compactMap {
+            twoTonight.featuredEvent(at: start + Double($0) * TonightSnapshot.rotation)?.id
+        }
+        #expect(Set(rotating) == ["bingo", "karaoke"])
+        #expect(twoTonight.rotates(at: start))
+        #expect(twoTonight.featuredEvents(at: start).map(\.id) == ["bingo", "karaoke"])
+    }
+
+    @Test("Previous and next step through every event, wrapping, and hold until the browse ends")
+    func stepping() {
+        let events = ["a", "b", "c"].map { TonightSnapshot.Event(id: $0, name: $0, startsAt: base + 30 * 3600) }
+        let snapshot = TonightSnapshot(updatedAt: base, events: events, pings: [])
+        #expect(snapshot.event(1, from: events[0], at: base)?.id == "b")
+        #expect(snapshot.event(-1, from: events[0], at: base)?.id == "c")
+        #expect(snapshot.event(1, from: events[2], at: base)?.id == "a")
+        let browsing = TonightBrowse(eventID: "c", until: base + 600)
+        #expect(snapshot.featuredEvent(at: base, browsing: browsing)?.id == "c")
+        #expect(snapshot.featuredEvent(at: base + 601, browsing: browsing)?.id == snapshot.featuredEvent(at: base + 601)?.id)
+        let gone = TonightBrowse(eventID: "zzz", until: base + 600)
+        #expect(snapshot.featuredEvent(at: base, browsing: gone)?.id == snapshot.featuredEvent(at: base)?.id)
+    }
+
+    @Test("At a venue, the widget lists the rest of the city's events too, soonest first")
+    func nowMergesCityEvents() throws {
+        let suntrapp = venue("The SunTrapp", address: nil)
+        let milk = venue("Milk+", address: nil)
+        let sunday = event("Sunday Karaoke", in: 75, at: suntrapp)
+        let therapy = event("Therapy Thursdays", in: 2, at: milk)
+        let now = Now(title: "The SunTrapp", venue: suntrapp, events: [sunday], cityEvents: [therapy, sunday])
+        let names = TonightWidget.upcoming(now.events + now.cityEvents, leading: now.event, myPing: nil, at: base)
+            .map(\.name)
+        #expect(names == ["Therapy Thursdays", "Sunday Karaoke"])
     }
 
     @Test("A snapshot saved before location and buttons still reads")
