@@ -35,6 +35,15 @@ struct PersonScreen: View {
 
                         ManagedListingNotice(kind: .person, id: personID)
 
+                        if let about = detail.about {
+                            DetailSection(String(localized: "About")) {
+                                Text(about)
+                                    .font(.body)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
                         if let titles = viewModel?.titles, !titles.isEmpty {
                             DetailSection(String(localized: "Titles")) {
                                 ForEach(titles) { title in
