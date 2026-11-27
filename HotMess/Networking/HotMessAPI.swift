@@ -1378,6 +1378,7 @@ extension HotMessAPI {
         query Person($id: ID!) {
           people { person(id: $id) {
             \(personFields)
+            description
             events { upcoming { nodes { \(eventFields) } } }
             \(profileSocialLinks)
             members { \(personSummaryFields) }

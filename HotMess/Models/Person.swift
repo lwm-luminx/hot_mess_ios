@@ -75,6 +75,8 @@ struct Person: Codable, Hashable, Sendable, Identifiable {
 /// `/v1/people/{id}` — a person plus everything hanging off them.
 struct PersonDetail: Codable, Hashable, Sendable, Identifiable {
     let person: Person
+    /// Their bio, or what an organization does, in their own words; nil when they have none.
+    let about: String?
     let events: [Event]
     let socialLinks: [SocialLink]
     let tracks: [Track]
@@ -92,13 +94,17 @@ struct PersonDetail: Codable, Hashable, Sendable, Identifiable {
     var profileLinks: [SocialLink] { socialLinks.filter { $0.tipApp == nil } }
 
     enum CodingKeys: String, CodingKey {
-        case events, music, members, groups, profile
+        case events, music, members, groups, profile, description
     }
 
     init(from decoder: any Decoder) throws {
         person = try Person(from: decoder)
 
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Missing (an older API) or blank reads as none.
+        let description = try container.decodeIfPresent(String.self, forKey: .description)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        about = description?.isEmpty == false ? description : nil
         // The person's events mixin; tolerated when missing, which reads as none.
         events = try container.decodeIfPresent(UpcomingEventsMixin.self, forKey: .events)?.upcoming ?? []
         // Their links come through the profile mixin; missing reads as none.
@@ -113,6 +119,7 @@ struct PersonDetail: Codable, Hashable, Sendable, Identifiable {
         try person.encode(to: encoder)
 
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(about, forKey: .description)
         try container.encode(UpcomingEventsMixin(upcoming: events), forKey: .events)
         // The whole profile mixin again, as it replaces the person's own.
         try container.encode(
@@ -126,6 +133,7 @@ struct PersonDetail: Codable, Hashable, Sendable, Identifiable {
 
     init(
         person: Person,
+        about: String? = nil,
         events: [Event] = [],
         socialLinks: [SocialLink] = [],
         tracks: [Track] = [],
@@ -133,6 +141,7 @@ struct PersonDetail: Codable, Hashable, Sendable, Identifiable {
         groups: [Person] = []
     ) {
         self.person = person
+        self.about = about
         self.events = events
         self.socialLinks = socialLinks
         self.tracks = tracks

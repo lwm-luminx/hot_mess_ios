@@ -292,6 +292,23 @@ struct PersonDetailTests {
         #expect(detail.socialLinks.isEmpty)
         #expect(detail.members.isEmpty)
         #expect(detail.groups.isEmpty)
+        #expect(detail.about == nil)
+    }
+
+    @Test("Reads their description, treating a blank one as none, and writes it back")
+    func description() throws {
+        let detail = try decode(PersonDetail.self, from: """
+        { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Love Wins Media",
+          "description": "  Makes Hot Mess.\\n" }
+        """)
+        let blank = try decode(PersonDetail.self, from: """
+        { "id": "0A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D", "name": "Nobody", "description": " " }
+        """)
+        let again = try JSONDecoder.hotMess.decode(PersonDetail.self, from: JSONEncoder.hotMess.encode(detail))
+
+        #expect(detail.about == "Makes Hot Mess.")
+        #expect(blank.about == nil)
+        #expect(again.about == "Makes Hot Mess.")
     }
 }
 
