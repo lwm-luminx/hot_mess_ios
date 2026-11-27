@@ -129,6 +129,7 @@ struct EventScreen: View {
                         SetListOnSpotifyButton(eventID: event.id)
 
                         PostsSection(title: String(localized: "From the venue and hosts"), subject: .event(event.id))
+                        ReviewsSection(topic: .event(event.id.uuidString.lowercased()))
                         NewsSection.inTheNews(.event(event.id.uuidString.lowercased()))
 
                         PhotosSection(subject: .event(event.id))

@@ -89,6 +89,7 @@ struct PersonScreen: View {
                         }
 
                         PostsSection(title: String(localized: "Posts"), subject: .person(detail.person.id))
+                        ReviewsSection(topic: .person(detail.person.id.uuidString.lowercased()))
                         NewsSection.inTheNews(.person(detail.person.id.uuidString.lowercased()))
 
                         PhotosSection(subject: .person(detail.person.id), title: String(localized: "On stage"))
